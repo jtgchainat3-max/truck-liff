@@ -1,0 +1,992 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Truck Tracker</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:'Sarabun',sans-serif;background:#f5f5f5;color:#333;min-height:100vh;user-select:none}
+.screen{display:none;flex-direction:column;min-height:100vh;padding:0 0 env(safe-area-inset-bottom)}
+.screen.active{display:flex}
+.header{background:#1a73e8;color:#fff;padding:14px 16px;text-align:center;position:sticky;top:0;z-index:10}
+.header h2{font-size:17px;font-weight:700}
+.header .sub{font-size:13px;opacity:.85;margin-top:2px}
+.body{flex:1;padding:16px;overflow-y:auto}
+.card{background:#fff;border-radius:12px;padding:16px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.card-title{font-size:13px;color:#888;margin-bottom:8px;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+/* Buttons */
+.btn{display:block;width:100%;padding:15px;border:none;border-radius:10px;font-size:16px;font-weight:700;cursor:pointer;text-align:center;transition:.15s}
+.btn-primary{background:#1a73e8;color:#fff}
+.btn-primary:active{background:#1558b0}
+.btn-success{background:#34a853;color:#fff}
+.btn-success:active{background:#267a3a}
+.btn-orange{background:#ff7043;color:#fff}
+.btn-orange:active{background:#e64a19}
+.btn-gray{background:#e8e8e8;color:#555}
+.btn-gray:active{background:#d0d0d0}
+.btn-red{background:#e53935;color:#fff}
+.btn-red:active{background:#b71c1c}
+.btn+.btn{margin-top:10px}
+/* Menu grid */
+.menu-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+.menu-card{background:#fff;border-radius:14px;padding:20px 12px;text-align:center;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.1);transition:.15s;border:3px solid transparent}
+.menu-card:active{transform:scale(.97)}
+.menu-card .icon{font-size:36px;margin-bottom:8px}
+.menu-card .label{font-size:15px;font-weight:700;color:#333}
+.menu-card .desc{font-size:12px;color:#888;margin-top:3px}
+/* Form fields */
+.field{margin-bottom:14px}
+.field label{display:block;font-size:14px;font-weight:600;color:#555;margin-bottom:6px}
+.field input,.field select,.field textarea{width:100%;padding:12px 14px;border:2px solid #e0e0e0;border-radius:8px;font-size:16px;outline:none;font-family:inherit;transition:.15s}
+.field input:focus,.field select:focus{border-color:#1a73e8}
+.field textarea{height:80px;resize:none}
+/* OCR box */
+.ocr-box{background:#e8f5e9;border:2px solid #4caf50;border-radius:10px;padding:14px;text-align:center;margin:12px 0}
+.ocr-number{font-size:32px;font-weight:700;color:#2e7d32;letter-spacing:2px}
+.ocr-label{font-size:13px;color:#555;margin-top:4px}
+.ocr-edit{font-size:14px;color:#1a73e8;text-decoration:underline;cursor:pointer;margin-top:6px;display:inline-block}
+/* Photo preview */
+.photo-preview{width:100%;border-radius:10px;object-fit:contain;max-height:220px;background:#000;display:none;margin-bottom:12px}
+/* Status badge */
+.badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600}
+.badge-ok{background:#e8f5e9;color:#2e7d32}
+.badge-warn{background:#fff3e0;color:#e65100}
+.badge-sent{background:#e3f2fd;color:#0d47a1}
+/* Info rows */
+.info-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f0f0f0}
+.info-row:last-child{border-bottom:none}
+.info-label{font-size:14px;color:#777}
+.info-value{font-size:14px;font-weight:600;color:#333;text-align:right}
+/* Loading */
+.loader{text-align:center;padding:40px;color:#888;font-size:15px}
+.spinner{width:36px;height:36px;border:4px solid #e0e0e0;border-top:4px solid #1a73e8;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 12px}
+@keyframes spin{to{transform:rotate(360deg)}}
+/* Truck chips */
+.truck-list{display:flex;flex-direction:column;gap:8px;max-height:240px;overflow-y:auto}
+.truck-chip{padding:12px 14px;border:2px solid #e0e0e0;border-radius:10px;cursor:pointer;transition:.15s;background:#fff}
+.truck-chip:active,.truck-chip.selected{border-color:#1a73e8;background:#e8f0fe}
+.truck-chip .plate{font-size:16px;font-weight:700;color:#333}
+.truck-chip .detail{font-size:12px;color:#888;margin-top:2px}
+.truck-chip .match-badge{float:right;font-size:11px;background:#e8f5e9;color:#2e7d32;padding:2px 7px;border-radius:10px;font-weight:600}
+/* Alert */
+.alert{padding:12px 14px;border-radius:10px;font-size:14px;margin-bottom:12px}
+.alert-warn{background:#fff3e0;color:#e65100;border:1px solid #ffcc80}
+.alert-err{background:#ffebee;color:#c62828;border:1px solid #ef9a9a}
+.alert-ok{background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7}
+/* Tire selector */
+.tire-grid{display:grid;gap:8px;margin-top:8px}
+.tire-btn{padding:10px;border:2px solid #e0e0e0;border-radius:8px;background:#fff;font-size:14px;cursor:pointer;text-align:center;transition:.15s}
+.tire-btn.selected{border-color:#ff7043;background:#fbe9e7;color:#bf360c;font-weight:700}
+/* Progress steps */
+.steps{display:flex;justify-content:center;gap:8px;margin:12px 0}
+.step{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;background:#e0e0e0;color:#888}
+.step.done{background:#4caf50;color:#fff}
+.step.active{background:#1a73e8;color:#fff}
+/* Block screen */
+#blockScreen{position:fixed;inset:0;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;padding:30px;text-align:center}
+#blockScreen .icon{font-size:64px;margin-bottom:16px}
+#blockScreen h2{font-size:20px;color:#333;margin-bottom:8px}
+#blockScreen p{font-size:15px;color:#888;line-height:1.6}
+</style>
+</head>
+<body>
+
+<!-- ═══ BLOCK: ไม่ใช่ LINE ═══ -->
+<div id="blockScreen" style="display:none">
+  <div class="icon">🚫</div>
+  <h2>เปิดจาก LINE เท่านั้น</h2>
+  <p>กรุณาเปิดลิงก์นี้ผ่านแอป LINE<br>ไม่สามารถเข้าใช้งานผ่านบราวเซอร์ได้</p>
+</div>
+
+<!-- ═══ SCREEN: Loading ═══ -->
+<div class="screen active" id="screenLoading">
+  <div class="body" style="display:flex;align-items:center;justify-content:center">
+    <div class="loader">
+      <div class="spinner"></div>
+      <div>กำลังโหลด...</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SCREEN: Register ═══ -->
+<div class="screen" id="screenRegister">
+  <div class="header">
+    <h2>🚚 ลงทะเบียนคนขับ</h2>
+    <div class="sub">ครั้งแรกเท่านั้น</div>
+  </div>
+  <div class="body">
+    <div class="card">
+      <div class="field">
+        <label>ชื่อ-นามสกุล</label>
+        <input type="text" id="regName" placeholder="กรอกชื่อ" autocomplete="off">
+      </div>
+      <div class="field">
+        <label>เบอร์โทร</label>
+        <input type="tel" id="regPhone" placeholder="08x-xxx-xxxx">
+      </div>
+      <div class="field">
+        <label>ประเภทคนขับ</label>
+        <select id="regType" onchange="onRegTypeChange()">
+          <option value="van">VAN — วิ่งสาย JTG</option>
+          <option value="transport">ขนส่ง — ไม่มีรถประจำ</option>
+        </select>
+      </div>
+      <div class="field" id="routeField">
+        <label>สายที่ประจำ</label>
+        <select id="regRoute">
+          <option value="">-- เลือกสาย --</option>
+          <option value="V01">JTG V01</option>
+          <option value="V02">JTG V02</option>
+          <option value="V03">JTG V03</option>
+          <option value="V04">JTG V04</option>
+          <option value="V05">JTG V05</option>
+          <option value="V06">JTG V06</option>
+          <option value="V07">JTG V07</option>
+          <option value="V08">JTG V08</option>
+          <option value="V09">JTG V09</option>
+          <option value="V10">JTG V10</option>
+          <option value="V11">JTG V11</option>
+          <option value="V12">JTG V12</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>เลือกรถที่ขับ</label>
+        <div id="regTruckList" class="truck-list"></div>
+      </div>
+    </div>
+    <button class="btn btn-primary" onclick="doRegister()">✅ ลงทะเบียน</button>
+    <div id="regMsg" style="margin-top:12px;text-align:center;font-size:14px;color:#e53935"></div>
+  </div>
+</div>
+
+<!-- ═══ SCREEN: Main Menu ═══ -->
+<div class="screen" id="screenMenu">
+  <div class="header">
+    <h2>🚚 Truck Tracker</h2>
+    <div class="sub" id="menuSub">-</div>
+  </div>
+  <div class="body">
+    <div class="card">
+      <div class="info-row">
+        <span class="info-label">คนขับ</span>
+        <span class="info-value" id="menuDriverName">-</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">รถ / สาย</span>
+        <span class="info-value" id="menuTruckInfo">-</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">ไมล์ล่าสุด</span>
+        <span class="info-value" id="menuLastMileage">-</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">วันนี้ส่งแล้ว</div>
+      <div id="menuTodaySent" style="display:flex;gap:8px;flex-wrap:wrap;min-height:28px"></div>
+    </div>
+
+    <div class="menu-grid">
+      <div class="menu-card" onclick="goMileage('morning')">
+        <div class="icon">🌅</div>
+        <div class="label">ไมล์เช้า</div>
+        <div class="desc">ก่อนออกโกดัง</div>
+      </div>
+      <div class="menu-card" onclick="goMileage('evening')">
+        <div class="icon">🌙</div>
+        <div class="label">ไมล์เย็น</div>
+        <div class="desc">กลับถึงโกดัง</div>
+      </div>
+    </div>
+    <div class="menu-grid">
+      <div class="menu-card" onclick="goFuel()">
+        <div class="icon">⛽</div>
+        <div class="label">เติมน้ำมัน</div>
+        <div class="desc">บันทึกการเติม</div>
+      </div>
+      <div class="menu-card" onclick="goMaintenance()">
+        <div class="icon">🔧</div>
+        <div class="label">ซ่อมบำรุง</div>
+        <div class="desc">แจ้งซ่อม/เปลี่ยน</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SCREEN: Mileage Photo ═══ -->
+<div class="screen" id="screenMileage">
+  <div class="header">
+    <h2 id="mileageTitle">📷 ไมล์เช้า</h2>
+    <div class="sub" id="mileageTruckSub">-</div>
+  </div>
+  <div class="body">
+    <div class="steps">
+      <div class="step active" id="mStep1">1</div>
+      <div class="step" id="mStep2">2</div>
+      <div class="step" id="mStep3">3</div>
+    </div>
+
+    <!-- Step 1: ถ่ายรูป -->
+    <div id="mileageStep1">
+      <div class="card">
+        <div class="card-title">📷 ถ่ายรูปเลขไมล์</div>
+        <p style="font-size:14px;color:#666;margin-bottom:14px">ถ่ายให้เห็นตัวเลขชัดเจน ระบบจะอ่านไมล์ให้อัตโนมัติ</p>
+        <img id="mileagePreview" class="photo-preview" alt="preview">
+        <canvas id="mileageCanvas" style="display:none"></canvas>
+        <input type="file" id="mileageInput" accept="image/*" capture="environment" style="display:none" onchange="onMileagePhoto(event)">
+        <button class="btn btn-primary" onclick="document.getElementById('mileageInput').click()">
+          📷 ถ่ายรูปเลขไมล์
+        </button>
+      </div>
+      <button class="btn btn-gray" onclick="showScreen('screenMenu')">← กลับ</button>
+    </div>
+
+    <!-- Step 2: ยืนยัน OCR -->
+    <div id="mileageStep2" style="display:none">
+      <div class="card">
+        <img id="mileagePreview2" class="photo-preview" alt="preview" style="display:block">
+        <div id="ocrLoading" class="loader" style="padding:20px">
+          <div class="spinner"></div>
+          <div>กำลังอ่านเลขไมล์...</div>
+        </div>
+        <div id="ocrResult" style="display:none">
+          <div class="ocr-box">
+            <div class="ocr-number" id="ocrNumber">-</div>
+            <div class="ocr-label">ไมล์ที่อ่านได้ (กม.)</div>
+            <span class="ocr-edit" onclick="showMileageInput()">✏️ แก้ไขตัวเลข</span>
+          </div>
+        </div>
+        <div class="field" id="mileageInputField" style="display:none;margin-top:12px">
+          <label>พิมพ์เลขไมล์ (กม.)</label>
+          <input type="number" id="mileageManual" placeholder="เช่น 123456" inputmode="numeric">
+        </div>
+      </div>
+
+      <!-- Smart match truck (transport only) -->
+      <div id="truckMatchSection" style="display:none">
+        <div class="card">
+          <div class="card-title">🚚 เลือกรถที่ขับวันนี้</div>
+          <div id="matchedTruckAlert" style="margin-bottom:10px"></div>
+          <div id="matchTruckList" class="truck-list"></div>
+        </div>
+      </div>
+
+      <button class="btn btn-success" onclick="confirmMileage()">✅ ยืนยันและส่ง</button>
+      <button class="btn btn-gray" style="margin-top:8px" onclick="goBack('mileage')">🔄 ถ่ายใหม่</button>
+    </div>
+
+    <!-- Step 3: สำเร็จ -->
+    <div id="mileageStep3" style="display:none">
+      <div class="card" style="text-align:center;padding:30px">
+        <div style="font-size:60px;margin-bottom:12px">✅</div>
+        <div id="mileageSuccessMsg" style="font-size:18px;font-weight:700;color:#2e7d32;white-space:pre-line"></div>
+      </div>
+      <button class="btn btn-primary" onclick="showScreen('screenMenu');loadMenu()">🏠 กลับหน้าหลัก</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SCREEN: Fuel ═══ -->
+<div class="screen" id="screenFuel">
+  <div class="header">
+    <h2>⛽ บันทึกเติมน้ำมัน</h2>
+    <div class="sub" id="fuelTruckSub">-</div>
+  </div>
+  <div class="body">
+    <div class="card">
+      <div class="card-title">📷 รูปมิเตอร์ปั๊ม (จำเป็น)</div>
+      <img id="fuelPreview" class="photo-preview" alt="preview">
+      <input type="file" id="fuelInput" accept="image/*" capture="environment" style="display:none" onchange="onFuelPhoto(event)">
+      <button class="btn btn-primary" onclick="document.getElementById('fuelInput').click()">📷 ถ่ายรูปมิเตอร์ปั๊ม</button>
+    </div>
+
+    <div class="card">
+      <div class="field">
+        <label>เลขไมล์ตอนเติม (กม.)</label>
+        <input type="number" id="fuelMileage" placeholder="เช่น 125000" inputmode="numeric">
+      </div>
+      <div class="field">
+        <label>จำนวนลิตร</label>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:8px">
+          <button class="btn btn-gray" style="padding:10px;font-size:14px" onclick="setLiters(20)">20 ล.</button>
+          <button class="btn btn-gray" style="padding:10px;font-size:14px" onclick="setLiters(30)">30 ล.</button>
+          <button class="btn btn-gray" style="padding:10px;font-size:14px" onclick="setLiters(40)">40 ล.</button>
+          <button class="btn btn-gray" style="padding:10px;font-size:14px" onclick="setLiters(50)">50 ล.</button>
+        </div>
+        <input type="number" id="fuelLiters" placeholder="หรือพิมพ์เอง" inputmode="decimal" step="0.01" oninput="calcTotal()">
+      </div>
+      <div class="field">
+        <label>ราคาต่อลิตร (บาท)</label>
+        <input type="number" id="fuelPrice" placeholder="เช่น 33.50" inputmode="decimal" step="0.01" oninput="calcTotal()">
+      </div>
+      <div class="field" id="fuelTotalField" style="display:none">
+        <label>รวมทั้งหมด</label>
+        <div style="font-size:24px;font-weight:700;color:#1a73e8" id="fuelTotal">-</div>
+      </div>
+      <div class="field">
+        <label>ชื่อปั๊ม (ถ้ามี)</label>
+        <input type="text" id="fuelStation" placeholder="เช่น ปตท. ถนนพหล">
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">📷 รูปใบเสร็จ (ถ้ามี)</div>
+      <img id="fuelBillPreview" class="photo-preview" alt="preview">
+      <input type="file" id="fuelBillInput" accept="image/*" capture="environment" style="display:none" onchange="onFuelBillPhoto(event)">
+      <button class="btn btn-gray" onclick="document.getElementById('fuelBillInput').click()">📷 ถ่ายใบเสร็จ (ไม่บังคับ)</button>
+    </div>
+
+    <button class="btn btn-success" onclick="submitFuel()">✅ บันทึกการเติมน้ำมัน</button>
+    <button class="btn btn-gray" style="margin-top:8px" onclick="showScreen('screenMenu')">← กลับ</button>
+    <div id="fuelMsg" style="margin-top:12px;font-size:14px;text-align:center;white-space:pre-line"></div>
+  </div>
+</div>
+
+<!-- ═══ SCREEN: Maintenance ═══ -->
+<div class="screen" id="screenMaintenance">
+  <div class="header">
+    <h2>🔧 แจ้งซ่อมบำรุง</h2>
+    <div class="sub" id="maintTruckSub">-</div>
+  </div>
+  <div class="body">
+    <div class="card">
+      <div class="field">
+        <label>ประเภทงาน</label>
+        <select id="maintType" onchange="onMaintTypeChange()">
+          <option value="oil_change">🛢 เปลี่ยนน้ำมันเครื่อง</option>
+          <option value="tire">🔄 ยาง (เปลี่ยน/สลับ)</option>
+          <option value="brake">🛑 เบรก</option>
+          <option value="battery">🔋 แบตเตอรี่</option>
+          <option value="other">🔩 อื่นๆ</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>เลขไมล์ตอนซ่อม (กม.)</label>
+        <input type="number" id="maintMileage" placeholder="เช่น 125000" inputmode="numeric">
+      </div>
+      <div class="field">
+        <label>ร้านที่ซ่อม</label>
+        <input type="text" id="maintShop" placeholder="ชื่อร้าน/อู่">
+      </div>
+      <div class="field">
+        <label>ค่าใช้จ่าย (บาท)</label>
+        <input type="number" id="maintCost" placeholder="0" inputmode="numeric">
+      </div>
+      <div class="field" id="maintNextMileField">
+        <label>ครั้งถัดไปที่ไมล์ (กม.) <span style="color:#aaa;font-weight:400">ไม่บังคับ</span></label>
+        <input type="number" id="maintNextMile" placeholder="เช่น 130000" inputmode="numeric">
+      </div>
+      <!-- ตำแหน่งยาง -->
+      <div class="field" id="tireSection" style="display:none">
+        <label>ตำแหน่งยางที่เปลี่ยน/สลับ (เลือกได้หลายตำแหน่ง)</label>
+        <div id="tireGrid" class="tire-grid"></div>
+      </div>
+      <div class="field">
+        <label>หมายเหตุ</label>
+        <textarea id="maintNotes" placeholder="รายละเอียดเพิ่มเติม"></textarea>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">📷 รูปใบเสร็จ (จำเป็น)</div>
+      <img id="maintBillPreview" class="photo-preview" alt="preview">
+      <input type="file" id="maintBillInput" accept="image/*" capture="environment" style="display:none" onchange="onMaintBillPhoto(event)">
+      <button class="btn btn-orange" onclick="document.getElementById('maintBillInput').click()">📷 ถ่ายรูปใบเสร็จ</button>
+    </div>
+
+    <button class="btn btn-success" onclick="submitMaintenance()">✅ ส่งข้อมูลซ่อมบำรุง</button>
+    <button class="btn btn-gray" style="margin-top:8px" onclick="showScreen('screenMenu')">← กลับ</button>
+    <div id="maintMsg" style="margin-top:12px;font-size:14px;text-align:center;white-space:pre-line"></div>
+  </div>
+</div>
+
+<!-- Tesseract.js -->
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<!-- LIFF SDK -->
+<script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+
+<script>
+// ════════════════════════════════════════════════════════════
+// CONFIG — แก้ YOUR_PROJECT เป็น project ref จาก Supabase
+// ════════════════════════════════════════════════════════════
+const LIFF_ID  = "2010109104-FF5HuJuq";
+const API_BASE = "https://joevecrppgctnemaqgan.supabase.co/functions/v1/liff-api";
+
+// ════════════════════════════════════════════════════════════
+// STATE
+// ════════════════════════════════════════════════════════════
+let lineUserId    = null;
+let driverInfo    = null;
+let currentType   = null;   // 'morning' | 'evening'
+let croppedBlob   = null;
+let fuelBlob      = null;
+let fuelBillBlob  = null;
+let maintBillBlob = null;
+let photoTs       = null;
+let ocrMileage    = null;
+let selectedTruckId = null;
+let selectedTirePositions = new Set();
+
+// ════════════════════════════════════════════════════════════
+// INIT
+// ════════════════════════════════════════════════════════════
+async function init() {
+  await liff.init({ liffId: LIFF_ID });
+
+  if (!liff.isInClient()) {
+    document.getElementById("blockScreen").style.display = "flex";
+    document.getElementById("screenLoading").classList.remove("active");
+    return;
+  }
+
+  const profile = await liff.getProfile();
+  lineUserId = profile.userId;
+
+  const params   = new URLSearchParams(location.search);
+  const deepType = params.get("type");
+
+  await loadMenu(deepType);
+}
+
+// ════════════════════════════════════════════════════════════
+// HELPERS
+// ════════════════════════════════════════════════════════════
+function showScreen(id) {
+  document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+  document.getElementById(id).classList.add("active");
+}
+
+function nowBKK() {
+  return new Date().toLocaleString("sv-SE", { timeZone: "Asia/Bangkok" }).replace(" ", "T") + "+07:00";
+}
+
+function fmtNum(n) {
+  return (n !== null && n !== undefined) ? Number(n).toLocaleString("th-TH") : "-";
+}
+
+async function apiFetch(path, opts = {}) {
+  const res = await fetch(`${API_BASE}/${path}`, {
+    headers: { "Content-Type": "application/json" },
+    ...opts
+  });
+  return res.json();
+}
+
+function getGPS() {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) { reject(new Error("no geo")); return; }
+    navigator.geolocation.getCurrentPosition(resolve, reject, {
+      enableHighAccuracy: true, timeout: 8000, maximumAge: 30000,
+    });
+  });
+}
+
+// ════════════════════════════════════════════════════════════
+// LOAD MENU
+// ════════════════════════════════════════════════════════════
+async function loadMenu(deepType = null) {
+  try {
+    const data = await apiFetch(`driver-status?line_user_id=${lineUserId}`);
+
+    if (!data || !data.registered) {
+      renderRegisterScreen(data?.trucks || []);
+      showScreen("screenRegister");
+      return;
+    }
+
+    driverInfo      = data;
+    selectedTruckId = data.truck_id;
+
+    document.getElementById("menuDriverName").textContent = data.driver_name || "-";
+    document.getElementById("menuTruckInfo").textContent  =
+      (data.truck_plate || "-") + (data.route_code ? ` (${data.route_code})` : "");
+    document.getElementById("menuLastMileage").textContent =
+      data.last_evening_mileage
+        ? `${fmtNum(data.last_evening_mileage)} กม. (${data.last_evening_date || ""})`
+        : "-";
+    document.getElementById("menuSub").textContent = data.warehouse || "-";
+
+    const sent    = data.today_sent || [];
+    const sentEl  = document.getElementById("menuTodaySent");
+    sentEl.innerHTML = [
+      `<span class="badge ${sent.includes('morning') ? 'badge-sent' : 'badge-warn'}">${sent.includes('morning') ? '✅' : '⏳'} ไมล์เช้า</span>`,
+      `<span class="badge ${sent.includes('evening') ? 'badge-sent' : 'badge-warn'}">${sent.includes('evening') ? '✅' : '⏳'} ไมล์เย็น</span>`,
+    ].join(" ");
+
+    showScreen("screenMenu");
+    if (deepType === "morning") goMileage("morning");
+    else if (deepType === "evening") goMileage("evening");
+    else if (deepType === "fuel") goFuel();
+  } catch (e) {
+    document.getElementById("screenLoading").innerHTML =
+      `<div class="body loader">เกิดข้อผิดพลาด: ${e.message}</div>`;
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// REGISTER
+// ════════════════════════════════════════════════════════════
+function renderRegisterScreen(trucks) {
+  const list = document.getElementById("regTruckList");
+  list.innerHTML = "";
+  trucks.forEach(t => {
+    const el = document.createElement("div");
+    el.className  = "truck-chip";
+    el.innerHTML  = `<span class="plate">${t.plate_number}</span><div class="detail">${t.warehouse} · ${t.truck_type || "4wheel"}</div>`;
+    el.onclick    = () => {
+      list.querySelectorAll(".truck-chip").forEach(c => c.classList.remove("selected"));
+      el.classList.add("selected");
+      selectedTruckId = t.id;
+    };
+    list.appendChild(el);
+  });
+  showScreen("screenRegister");
+}
+
+function onRegTypeChange() {
+  const t = document.getElementById("regType").value;
+  document.getElementById("routeField").style.display = t === "van" ? "" : "none";
+}
+
+async function doRegister() {
+  const name  = document.getElementById("regName").value.trim();
+  const phone = document.getElementById("regPhone").value.trim();
+  const type  = document.getElementById("regType").value;
+  const route = document.getElementById("regRoute").value;
+  const msgEl = document.getElementById("regMsg");
+
+  if (!name) { msgEl.textContent = "กรุณากรอกชื่อ"; return; }
+  if (type === "van" && !selectedTruckId) { msgEl.textContent = "กรุณาเลือกรถ"; return; }
+
+  msgEl.textContent = "⏳ กำลังลงทะเบียน...";
+  msgEl.style.color = "#888";
+
+  const res = await apiFetch("register", {
+    method: "POST",
+    body: JSON.stringify({
+      line_user_id: lineUserId,
+      driver_name:  name,
+      phone:        phone || null,
+      driver_type:  type,
+      route_code:   type === "van" ? (route || null) : null,
+      truck_id:     type === "van" ? selectedTruckId : null,
+    })
+  });
+
+  if (res.success) {
+    msgEl.style.color = "#2e7d32";
+    msgEl.textContent = res.message;
+    setTimeout(() => loadMenu(), 1500);
+  } else {
+    msgEl.style.color = "#e53935";
+    msgEl.textContent = res.error || "เกิดข้อผิดพลาด";
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// MILEAGE FLOW
+// ════════════════════════════════════════════════════════════
+function goMileage(type) {
+  currentType     = type;
+  croppedBlob     = null;
+  ocrMileage      = null;
+  selectedTruckId = driverInfo?.truck_id || null;
+
+  document.getElementById("mileageTitle").textContent    = type === "morning" ? "🌅 ไมล์เช้า" : "🌙 ไมล์เย็น";
+  document.getElementById("mileageTruckSub").textContent =
+    (driverInfo?.truck_plate || "-") + (driverInfo?.route_code ? ` · ${driverInfo.route_code}` : "");
+
+  ["mStep1","mStep2","mStep3"].forEach((id, i) => {
+    document.getElementById(id).className = "step" + (i === 0 ? " active" : "");
+  });
+  ["mileageStep1","mileagePreview"].forEach(id => document.getElementById(id).style.display = "");
+  ["mileageStep2","mileageStep3"].forEach(id => document.getElementById(id).style.display = "none");
+  document.getElementById("mileagePreview").style.display = "none";
+  document.getElementById("mileageInput").value = "";
+  showScreen("screenMileage");
+}
+
+async function onMileagePhoto(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  photoTs = nowBKK();
+
+  const preview = document.getElementById("mileagePreview");
+  preview.src   = URL.createObjectURL(file);
+  preview.style.display = "block";
+
+  document.getElementById("mileageStep1").style.display = "none";
+  document.getElementById("mileageStep2").style.display = "";
+  document.getElementById("ocrLoading").style.display   = "";
+  document.getElementById("ocrResult").style.display    = "none";
+  document.getElementById("mileageInputField").style.display = "none";
+  document.getElementById("truckMatchSection").style.display = "none";
+  document.getElementById("mStep1").className = "step done";
+  document.getElementById("mStep2").className = "step active";
+
+  // preview 2 (top of step2)
+  document.getElementById("mileagePreview2").src = URL.createObjectURL(file);
+
+  croppedBlob = await cropAndOCR(file);
+}
+
+async function cropAndOCR(file) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = async () => {
+      const w = img.naturalWidth, h = img.naturalHeight;
+      const cx = Math.round(w * 0.05), cy = Math.round(h * 0.38);
+      const cw = Math.round(w * 0.90), ch = Math.round(h * 0.38);
+
+      const canvas = document.getElementById("mileageCanvas");
+      canvas.width = cw; canvas.height = ch;
+      canvas.getContext("2d").drawImage(img, cx, cy, cw, ch, 0, 0, cw, ch);
+
+      canvas.toBlob(async (blob) => {
+        try {
+          const result  = await Tesseract.recognize(blob, "eng", { tessedit_char_whitelist: "0123456789" });
+          const text    = result.data.text.replace(/[^0-9]/g, " ").trim();
+          const numbers = text.split(/\s+/).filter(n => n.length >= 5 && n.length <= 7);
+          ocrMileage    = numbers.length > 0 ? parseInt(numbers[0]) : null;
+        } catch {
+          ocrMileage = null;
+        }
+
+        document.getElementById("ocrLoading").style.display = "none";
+
+        if (ocrMileage) {
+          document.getElementById("ocrNumber").textContent  = ocrMileage.toLocaleString("th-TH");
+          document.getElementById("ocrResult").style.display = "";
+          // ถ้าเป็น transport ให้ smart match
+          if (!driverInfo?.truck_id) await loadSmartMatch();
+        } else {
+          showMileageInput();
+          if (!driverInfo?.truck_id) await loadSmartMatch();
+        }
+
+        resolve(blob);
+      }, "image/jpeg", 0.82);
+    };
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+function showMileageInput() {
+  document.getElementById("mileageInputField").style.display = "";
+  if (ocrMileage) document.getElementById("mileageManual").value = ocrMileage;
+}
+
+async function loadSmartMatch() {
+  document.getElementById("truckMatchSection").style.display = "";
+  const matchAlert = document.getElementById("matchedTruckAlert");
+  const listEl     = document.getElementById("matchTruckList");
+  matchAlert.innerHTML = `<div class="loader" style="padding:12px"><div class="spinner"></div><div>กำลังหารถ...</div></div>`;
+  listEl.innerHTML = "";
+
+  const data = await apiFetch(`smart-match?line_user_id=${lineUserId}&mileage=${ocrMileage || 0}`).catch(() => null);
+  if (!data) { matchAlert.innerHTML = `<div class="alert alert-err">ไม่สามารถโหลดรายการรถได้</div>`; return; }
+
+  if (data.matched) {
+    selectedTruckId = data.matched.id;
+    matchAlert.innerHTML = `<div class="alert alert-ok">🎯 จับคู่อัตโนมัติ: <b>${data.matched.plate_number}</b><br><small>ต่างจากไมล์ล่าสุด ${fmtNum(data.matched.distance)} กม. ถ้าไม่ใช่ เลือกจากรายการด้านล่าง</small></div>`;
+  } else {
+    matchAlert.innerHTML = `<div class="alert alert-warn">⚠️ ไม่พบรถที่ตรงกันอัตโนมัติ กรุณาเลือกเอง</div>`;
+  }
+
+  (data.trucks || []).forEach(t => {
+    const el = document.createElement("div");
+    el.className = "truck-chip" + (t.id === selectedTruckId ? " selected" : "");
+    el.innerHTML = `
+      <span class="plate">${t.plate_number}</span>
+      ${data.matched?.id === t.id ? '<span class="match-badge">🎯 แนะนำ</span>' : ""}
+      <div class="detail">${t.warehouse} · ไมล์ล่าสุด: ${fmtNum(t.last_mileage)} กม. · ต่างกัน ${fmtNum(t.distance)} กม.</div>`;
+    el.onclick = () => {
+      listEl.querySelectorAll(".truck-chip").forEach(c => c.classList.remove("selected"));
+      el.classList.add("selected");
+      selectedTruckId = t.id;
+    };
+    listEl.appendChild(el);
+  });
+}
+
+async function confirmMileage() {
+  const manual  = document.getElementById("mileageManual").value;
+  const mileage = manual ? parseInt(manual) : ocrMileage;
+
+  if (!mileage)        { alert("กรุณาระบุเลขไมล์"); return; }
+  if (!selectedTruckId){ alert("กรุณาเลือกรถก่อน"); return; }
+  if (!croppedBlob)    { alert("กรุณาถ่ายรูปก่อน"); return; }
+
+  const pos = await getGPS().catch(() => null);
+  const fd  = new FormData();
+  fd.append("line_user_id",    lineUserId);
+  fd.append("log_type",        currentType);
+  fd.append("mileage",         mileage);
+  fd.append("photo_timestamp", photoTs);
+  fd.append("truck_id",        selectedTruckId);
+  fd.append("image",           croppedBlob, "mileage.jpg");
+  if (pos) {
+    fd.append("latitude",  pos.coords.latitude);
+    fd.append("longitude", pos.coords.longitude);
+    fd.append("accuracy",  pos.coords.accuracy);
+  }
+
+  const res = await fetch(`${API_BASE}/submit-mileage`, { method: "POST", body: fd })
+    .then(r => r.json()).catch(e => ({ error: e.message }));
+
+  if (res.success) {
+    document.getElementById("mileageSuccessMsg").textContent = res.message;
+    document.getElementById("mileageStep2").style.display = "none";
+    document.getElementById("mileageStep3").style.display = "";
+    document.getElementById("mStep2").className = "step done";
+    document.getElementById("mStep3").className = "step done";
+  } else {
+    alert(res.error || "เกิดข้อผิดพลาด กรุณาลองใหม่");
+  }
+}
+
+function goBack(from) {
+  if (from === "mileage") {
+    document.getElementById("mileageStep2").style.display = "none";
+    document.getElementById("mileageStep1").style.display = "";
+    document.getElementById("mStep1").className = "step active";
+    document.getElementById("mStep2").className = "step";
+    document.getElementById("mileageInput").value = "";
+    document.getElementById("mileagePreview").style.display = "none";
+    croppedBlob = null; ocrMileage = null;
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// FUEL FLOW
+// ════════════════════════════════════════════════════════════
+function goFuel() {
+  fuelBlob = null; fuelBillBlob = null;
+  document.getElementById("fuelTruckSub").textContent =
+    (driverInfo?.truck_plate || "-") + (driverInfo?.route_code ? ` · ${driverInfo.route_code}` : "");
+  document.getElementById("fuelPreview").style.display = "none";
+  document.getElementById("fuelBillPreview").style.display = "none";
+  document.getElementById("fuelInput").value = "";
+  document.getElementById("fuelBillInput").value = "";
+  document.getElementById("fuelMsg").textContent = "";
+  document.getElementById("fuelTotalField").style.display = "none";
+  showScreen("screenFuel");
+}
+
+function onFuelPhoto(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  photoTs  = nowBKK();
+  fuelBlob = file;
+  const el = document.getElementById("fuelPreview");
+  el.src   = URL.createObjectURL(file);
+  el.style.display = "block";
+}
+
+function onFuelBillPhoto(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  fuelBillBlob = file;
+  const el = document.getElementById("fuelBillPreview");
+  el.src   = URL.createObjectURL(file);
+  el.style.display = "block";
+}
+
+function setLiters(n) {
+  document.getElementById("fuelLiters").value = n;
+  calcTotal();
+}
+
+function calcTotal() {
+  const l = parseFloat(document.getElementById("fuelLiters").value) || 0;
+  const p = parseFloat(document.getElementById("fuelPrice").value)  || 0;
+  if (l && p) {
+    document.getElementById("fuelTotal").textContent =
+      `฿${(l * p).toLocaleString("th-TH", { minimumFractionDigits: 2 })}`;
+    document.getElementById("fuelTotalField").style.display = "";
+  } else {
+    document.getElementById("fuelTotalField").style.display = "none";
+  }
+}
+
+async function submitFuel() {
+  if (!fuelBlob) { alert("กรุณาถ่ายรูปมิเตอร์ปั๊ม"); return; }
+  const liters = parseFloat(document.getElementById("fuelLiters").value) || null;
+  if (!liters)  { alert("กรุณาระบุจำนวนลิตร"); return; }
+
+  const truckId = driverInfo?.truck_id || selectedTruckId;
+  if (!truckId) { alert("ไม่พบรถ"); return; }
+
+  const mileage = parseInt(document.getElementById("fuelMileage").value) || null;
+  const price   = parseFloat(document.getElementById("fuelPrice").value) || null;
+  const station = document.getElementById("fuelStation").value.trim() || null;
+  const pos     = await getGPS().catch(() => null);
+
+  const fd = new FormData();
+  fd.append("line_user_id",    lineUserId);
+  fd.append("truck_id",        truckId);
+  fd.append("photo_timestamp", photoTs || nowBKK());
+  fd.append("image",           fuelBlob, "fuel.jpg");
+  fd.append("liters",          liters);
+  if (mileage)      fd.append("mileage", mileage);
+  if (price)        fd.append("price_per_liter", price);
+  if (station)      fd.append("station_name", station);
+  if (fuelBillBlob) fd.append("bill_image", fuelBillBlob, "bill.jpg");
+  if (pos) {
+    fd.append("latitude",  pos.coords.latitude);
+    fd.append("longitude", pos.coords.longitude);
+    fd.append("accuracy",  pos.coords.accuracy);
+  }
+
+  const msgEl = document.getElementById("fuelMsg");
+  msgEl.style.color = "#888";
+  msgEl.textContent = "⏳ กำลังส่งข้อมูล...";
+
+  const res = await fetch(`${API_BASE}/submit-fuel`, { method: "POST", body: fd })
+    .then(r => r.json()).catch(e => ({ error: e.message }));
+
+  if (res.success) {
+    msgEl.style.color = "#2e7d32";
+    msgEl.textContent = res.message;
+    setTimeout(() => { showScreen("screenMenu"); loadMenu(); }, 2500);
+  } else {
+    msgEl.style.color = "#e53935";
+    msgEl.textContent = res.error || "เกิดข้อผิดพลาด";
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// MAINTENANCE FLOW
+// ════════════════════════════════════════════════════════════
+const TIRE_POSITIONS = {
+  "4wheel":  [
+    { code:"FL", label:"หน้าซ้าย" }, { code:"FR", label:"หน้าขวา" },
+    { code:"RL", label:"หลังซ้าย" }, { code:"RR", label:"หลังขวา" }
+  ],
+  "6wheel":  [
+    { code:"FL", label:"หน้าซ้าย" }, { code:"FR", label:"หน้าขวา" },
+    { code:"RLL", label:"หลังในซ้าย" }, { code:"RLR", label:"หลังนอกซ้าย" },
+    { code:"RRL", label:"หลังในขวา" }, { code:"RRR", label:"หลังนอกขวา" }
+  ],
+  "10wheel": [
+    { code:"FL", label:"หน้าซ้าย" }, { code:"FR", label:"หน้าขวา" },
+    { code:"M1L", label:"กลางในซ้าย" }, { code:"M1R", label:"กลางนอกซ้าย" },
+    { code:"M2L", label:"กลางในขวา" }, { code:"M2R", label:"กลางนอกขวา" },
+    { code:"R1L", label:"หลังในซ้าย" }, { code:"R1R", label:"หลังนอกซ้าย" },
+    { code:"R2L", label:"หลังในขวา" }, { code:"R2R", label:"หลังนอกขวา" }
+  ],
+};
+
+function goMaintenance() {
+  maintBillBlob = null;
+  selectedTirePositions = new Set();
+  document.getElementById("maintTruckSub").textContent =
+    (driverInfo?.truck_plate || "-") + (driverInfo?.route_code ? ` · ${driverInfo.route_code}` : "");
+  document.getElementById("maintBillPreview").style.display = "none";
+  document.getElementById("maintBillInput").value = "";
+  document.getElementById("maintMsg").textContent = "";
+  onMaintTypeChange();
+  showScreen("screenMaintenance");
+}
+
+function onMaintTypeChange() {
+  const type = document.getElementById("maintType").value;
+  document.getElementById("tireSection").style.display = (type === "tire") ? "" : "none";
+  document.getElementById("maintNextMileField").style.display =
+    ["oil_change","tire","brake"].includes(type) ? "" : "none";
+  if (type === "tire") renderTireGrid();
+}
+
+function renderTireGrid() {
+  const truckType = driverInfo?.truck_type || "4wheel";
+  const positions = TIRE_POSITIONS[truckType] || TIRE_POSITIONS["4wheel"];
+  const cols      = truckType === "4wheel" ? 2 : truckType === "6wheel" ? 3 : 4;
+  const grid      = document.getElementById("tireGrid");
+  grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+  grid.innerHTML = positions.map(p =>
+    `<button class="tire-btn${selectedTirePositions.has(p.code) ? " selected" : ""}"
+      onclick="toggleTire('${p.code}', this)">${p.label}</button>`
+  ).join("");
+}
+
+function toggleTire(code, el) {
+  if (selectedTirePositions.has(code)) {
+    selectedTirePositions.delete(code);
+    el.classList.remove("selected");
+  } else {
+    selectedTirePositions.add(code);
+    el.classList.add("selected");
+  }
+}
+
+function onMaintBillPhoto(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  maintBillBlob = file;
+  const el = document.getElementById("maintBillPreview");
+  el.src   = URL.createObjectURL(file);
+  el.style.display = "block";
+}
+
+async function submitMaintenance() {
+  if (!maintBillBlob) { alert("กรุณาถ่ายรูปใบเสร็จก่อน"); return; }
+
+  const truckId = driverInfo?.truck_id || selectedTruckId;
+  if (!truckId) { alert("ไม่พบรถ"); return; }
+
+  const type     = document.getElementById("maintType").value;
+  const mile     = parseInt(document.getElementById("maintMileage").value) || null;
+  const shop     = document.getElementById("maintShop").value.trim() || null;
+  const cost     = parseFloat(document.getElementById("maintCost").value) || null;
+  const nextMile = parseInt(document.getElementById("maintNextMile").value) || null;
+  const notes    = document.getElementById("maintNotes").value.trim() || null;
+  const pos      = await getGPS().catch(() => null);
+
+  const fd = new FormData();
+  fd.append("line_user_id",     lineUserId);
+  fd.append("truck_id",         truckId);
+  fd.append("maintenance_type", type);
+  fd.append("bill_image",       maintBillBlob, "bill.jpg");
+  if (mile)     fd.append("mileage_at_service", mile);
+  if (shop)     fd.append("shop_name", shop);
+  if (cost)     fd.append("cost", cost);
+  if (nextMile) fd.append("next_service_mileage", nextMile);
+  if (notes)    fd.append("notes", notes);
+  if (selectedTirePositions.size > 0)
+    fd.append("tire_positions", [...selectedTirePositions].join(","));
+  if (pos) {
+    fd.append("latitude",  pos.coords.latitude);
+    fd.append("longitude", pos.coords.longitude);
+    fd.append("accuracy",  pos.coords.accuracy);
+  }
+
+  const msgEl = document.getElementById("maintMsg");
+  msgEl.style.color = "#888";
+  msgEl.textContent = "⏳ กำลังส่งข้อมูล...";
+
+  const res = await fetch(`${API_BASE}/submit-maintenance`, { method: "POST", body: fd })
+    .then(r => r.json()).catch(e => ({ error: e.message }));
+
+  if (res.success) {
+    msgEl.style.color = "#2e7d32";
+    msgEl.textContent = res.message;
+    setTimeout(() => { showScreen("screenMenu"); loadMenu(); }, 2500);
+  } else {
+    msgEl.style.color = "#e53935";
+    msgEl.textContent = res.error || "เกิดข้อผิดพลาด";
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// START
+// ════════════════════════════════════════════════════════════
+init().catch(err => {
+  console.error(err);
+  document.getElementById("screenLoading").innerHTML =
+    `<div class="body loader">⚠️ เกิดข้อผิดพลาด: ${err.message}</div>`;
+});
+</script>
+</body>
+</html>
