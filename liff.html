@@ -15,7 +15,6 @@ body{font-family:'Sarabun',sans-serif;background:#f5f5f5;color:#333;min-height:1
 .body{flex:1;padding:16px;overflow-y:auto}
 .card{background:#fff;border-radius:12px;padding:16px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
 .card-title{font-size:13px;color:#888;margin-bottom:8px;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
-/* Buttons */
 .btn{display:block;width:100%;padding:15px;border:none;border-radius:10px;font-size:16px;font-weight:700;cursor:pointer;text-align:center;transition:.15s}
 .btn-primary{background:#1a73e8;color:#fff}
 .btn-primary:active{background:#1558b0}
@@ -28,75 +27,65 @@ body{font-family:'Sarabun',sans-serif;background:#f5f5f5;color:#333;min-height:1
 .btn-red{background:#e53935;color:#fff}
 .btn-red:active{background:#b71c1c}
 .btn+.btn{margin-top:10px}
-/* Menu grid */
 .menu-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
 .menu-card{background:#fff;border-radius:14px;padding:20px 12px;text-align:center;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.1);transition:.15s;border:3px solid transparent}
 .menu-card:active{transform:scale(.97)}
 .menu-card .icon{font-size:36px;margin-bottom:8px}
 .menu-card .label{font-size:15px;font-weight:700;color:#333}
 .menu-card .desc{font-size:12px;color:#888;margin-top:3px}
-/* Form fields */
 .field{margin-bottom:14px}
 .field label{display:block;font-size:14px;font-weight:600;color:#555;margin-bottom:6px}
 .field input,.field select,.field textarea{width:100%;padding:12px 14px;border:2px solid #e0e0e0;border-radius:8px;font-size:16px;outline:none;font-family:inherit;transition:.15s}
 .field input:focus,.field select:focus{border-color:#1a73e8}
 .field textarea{height:80px;resize:none}
-/* OCR box */
 .ocr-box{background:#e8f5e9;border:2px solid #4caf50;border-radius:10px;padding:14px;text-align:center;margin:12px 0}
 .ocr-number{font-size:32px;font-weight:700;color:#2e7d32;letter-spacing:2px}
 .ocr-label{font-size:13px;color:#555;margin-top:4px}
 .ocr-edit{font-size:14px;color:#1a73e8;text-decoration:underline;cursor:pointer;margin-top:6px;display:inline-block}
-/* Photo preview */
 .photo-preview{width:100%;border-radius:10px;object-fit:contain;max-height:220px;background:#000;display:none;margin-bottom:12px}
-/* Status badge */
 .badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600}
 .badge-ok{background:#e8f5e9;color:#2e7d32}
 .badge-warn{background:#fff3e0;color:#e65100}
 .badge-sent{background:#e3f2fd;color:#0d47a1}
-/* Info rows */
 .info-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f0f0f0}
 .info-row:last-child{border-bottom:none}
 .info-label{font-size:14px;color:#777}
 .info-value{font-size:14px;font-weight:600;color:#333;text-align:right}
-/* Loading */
 .loader{text-align:center;padding:40px;color:#888;font-size:15px}
 .spinner{width:36px;height:36px;border:4px solid #e0e0e0;border-top:4px solid #1a73e8;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 12px}
 @keyframes spin{to{transform:rotate(360deg)}}
-/* Truck chips */
 .truck-list{display:flex;flex-direction:column;gap:8px;max-height:240px;overflow-y:auto}
 .truck-chip{padding:12px 14px;border:2px solid #e0e0e0;border-radius:10px;cursor:pointer;transition:.15s;background:#fff}
 .truck-chip:active,.truck-chip.selected{border-color:#1a73e8;background:#e8f0fe}
 .truck-chip .plate{font-size:16px;font-weight:700;color:#333}
 .truck-chip .detail{font-size:12px;color:#888;margin-top:2px}
 .truck-chip .match-badge{float:right;font-size:11px;background:#e8f5e9;color:#2e7d32;padding:2px 7px;border-radius:10px;font-weight:600}
-/* Alert */
 .alert{padding:12px 14px;border-radius:10px;font-size:14px;margin-bottom:12px}
 .alert-warn{background:#fff3e0;color:#e65100;border:1px solid #ffcc80}
 .alert-err{background:#ffebee;color:#c62828;border:1px solid #ef9a9a}
 .alert-ok{background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7}
-/* Tire selector */
 .tire-grid{display:grid;gap:8px;margin-top:8px}
 .tire-btn{padding:10px;border:2px solid #e0e0e0;border-radius:8px;background:#fff;font-size:14px;cursor:pointer;text-align:center;transition:.15s}
 .tire-btn.selected{border-color:#ff7043;background:#fbe9e7;color:#bf360c;font-weight:700}
-/* Progress steps */
 .steps{display:flex;justify-content:center;gap:8px;margin:12px 0}
 .step{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;background:#e0e0e0;color:#888}
 .step.done{background:#4caf50;color:#fff}
 .step.active{background:#1a73e8;color:#fff}
-/* Block screen */
 #blockScreen{position:fixed;inset:0;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;padding:30px;text-align:center}
 #blockScreen .icon{font-size:64px;margin-bottom:16px}
 #blockScreen h2{font-size:20px;color:#333;margin-bottom:8px}
 #blockScreen p{font-size:15px;color:#888;line-height:1.6}
+#blockScreen .add-btn{margin-top:20px;padding:14px 28px;background:#06c755;color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-block}
 </style>
 </head>
 <body>
 
-<!-- ═══ BLOCK: ไม่ใช่ LINE ═══ -->
+<!-- ═══ BLOCK SCREENS ═══ -->
 <div id="blockScreen" style="display:none">
-  <div class="icon">🚫</div>
-  <h2>เปิดจาก LINE เท่านั้น</h2>
-  <p>กรุณาเปิดลิงก์นี้ผ่านแอป LINE<br>ไม่สามารถเข้าใช้งานผ่านบราวเซอร์ได้</p>
+  <div class="icon" id="blockIcon">🚫</div>
+  <h2 id="blockTitle">เปิดจาก LINE เท่านั้น</h2>
+  <p id="blockMsg">กรุณาเปิดลิงก์นี้ผ่านแอป LINE<br>ไม่สามารถเข้าใช้งานผ่านบราวเซอร์ได้</p>
+  <a id="blockBtn" href="#" style="display:none" class="add-btn">➕ เพิ่มเพื่อน OA</a>
 </div>
 
 <!-- ═══ SCREEN: Loading ═══ -->
@@ -181,12 +170,10 @@ body{font-family:'Sarabun',sans-serif;background:#f5f5f5;color:#333;min-height:1
         <span class="info-value" id="menuLastMileage">-</span>
       </div>
     </div>
-
     <div class="card">
       <div class="card-title">วันนี้ส่งแล้ว</div>
       <div id="menuTodaySent" style="display:flex;gap:8px;flex-wrap:wrap;min-height:28px"></div>
     </div>
-
     <div class="menu-grid">
       <div class="menu-card" onclick="goMileage('morning')">
         <div class="icon">🌅</div>
@@ -226,8 +213,6 @@ body{font-family:'Sarabun',sans-serif;background:#f5f5f5;color:#333;min-height:1
       <div class="step" id="mStep2">2</div>
       <div class="step" id="mStep3">3</div>
     </div>
-
-    <!-- Step 1: ถ่ายรูป -->
     <div id="mileageStep1">
       <div class="card">
         <div class="card-title">📷 ถ่ายรูปเลขไมล์</div>
@@ -235,14 +220,10 @@ body{font-family:'Sarabun',sans-serif;background:#f5f5f5;color:#333;min-height:1
         <img id="mileagePreview" class="photo-preview" alt="preview">
         <canvas id="mileageCanvas" style="display:none"></canvas>
         <input type="file" id="mileageInput" accept="image/*" capture="environment" style="display:none" onchange="onMileagePhoto(event)">
-        <button class="btn btn-primary" onclick="document.getElementById('mileageInput').click()">
-          📷 ถ่ายรูปเลขไมล์
-        </button>
+        <button class="btn btn-primary" onclick="document.getElementById('mileageInput').click()">📷 ถ่ายรูปเลขไมล์</button>
       </div>
       <button class="btn btn-gray" onclick="showScreen('screenMenu')">← กลับ</button>
     </div>
-
-    <!-- Step 2: ยืนยัน OCR -->
     <div id="mileageStep2" style="display:none">
       <div class="card">
         <img id="mileagePreview2" class="photo-preview" alt="preview" style="display:block">
@@ -262,8 +243,6 @@ body{font-family:'Sarabun',sans-serif;background:#f5f5f5;color:#333;min-height:1
           <input type="number" id="mileageManual" placeholder="เช่น 123456" inputmode="numeric">
         </div>
       </div>
-
-      <!-- Smart match truck (transport only) -->
       <div id="truckMatchSection" style="display:none">
         <div class="card">
           <div class="card-title">🚚 เลือกรถที่ขับวันนี้</div>
@@ -271,12 +250,9 @@ body{font-family:'Sarabun',sans-serif;background:#f5f5f5;color:#333;min-height:1
           <div id="matchTruckList" class="truck-list"></div>
         </div>
       </div>
-
       <button class="btn btn-success" onclick="confirmMileage()">✅ ยืนยันและส่ง</button>
       <button class="btn btn-gray" style="margin-top:8px" onclick="goBack('mileage')">🔄 ถ่ายใหม่</button>
     </div>
-
-    <!-- Step 3: สำเร็จ -->
     <div id="mileageStep3" style="display:none">
       <div class="card" style="text-align:center;padding:30px">
         <div style="font-size:60px;margin-bottom:12px">✅</div>
@@ -300,7 +276,6 @@ body{font-family:'Sarabun',sans-serif;background:#f5f5f5;color:#333;min-height:1
       <input type="file" id="fuelInput" accept="image/*" capture="environment" style="display:none" onchange="onFuelPhoto(event)">
       <button class="btn btn-primary" onclick="document.getElementById('fuelInput').click()">📷 ถ่ายรูปมิเตอร์ปั๊ม</button>
     </div>
-
     <div class="card">
       <div class="field">
         <label>เลขไมล์ตอนเติม (กม.)</label>
@@ -329,14 +304,12 @@ body{font-family:'Sarabun',sans-serif;background:#f5f5f5;color:#333;min-height:1
         <input type="text" id="fuelStation" placeholder="เช่น ปตท. ถนนพหล">
       </div>
     </div>
-
     <div class="card">
       <div class="card-title">📷 รูปใบเสร็จ (ถ้ามี)</div>
       <img id="fuelBillPreview" class="photo-preview" alt="preview">
       <input type="file" id="fuelBillInput" accept="image/*" capture="environment" style="display:none" onchange="onFuelBillPhoto(event)">
       <button class="btn btn-gray" onclick="document.getElementById('fuelBillInput').click()">📷 ถ่ายใบเสร็จ (ไม่บังคับ)</button>
     </div>
-
     <button class="btn btn-success" onclick="submitFuel()">✅ บันทึกการเติมน้ำมัน</button>
     <button class="btn btn-gray" style="margin-top:8px" onclick="showScreen('screenMenu')">← กลับ</button>
     <div id="fuelMsg" style="margin-top:12px;font-size:14px;text-align:center;white-space:pre-line"></div>
@@ -377,7 +350,6 @@ body{font-family:'Sarabun',sans-serif;background:#f5f5f5;color:#333;min-height:1
         <label>ครั้งถัดไปที่ไมล์ (กม.) <span style="color:#aaa;font-weight:400">ไม่บังคับ</span></label>
         <input type="number" id="maintNextMile" placeholder="เช่น 130000" inputmode="numeric">
       </div>
-      <!-- ตำแหน่งยาง -->
       <div class="field" id="tireSection" style="display:none">
         <label>ตำแหน่งยางที่เปลี่ยน/สลับ (เลือกได้หลายตำแหน่ง)</label>
         <div id="tireGrid" class="tire-grid"></div>
@@ -387,38 +359,28 @@ body{font-family:'Sarabun',sans-serif;background:#f5f5f5;color:#333;min-height:1
         <textarea id="maintNotes" placeholder="รายละเอียดเพิ่มเติม"></textarea>
       </div>
     </div>
-
     <div class="card">
       <div class="card-title">📷 รูปใบเสร็จ (จำเป็น)</div>
       <img id="maintBillPreview" class="photo-preview" alt="preview">
       <input type="file" id="maintBillInput" accept="image/*" capture="environment" style="display:none" onchange="onMaintBillPhoto(event)">
       <button class="btn btn-orange" onclick="document.getElementById('maintBillInput').click()">📷 ถ่ายรูปใบเสร็จ</button>
     </div>
-
     <button class="btn btn-success" onclick="submitMaintenance()">✅ ส่งข้อมูลซ่อมบำรุง</button>
     <button class="btn btn-gray" style="margin-top:8px" onclick="showScreen('screenMenu')">← กลับ</button>
     <div id="maintMsg" style="margin-top:12px;font-size:14px;text-align:center;white-space:pre-line"></div>
   </div>
 </div>
 
-<!-- Tesseract.js -->
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-<!-- LIFF SDK -->
 <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 
 <script>
-// ════════════════════════════════════════════════════════════
-// CONFIG — แก้ YOUR_PROJECT เป็น project ref จาก Supabase
-// ════════════════════════════════════════════════════════════
 const LIFF_ID  = "2010109104-FF5HuJuq";
 const API_BASE = "https://joevecrppgctnemaqgan.supabase.co/functions/v1/liff-api";
 
-// ════════════════════════════════════════════════════════════
-// STATE
-// ════════════════════════════════════════════════════════════
 let lineUserId    = null;
 let driverInfo    = null;
-let currentType   = null;   // 'morning' | 'evening'
+let currentType   = null;
 let croppedBlob   = null;
 let fuelBlob      = null;
 let fuelBillBlob  = null;
@@ -428,16 +390,30 @@ let ocrMileage    = null;
 let selectedTruckId = null;
 let selectedTirePositions = new Set();
 
-// ════════════════════════════════════════════════════════════
-// INIT
-// ════════════════════════════════════════════════════════════
 async function init() {
-  await liff.init({ liffId: LIFF_ID });
+  try {
+    await liff.init({ liffId: LIFF_ID });
+  } catch (e) {
+    showBlock("🚫", "LIFF โหลดไม่สำเร็จ", `กรุณาลองใหม่อีกครั้ง\n(${e.message})`);
+    return;
+  }
 
   if (!liff.isInClient()) {
-    document.getElementById("blockScreen").style.display = "flex";
-    document.getElementById("screenLoading").classList.remove("active");
+    showBlock("🚫", "เปิดจาก LINE เท่านั้น",
+      "กรุณาเปิดลิงก์นี้ผ่านแอป LINE\nไม่สามารถเข้าใช้งานผ่านบราวเซอร์ได้");
     return;
+  }
+
+  try {
+    const fs = await liff.getFriendship();
+    if (!fs.friendFlag) {
+      showBlock("👋", "กรุณาแอดเฟรน OA ก่อน",
+        "คุณต้องเพิ่ม LINE OA ของเราเป็นเพื่อนก่อน\nจึงจะเข้าใช้ระบบได้",
+        "https://line.me/R/ti/p/@057rszew");
+      return;
+    }
+  } catch {
+    // getFriendship() อาจ fail ใน dev mode — ข้ามไปได้
   }
 
   const profile = await liff.getProfile();
@@ -449,9 +425,21 @@ async function init() {
   await loadMenu(deepType);
 }
 
-// ════════════════════════════════════════════════════════════
-// HELPERS
-// ════════════════════════════════════════════════════════════
+function showBlock(icon, title, msg, addFriendUrl = null) {
+  document.getElementById("blockIcon").textContent  = icon;
+  document.getElementById("blockTitle").textContent = title;
+  document.getElementById("blockMsg").textContent   = msg;
+  const btn = document.getElementById("blockBtn");
+  if (addFriendUrl) {
+    btn.href          = addFriendUrl;
+    btn.style.display = "inline-block";
+  } else {
+    btn.style.display = "none";
+  }
+  document.getElementById("blockScreen").style.display = "flex";
+  document.getElementById("screenLoading").classList.remove("active");
+}
+
 function showScreen(id) {
   document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
   document.getElementById(id).classList.add("active");
@@ -482,9 +470,6 @@ function getGPS() {
   });
 }
 
-// ════════════════════════════════════════════════════════════
-// LOAD MENU
-// ════════════════════════════════════════════════════════════
 async function loadMenu(deepType = null) {
   try {
     const data = await apiFetch(`driver-status?line_user_id=${lineUserId}`);
@@ -507,34 +492,44 @@ async function loadMenu(deepType = null) {
         : "-";
     document.getElementById("menuSub").textContent = data.warehouse || "-";
 
-    const sent    = data.today_sent || [];
-    const sentEl  = document.getElementById("menuTodaySent");
+    const sent   = data.today_sent || [];
+    const sentEl = document.getElementById("menuTodaySent");
     sentEl.innerHTML = [
       `<span class="badge ${sent.includes('morning') ? 'badge-sent' : 'badge-warn'}">${sent.includes('morning') ? '✅' : '⏳'} ไมล์เช้า</span>`,
       `<span class="badge ${sent.includes('evening') ? 'badge-sent' : 'badge-warn'}">${sent.includes('evening') ? '✅' : '⏳'} ไมล์เย็น</span>`,
     ].join(" ");
 
     showScreen("screenMenu");
-    if (deepType === "morning") goMileage("morning");
-    else if (deepType === "evening") goMileage("evening");
-    else if (deepType === "fuel") goFuel();
+
+    if (deepType === "morning") {
+      goMileage("morning");
+    } else if (deepType === "evening") {
+      goMileage("evening");
+    } else if (deepType === "mileage") {
+      if (!sent.includes("morning")) {
+        goMileage("morning");
+      } else if (!sent.includes("evening")) {
+        goMileage("evening");
+      }
+    } else if (deepType === "fuel") {
+      goFuel();
+    } else if (deepType === "maintenance") {
+      goMaintenance();
+    }
   } catch (e) {
     document.getElementById("screenLoading").innerHTML =
       `<div class="body loader">เกิดข้อผิดพลาด: ${e.message}</div>`;
   }
 }
 
-// ════════════════════════════════════════════════════════════
-// REGISTER
-// ════════════════════════════════════════════════════════════
 function renderRegisterScreen(trucks) {
   const list = document.getElementById("regTruckList");
   list.innerHTML = "";
   trucks.forEach(t => {
     const el = document.createElement("div");
-    el.className  = "truck-chip";
-    el.innerHTML  = `<span class="plate">${t.plate_number}</span><div class="detail">${t.warehouse} · ${t.truck_type || "4wheel"}</div>`;
-    el.onclick    = () => {
+    el.className = "truck-chip";
+    el.innerHTML = `<span class="plate">${t.plate_number}</span><div class="detail">${t.warehouse} · ${t.truck_type || "4wheel"}</div>`;
+    el.onclick   = () => {
       list.querySelectorAll(".truck-chip").forEach(c => c.classList.remove("selected"));
       el.classList.add("selected");
       selectedTruckId = t.id;
@@ -584,9 +579,6 @@ async function doRegister() {
   }
 }
 
-// ════════════════════════════════════════════════════════════
-// MILEAGE FLOW
-// ════════════════════════════════════════════════════════════
 function goMileage(type) {
   currentType     = type;
   croppedBlob     = null;
@@ -626,9 +618,7 @@ async function onMileagePhoto(event) {
   document.getElementById("mStep1").className = "step done";
   document.getElementById("mStep2").className = "step active";
 
-  // preview 2 (top of step2)
   document.getElementById("mileagePreview2").src = URL.createObjectURL(file);
-
   croppedBlob = await cropAndOCR(file);
 }
 
@@ -657,9 +647,8 @@ async function cropAndOCR(file) {
         document.getElementById("ocrLoading").style.display = "none";
 
         if (ocrMileage) {
-          document.getElementById("ocrNumber").textContent  = ocrMileage.toLocaleString("th-TH");
+          document.getElementById("ocrNumber").textContent   = ocrMileage.toLocaleString("th-TH");
           document.getElementById("ocrResult").style.display = "";
-          // ถ้าเป็น transport ให้ smart match
           if (!driverInfo?.truck_id) await loadSmartMatch();
         } else {
           showMileageInput();
@@ -715,9 +704,9 @@ async function confirmMileage() {
   const manual  = document.getElementById("mileageManual").value;
   const mileage = manual ? parseInt(manual) : ocrMileage;
 
-  if (!mileage)        { alert("กรุณาระบุเลขไมล์"); return; }
-  if (!selectedTruckId){ alert("กรุณาเลือกรถก่อน"); return; }
-  if (!croppedBlob)    { alert("กรุณาถ่ายรูปก่อน"); return; }
+  if (!mileage)         { alert("กรุณาระบุเลขไมล์"); return; }
+  if (!selectedTruckId) { alert("กรุณาเลือกรถก่อน"); return; }
+  if (!croppedBlob)     { alert("กรุณาถ่ายรูปก่อน"); return; }
 
   const pos = await getGPS().catch(() => null);
   const fd  = new FormData();
@@ -759,9 +748,6 @@ function goBack(from) {
   }
 }
 
-// ════════════════════════════════════════════════════════════
-// FUEL FLOW
-// ════════════════════════════════════════════════════════════
 function goFuel() {
   fuelBlob = null; fuelBillBlob = null;
   document.getElementById("fuelTruckSub").textContent =
@@ -857,9 +843,6 @@ async function submitFuel() {
   }
 }
 
-// ════════════════════════════════════════════════════════════
-// MAINTENANCE FLOW
-// ════════════════════════════════════════════════════════════
 const TIRE_POSITIONS = {
   "4wheel":  [
     { code:"FL", label:"หน้าซ้าย" }, { code:"FR", label:"หน้าขวา" },
@@ -979,9 +962,6 @@ async function submitMaintenance() {
   }
 }
 
-// ════════════════════════════════════════════════════════════
-// START
-// ════════════════════════════════════════════════════════════
 init().catch(err => {
   console.error(err);
   document.getElementById("screenLoading").innerHTML =
