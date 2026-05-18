@@ -233,7 +233,12 @@ body{font-family:'Sarabun',sans-serif;background:#f5f5f5;color:#333;min-height:1
     <div id="mileageStep1">
       <div class="card">
         <div class="card-title">📷 ถ่ายรูปเลขไมล์</div>
-        <p style="font-size:14px;color:#666;margin-bottom:14px">ถ่ายให้เห็นตัวเลขชัดเจน ระบบจะอ่านไมล์ให้อัตโนมัติ</p>
+        <div style="font-size:12px;color:#555;background:#f5f5f5;border-radius:8px;padding:8px 10px;margin:6px 0 12px;text-align:left;line-height:1.7">
+          📌 เคล็ดลับถ่ายให้อ่านง่าย:<br>
+          • ถ่ายให้ <b>เลขไมล์เต็มภาพ</b> ไม่ต้องเห็นทั้ง dashboard<br>
+          • ถ่าย <b>ตรงๆ ไม่เอียง</b><br>
+          • ให้ <b>แสงสว่าง</b> พอ หรือเปิดไฟในรถ
+        </div>
         <img id="mileagePreview" class="photo-preview" alt="preview">
         <canvas id="mileageCanvas" style="display:none"></canvas>
         <canvas id="fuelOcrCanvas" style="display:none"></canvas>
@@ -302,7 +307,12 @@ body{font-family:'Sarabun',sans-serif;background:#f5f5f5;color:#333;min-height:1
     <div id="fuelStep1">
       <div class="card" style="text-align:center">
         <div class="card-title">📷 ถ่ายรูปเลขไมล์ตอนเติม (จำเป็น)</div>
-        <p style="font-size:13px;color:#888;margin:4px 0 12px">ถ่ายให้เห็นตัวเลขชัดเจน ระบบจะอ่านเลขให้อัตโนมัติ</p>
+        <div style="font-size:12px;color:#555;background:#f5f5f5;border-radius:8px;padding:8px 10px;margin:6px 0 12px;text-align:left;line-height:1.7">
+          📌 เคล็ดลับถ่ายให้อ่านง่าย:<br>
+          • ถ่ายให้ <b>เลขไมล์เต็มภาพ</b> ไม่ต้องเห็นทั้ง dashboard<br>
+          • ถ่าย <b>ตรงๆ ไม่เอียง</b><br>
+          • ให้ <b>แสงสว่าง</b> พอ หรือเปิดไฟในรถ
+        </div>
         <input type="file" id="fuelOcrInput" accept="image/*" capture="environment" style="display:none" onchange="onFuelOcrPhoto(event)">
         <button class="btn btn-primary" onclick="document.getElementById('fuelOcrInput').click()">📷 ถ่ายรูปเลขไมล์</button>
       </div>
@@ -718,45 +728,109 @@ async function onMileagePhoto(event) {
   croppedBlob = await cropAndOCR(file);
 }
 
-async function cropAndOCR(file) {
+// ════════════════════════════════════════════════════════════
+// OCR ENGINE — ใช้ร่วมกันทั้ง mileage screen และ fuel screen
+// ════════════════════════════════════════════════════════════
+
+// Preprocess canvas: Grayscale + Contrast boost
+function applyContrastGray(ctx, w, h) {
+  const imageData = ctx.getImageData(0, 0, w, h);
+  const d = imageData.data;
+  for (let i = 0; i < d.length; i += 4) {
+    // Luminance grayscale
+    const gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+    // Strong contrast stretch (factor 2.8)
+    const val = Math.min(255, Math.max(0, (gray - 128) * 2.8 + 128));
+    d[i] = d[i + 1] = d[i + 2] = val;
+    d[i + 3] = 255;
+  }
+  ctx.putImageData(imageData, 0, 0);
+}
+
+// ลอง OCR บน canvas ที่ crop แล้ว — คืน number หรือ null
+async function ocrCanvas(canvas) {
+  const blob = await new Promise(r => canvas.toBlob(r, "image/png")); // PNG ดีกว่า JPEG สำหรับ OCR
+  const result = await Tesseract.recognize(blob, "eng", {
+    tessedit_char_whitelist: "0123456789 ",
+    tessedit_pageseg_mode: "7",        // single text line
+    tessedit_ocr_engine_mode: "1",     // LSTM only (แม่นกว่า)
+    preserve_interword_spaces: "0",
+  });
+  const text    = result.data.text.replace(/[^0-9]/g, " ").trim();
+  const numbers = text.split(/\s+/).filter(n => n.length >= 5 && n.length <= 7);
+  return numbers.length > 0 ? parseInt(numbers[0]) : null;
+}
+
+// Multi-crop + preprocess + OCR — ลอง 3 ตำแหน่ง อัตโนมัติ
+// คืน { blob: Blob (cropped ตำแหน่งแรก), mileage: number|null }
+async function runOCR(file, canvasId) {
   return new Promise((resolve) => {
     const img = new Image();
     img.onload = async () => {
       const w = img.naturalWidth, h = img.naturalHeight;
-      const cx = Math.round(w * 0.05), cy = Math.round(h * 0.38);
-      const cw = Math.round(w * 0.90), ch = Math.round(h * 0.38);
+      const canvas = document.getElementById(canvasId);
+      const SCALE  = 3;  // ขยาย 3x ก่อน OCR — ตัวเลขใหญ่ขึ้น แม่นขึ้น
 
-      const canvas = document.getElementById("mileageCanvas");
-      canvas.width = cw; canvas.height = ch;
-      canvas.getContext("2d").drawImage(img, cx, cy, cw, ch, 0, 0, cw, ch);
+      // ตำแหน่ง crop ที่จะลอง (yRatio, hRatio)
+      const crops = [
+        { y: 0.35, h: 0.36 },   // กลาง — ตำแหน่งที่พบบ่อยที่สุด
+        { y: 0.18, h: 0.38 },   // บน — ถ้าถ่ายเห็นมิเตอร์ด้านบน
+        { y: 0.52, h: 0.36 },   // ล่าง — ถ้าถ่ายมุมต่ำ
+        { y: 0.05, h: 0.90 },   // เต็มภาพ — fallback สุดท้าย
+      ];
 
-      canvas.toBlob(async (blob) => {
+      let foundMileage: number | null = null;
+      let displayBlob: Blob | null   = null;
+
+      for (let ci = 0; ci < crops.length; ci++) {
+        const crop = crops[ci];
+        const cx   = Math.round(w * 0.03);
+        const cy   = Math.round(h * crop.y);
+        const cw   = Math.round(w * 0.94);
+        const ch   = Math.round(h * crop.h);
+
+        canvas.width  = cw * SCALE;
+        canvas.height = ch * SCALE;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, cx, cy, cw, ch, 0, 0, cw * SCALE, ch * SCALE);
+
+        // Preprocess: grayscale + contrast
+        applyContrastGray(ctx, canvas.width, canvas.height);
+
+        // เก็บ blob ของ crop แรก ไว้แสดง preview
+        if (ci === 0) {
+          displayBlob = await new Promise(r => canvas.toBlob(r, "image/jpeg", 0.85));
+        }
+
         try {
-          const result  = await Tesseract.recognize(blob, "eng", { tessedit_char_whitelist: "0123456789" });
-          const text    = result.data.text.replace(/[^0-9]/g, " ").trim();
-          const numbers = text.split(/\s+/).filter(n => n.length >= 5 && n.length <= 7);
-          ocrMileage    = numbers.length > 0 ? parseInt(numbers[0]) : null;
-        } catch {
-          ocrMileage = null;
-        }
+          const num = await ocrCanvas(canvas);
+          if (num) { foundMileage = num; break; }
+        } catch { /* ลอง crop ถัดไป */ }
+      }
 
-        document.getElementById("ocrLoading").style.display = "none";
-
-        if (ocrMileage) {
-          document.getElementById("ocrNumber").textContent  = ocrMileage.toLocaleString("th-TH");
-          document.getElementById("ocrResult").style.display = "";
-          // ถ้าเป็น transport ให้ smart match
-          if (!driverInfo?.truck_id) await loadSmartMatch();
-        } else {
-          // OCR อ่านไม่ออก — ให้ถ่ายใหม่
-          document.getElementById("ocrFailed").style.display = "";
-        }
-
-        resolve(blob);
-      }, "image/jpeg", 0.82);
+      resolve({ blob: displayBlob, mileage: foundMileage });
     };
     img.src = URL.createObjectURL(file);
   });
+}
+
+// ── Mileage screen OCR ──────────────────────────────────────
+async function cropAndOCR(file) {
+  const { blob, mileage } = await runOCR(file, "mileageCanvas");
+  ocrMileage = mileage;
+
+  document.getElementById("ocrLoading").style.display = "none";
+
+  if (ocrMileage) {
+    document.getElementById("ocrNumber").textContent   = ocrMileage.toLocaleString("th-TH");
+    document.getElementById("ocrResult").style.display = "";
+    document.getElementById("ocrFailed").style.display = "none";
+    if (!driverInfo?.truck_id) await loadSmartMatch();
+  } else {
+    document.getElementById("ocrFailed").style.display = "";
+  }
+
+  return blob;
 }
 
 function retakeMileagePhoto() {
@@ -892,7 +966,7 @@ async function onFuelOcrPhoto(event) {
 
   // Run OCR (reuse same crop logic as mileage)
   fuelOcrBlob    = await cropAndOCRFuel(file);
-  fuelOcrMileage = _lastFuelOcr;
+  // fuelOcrMileage ถูก set ใน cropAndOCRFuel แล้ว
 
   document.getElementById("fuelOcrLoading").style.display = "none";
 
@@ -905,40 +979,16 @@ async function onFuelOcrPhoto(event) {
   }
 }
 
-let _lastFuelOcr = null;
-
+// ── Fuel screen OCR — ใช้ engine เดียวกับ mileage ──────────
 async function cropAndOCRFuel(file) {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.onload = async () => {
-      const w = img.naturalWidth, h = img.naturalHeight;
-      const cx = Math.round(w * 0.05), cy = Math.round(h * 0.38);
-      const cw = Math.round(w * 0.90), ch = Math.round(h * 0.38);
-
-      const canvas = document.getElementById("fuelOcrCanvas");
-      canvas.width = cw; canvas.height = ch;
-      canvas.getContext("2d").drawImage(img, cx, cy, cw, ch, 0, 0, cw, ch);
-
-      canvas.toBlob(async (blob) => {
-        try {
-          const result  = await Tesseract.recognize(blob, "eng", { tessedit_char_whitelist: "0123456789" });
-          const text    = result.data.text.replace(/[^0-9]/g, " ").trim();
-          const numbers = text.split(/\s+/).filter(n => n.length >= 5 && n.length <= 7);
-          _lastFuelOcr  = numbers.length > 0 ? parseInt(numbers[0]) : null;
-        } catch {
-          _lastFuelOcr = null;
-        }
-        resolve(blob);
-      }, "image/jpeg", 0.82);
-    };
-    img.src = URL.createObjectURL(file);
-  });
+  const { blob, mileage } = await runOCR(file, "fuelOcrCanvas");
+  fuelOcrMileage = mileage;
+  return blob;
 }
 
 function retakeFuelOcrPhoto() {
   fuelOcrBlob    = null;
   fuelOcrMileage = null;
-  _lastFuelOcr   = null;
   document.getElementById("fuelStep1").style.display  = "";
   document.getElementById("fuelStep2").style.display  = "none";
   document.getElementById("fuelOcrInput").value       = "";
