@@ -158,7 +158,8 @@ body{font-family:'Sarabun',sans-serif;background:#f5f5f5;color:#333;min-height:1
       </div>
     </div>
     <button class="btn btn-primary" onclick="doRegister()">✅ ลงทะเบียน</button>
-    <div id="regMsg" style="margin-top:12px;text-align:center;font-size:14px;color:#e53935"></div>
+    <div id="regMsg" style="margin-top:12px;text-align:center;font-size:14px;white-space:pre-line"></div>
+    <div id="regDebug" style="margin-top:16px;font-size:11px;color:#bbb;text-align:center"></div>
   </div>
 </div>
 
@@ -545,11 +546,17 @@ function fmtNum(n) {
 }
 
 async function apiFetch(path, opts = {}) {
-  const res = await fetch(`${API_BASE}/${path}`, {
-    headers: { "Content-Type": "application/json" },
-    ...opts
-  });
-  return res.json();
+  try {
+    const res = await fetch(`${API_BASE}/${path}`, {
+      headers: { "Content-Type": "application/json" },
+      ...opts
+    });
+    const text = await res.text();
+    try { return JSON.parse(text); }
+    catch { return { error: `Server error (${res.status}): ${text.slice(0, 100)}` }; }
+  } catch (e) {
+    return { error: `เชื่อมต่อ server ไม่ได้: ${e.message}` };
+  }
 }
 
 function getGPS() {
@@ -566,7 +573,13 @@ function getGPS() {
 // ════════════════════════════════════════════════════════════
 async function loadMenu(deepType = null) {
   try {
-    const data = await apiFetch(`driver-status?line_user_id=${lineUserId}`);
+    const data = await apiFetch(`driver-status?line_user_id=${encodeURIComponent(lineUserId || "")}`);
+
+    // API error
+    if (data?.error && !data.registered) {
+      showBlock("⚠️", "เชื่อมต่อระบบไม่ได้", `กรุณาปิดแล้วเปิดใหม่\n(${data.error})`);
+      return;
+    }
 
     if (!data || !data.registered) {
       renderRegisterScreen(data?.trucks || []);
@@ -626,17 +639,35 @@ async function loadMenu(deepType = null) {
 function renderRegisterScreen(trucks) {
   const list = document.getElementById("regTruckList");
   list.innerHTML = "";
-  trucks.forEach(t => {
-    const el = document.createElement("div");
-    el.className  = "truck-chip";
-    el.innerHTML  = `<span class="plate">${t.plate_number}</span><div class="detail">${t.warehouse} · ${t.truck_type || "4wheel"}</div>`;
-    el.onclick    = () => {
-      list.querySelectorAll(".truck-chip").forEach(c => c.classList.remove("selected"));
-      el.classList.add("selected");
-      selectedTruckId = t.id;
-    };
-    list.appendChild(el);
-  });
+  selectedTruckId = null;
+
+  if (trucks.length === 0) {
+    list.innerHTML = `
+      <div class="alert alert-warn" style="margin:0">
+        ⚠️ ยังไม่มีรถในระบบ<br>
+        <span style="font-size:12px">แอดมินต้องเพิ่มรถก่อน หรือเลือกประเภท "ขนส่ง" ด้านบน</span>
+      </div>`;
+  } else {
+    trucks.forEach(t => {
+      const el = document.createElement("div");
+      el.className = "truck-chip";
+      el.innerHTML = `<span class="plate">${t.plate_number}</span><div class="detail">${t.warehouse || ""} · ${t.truck_type || "4wheel"}</div>`;
+      el.onclick   = () => {
+        list.querySelectorAll(".truck-chip").forEach(c => c.classList.remove("selected"));
+        el.classList.add("selected");
+        selectedTruckId = t.id;
+      };
+      list.appendChild(el);
+    });
+  }
+
+  // Debug info — แสดง LINE user ID ย่อ (ช่วย diagnose)
+  const debugEl = document.getElementById("regDebug");
+  if (debugEl) {
+    const uid = lineUserId || "ไม่มี";
+    debugEl.textContent = `LINE ID: ${uid.slice(0, 8)}... | รถในระบบ: ${trucks.length} คัน`;
+  }
+
   showScreen("screenRegister");
 }
 
@@ -652,11 +683,21 @@ async function doRegister() {
   const route = document.getElementById("regRoute").value;
   const msgEl = document.getElementById("regMsg");
 
-  if (!name) { msgEl.textContent = "กรุณากรอกชื่อ"; return; }
-  if (type === "van" && !selectedTruckId) { msgEl.textContent = "กรุณาเลือกรถ"; return; }
+  msgEl.style.color = "#e53935";
 
-  msgEl.textContent = "⏳ กำลังลงทะเบียน...";
+  // Validate
+  if (!lineUserId) {
+    msgEl.textContent = "❌ ไม่พบข้อมูล LINE กรุณาปิดแล้วเปิดใหม่";
+    return;
+  }
+  if (!name) { msgEl.textContent = "❌ กรุณากรอกชื่อ-นามสกุล"; return; }
+  if (type === "van" && !selectedTruckId) {
+    msgEl.textContent = "❌ กรุณาเลือกรถที่ขับก่อน";
+    return;
+  }
+
   msgEl.style.color = "#888";
+  msgEl.textContent = "⏳ กำลังลงทะเบียน...";
 
   const res = await apiFetch("register", {
     method: "POST",
@@ -670,13 +711,13 @@ async function doRegister() {
     })
   });
 
-  if (res.success) {
+  if (res?.success) {
     msgEl.style.color = "#2e7d32";
-    msgEl.textContent = res.message;
-    setTimeout(() => loadMenu(), 1500);
+    msgEl.textContent = "✅ " + (res.message || "ลงทะเบียนสำเร็จ!");
+    setTimeout(() => loadMenu(), 1800);
   } else {
     msgEl.style.color = "#e53935";
-    msgEl.textContent = res.error || "เกิดข้อผิดพลาด";
+    msgEl.textContent = "❌ " + (res?.error || "เกิดข้อผิดพลาด ลองใหม่อีกครั้ง");
   }
 }
 
