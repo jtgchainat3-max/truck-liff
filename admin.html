@@ -310,6 +310,25 @@ tr:hover td{background:#fafafa}
 </div>
 
 <!-- ═══ MODAL: Add Driver ═══ -->
+<!-- ═══ MODAL: Driver Detail (กดดูข้อมูลคนขับ) ═══ -->
+<div class="modal-overlay" id="driverDetailModal">
+  <div class="modal-box" style="max-width:600px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <h3 id="dd_title">👤 ข้อมูลคนขับ</h3>
+      <button onclick="closeModal('driverDetailModal')" style="background:none;border:none;font-size:24px;color:#999;cursor:pointer">×</button>
+    </div>
+
+    <div id="dd_content">
+      <!-- จะถูก render โดย showDriverDetail() -->
+    </div>
+
+    <div class="modal-actions" style="margin-top:16px">
+      <button class="btn btn-gray" style="width:auto;padding:10px 20px" onclick="closeModal('driverDetailModal')">ปิด</button>
+      <button id="dd_toggleBtn" class="btn btn-gray" style="width:auto;padding:10px 20px" onclick="toggleDriverFromDetail()">-</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="addDriverModal">
   <div class="modal-box">
     <h3>➕ เพิ่มคนขับใหม่</h3>
@@ -1211,6 +1230,8 @@ function generateQRCodes() {
   });
 }
 
+let allDriversCache = [];
+
 async function loadDrivers() {
   generateQRCodes();
   const el = document.getElementById("driversContent");
@@ -1221,6 +1242,7 @@ async function loadDrivers() {
     el.innerHTML = `<div class="alert alert-err">${data?.error || "โหลดไม่สำเร็จ"}</div>`;
     return;
   }
+  allDriversCache = data;
 
   if (data.length === 0) {
     el.innerHTML = `<div class="card"><p style="color:#aaa;text-align:center;padding:20px">ยังไม่มีคนขับลงทะเบียน — ให้คนขับสแกน QR ด้านบนเพื่อลงทะเบียน</p></div>`;
@@ -1252,7 +1274,7 @@ async function loadDrivers() {
     const idCardFmt = fmtIdCard(d.id_card_number);
     html += `<tr>
       <td>
-        <b>${d.name}</b>
+        <a onclick="showDriverDetail(${d.id})" style="color:#1a73e8;cursor:pointer;text-decoration:underline;font-weight:700">${d.name}</a>
         <br><small style="font-family:monospace;font-size:10px;color:#888">${lineId.slice(0, 10)}${lineId.length > 10 ? "..." : ""}${lineId !== "-" ? ` <button onclick="navigator.clipboard.writeText('${lineId}');this.textContent='✅';setTimeout(()=>this.textContent='📋',1500)" style="border:none;background:none;cursor:pointer;font-size:11px">📋</button>` : ""}</small>
       </td>
       <td><span class="badge ${d.driver_type === 'van' ? 'b-sent' : 'b-warn'}">${d.driver_type === 'van' ? 'VAN' : 'ขนส่ง'}</span></td>
@@ -1281,6 +1303,115 @@ async function toggleDriver(id, currentActive) {
     method: "PUT",
     body: JSON.stringify({ is_active: !currentActive })
   });
+  loadDrivers();
+}
+
+// ════════════════════════════════════════════════════════════
+// DRIVER DETAIL MODAL
+// ════════════════════════════════════════════════════════════
+let currentDriverDetail = null;
+
+function showDriverDetail(id) {
+  const d = allDriversCache.find(x => x.id === id);
+  if (!d) { alert("ไม่พบข้อมูลคนขับ"); return; }
+  currentDriverDetail = d;
+
+  // Format helpers
+  const fmtIdCard = (s) => {
+    if (!s) return "<span style='color:#aaa'>ไม่ระบุ</span>";
+    const v = String(s).replace(/\D/g, "");
+    if (v.length !== 13) return s;
+    return `${v[0]}-${v.slice(1,5)}-${v.slice(5,10)}-${v.slice(10,12)}-${v[12]}`;
+  };
+  const licenseStatus = (expDate) => {
+    if (!expDate) return `<span style="color:#aaa">ไม่ระบุ</span>`;
+    const days = daysUntil(expDate);
+    const dateStr = thaiDateLong(expDate);
+    if (days === null) return dateStr;
+    if (days < 0)   return `<span style="color:#c62828;font-weight:700">${dateStr} (หมดแล้ว ${Math.abs(days)} วัน)</span>`;
+    if (days <= 30) return `<span style="color:#e65100;font-weight:700">${dateStr} (เหลือ ${days} วัน)</span>`;
+    if (days <= 90) return `<span style="color:#0d47a1">${dateStr} (เหลือ ${days} วัน)</span>`;
+    return `<span style="color:#2e7d32">${dateStr} (เหลือ ${days} วัน)</span>`;
+  };
+  const row = (label, value, options = {}) => `
+    <div style="display:flex;padding:8px 0;border-bottom:1px solid #f0f0f0${options.wrap ? ';flex-direction:column;gap:4px' : ''}">
+      <div style="${options.wrap ? '' : 'flex:0 0 130px;'}font-size:13px;color:#777;font-weight:600">${label}</div>
+      <div style="flex:1;font-size:14px;color:#333">${value || "<span style='color:#aaa'>ไม่ระบุ</span>"}</div>
+    </div>`;
+
+  // Title
+  document.getElementById("dd_title").textContent = `👤 ${d.name}`;
+
+  // Toggle button
+  const toggleBtn = document.getElementById("dd_toggleBtn");
+  toggleBtn.textContent = d.is_active ? "🚫 ปิดการใช้งาน" : "✅ เปิดการใช้งาน";
+  toggleBtn.style.background = d.is_active ? "#ffebee" : "#e8f5e9";
+  toggleBtn.style.color = d.is_active ? "#c62828" : "#2e7d32";
+
+  const content = document.getElementById("dd_content");
+  content.innerHTML = `
+    <!-- ── สถานะ + ประเภท ── -->
+    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+      <span class="badge ${d.is_active ? 'b-ok' : 'b-exp'}" style="font-size:13px">${d.is_active ? '✅ ใช้งานอยู่' : '🚫 ปิดอยู่'}</span>
+      <span class="badge ${d.driver_type === 'van' ? 'b-sent' : 'b-warn'}" style="font-size:13px">${d.driver_type === 'van' ? '🚐 VAN' : '🚛 ขนส่ง'}</span>
+      ${d.warehouse ? `<span class="badge b-blue" style="font-size:13px">📍 ${d.warehouse}</span>` : ""}
+      ${d.route_code ? `<span class="badge b-blue" style="font-size:13px">🛣 ${d.route_code}</span>` : ""}
+    </div>
+
+    <!-- ── ข้อมูลส่วนตัว ── -->
+    <div style="background:#f9f9f9;border-radius:8px;padding:12px 14px;margin-bottom:12px">
+      <div style="font-size:12px;color:#1a73e8;font-weight:700;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">👤 ข้อมูลส่วนตัว</div>
+      ${row("ชื่อ-นามสกุล", `<b>${d.name}</b>`)}
+      ${row("เบอร์โทร", d.phone ? `<a href="tel:${d.phone}" style="color:#1a73e8">${d.phone}</a>` : null)}
+      ${row("เลขบัตร ปชช.", `<span style="font-family:monospace">${fmtIdCard(d.id_card_number)}</span>`)}
+      ${row("ที่อยู่", d.address || null, { wrap: true })}
+    </div>
+
+    <!-- ── ใบขับขี่ ── -->
+    <div style="background:#f9f9f9;border-radius:8px;padding:12px 14px;margin-bottom:12px">
+      <div style="font-size:12px;color:#1a73e8;font-weight:700;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">🪪 ใบขับขี่</div>
+      ${row("เลขที่ใบขับขี่", d.license_number)}
+      ${row("วันหมดอายุ", licenseStatus(d.license_expiry_date))}
+      ${d.license_image_path ? `
+        <div style="padding:10px 0;border-top:1px solid #f0f0f0;margin-top:6px">
+          <div style="font-size:13px;color:#777;font-weight:600;margin-bottom:8px">รูปใบขับขี่</div>
+          <a href="${d.license_image_path}" target="_blank">
+            <img src="${d.license_image_path}" style="width:100%;max-height:220px;object-fit:contain;border-radius:8px;border:1px solid #e0e0e0;background:#fff">
+          </a>
+          <div style="font-size:11px;color:#aaa;text-align:center;margin-top:4px">กดที่รูปเพื่อขยาย</div>
+        </div>
+      ` : `<div style="padding:10px 0;color:#aaa;font-size:13px">— ไม่มีรูปใบขับขี่ —</div>`}
+    </div>
+
+    <!-- ── การทำงาน ── -->
+    <div style="background:#f9f9f9;border-radius:8px;padding:12px 14px;margin-bottom:12px">
+      <div style="font-size:12px;color:#1a73e8;font-weight:700;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">🚛 การทำงาน</div>
+      ${row("ประเภท", d.driver_type === "van" ? "VAN — มีรถประจำ" : "ขนส่ง — เลือกรถได้ทุกวัน")}
+      ${row("โกดัง", d.warehouse || d.trucks?.warehouse)}
+      ${row("สายที่ประจำ", d.route_code)}
+      ${row("รถประจำ", d.trucks?.plate_number ? `<b>${d.trucks.plate_number}</b>` : null)}
+    </div>
+
+    <!-- ── ระบบ ── -->
+    <div style="background:#f9f9f9;border-radius:8px;padding:12px 14px">
+      <div style="font-size:12px;color:#1a73e8;font-weight:700;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">⚙️ ระบบ</div>
+      ${row("LINE User ID", `<small style="font-family:monospace;font-size:11px;color:#555">${d.line_user_id || "-"}</small>`)}
+      ${row("ลงทะเบียนเมื่อ", d.created_at ? thaiDateLong(d.created_at.slice(0, 10)) : null)}
+    </div>
+  `;
+
+  document.getElementById("driverDetailModal").classList.add("open");
+}
+
+async function toggleDriverFromDetail() {
+  if (!currentDriverDetail) return;
+  const action = currentDriverDetail.is_active ? "ปิด" : "เปิด";
+  if (!confirm(`${action}การใช้งานคนขับ "${currentDriverDetail.name}"?`)) return;
+  await api(`drivers/${currentDriverDetail.id}`, {
+    method: "PUT",
+    body: JSON.stringify({ is_active: !currentDriverDetail.is_active })
+  });
+  closeModal("driverDetailModal");
   loadDrivers();
 }
 
