@@ -585,6 +585,21 @@ tr:hover td{background:#fafafa}
 
 <!-- ═══════════════════════════════════ SETTINGS ═══════════════════════════════════ -->
 <div id="sec-settings" class="section">
+  <!-- 🔐 รหัสลงทะเบียน — เด่นๆ ด้านบน -->
+  <div class="card" style="background:linear-gradient(135deg,#e3f2fd,#bbdefb);border:2px solid #1a73e8">
+    <h3 style="color:#0d47a1">🔐 รหัสลงทะเบียนคนขับ</h3>
+    <div style="font-size:13px;color:#555;margin-bottom:12px;line-height:1.6">
+      รหัสนี้ที่คนขับใหม่ต้องใส่ตอนสมัคร ใน LIFF — กันคนนอกแอบสมัคร<br>
+      <b>แจ้งคนขับใหม่ผ่าน LINE/ปากเปล่า เปลี่ยนได้ทุกเมื่อ</b>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <div style="flex:0 0 130px;font-size:14px;color:#666">รหัสปัจจุบัน:</div>
+      <div id="regCodeCurrent" style="font-size:24px;font-weight:900;color:#0d47a1;font-family:monospace;letter-spacing:2px;padding:8px 16px;background:#fff;border-radius:8px;border:2px dashed #1a73e8;min-width:160px;text-align:center">-</div>
+      <button class="btn btn-primary" style="width:auto;padding:10px 18px" onclick="changeRegCode()">✏️ เปลี่ยนรหัส</button>
+    </div>
+    <div id="regCodeMsg" style="margin-top:10px;font-size:13px"></div>
+  </div>
+
   <div class="card">
     <h3>🔔 เป้าหมายแจ้งเตือน (กลุ่มไลน์ / แอดมิน)</h3>
     <div id="notifTargets"><div class="loader"><div class="spinner"></div>กำลังโหลด...</div></div>
@@ -2141,7 +2156,50 @@ async function submitAddDriver() {
 // SETTINGS
 // ════════════════════════════════════════════════════════════
 async function loadSettings() {
-  await Promise.all([loadNotifTargets(), loadSystemSettings()]);
+  await Promise.all([loadNotifTargets(), loadSystemSettings(), loadRegCode()]);
+}
+
+// ── Registration code (รหัสที่คนขับใส่ตอนสมัคร) ─────────
+async function loadRegCode() {
+  const data = await api("settings");
+  if (!data || data.error) return;
+  const row = (data || []).find(s => s.key === "registration_code");
+  const el = document.getElementById("regCodeCurrent");
+  if (el) el.textContent = row?.value || "(ยังไม่ตั้ง)";
+}
+
+async function changeRegCode() {
+  const cur  = document.getElementById("regCodeCurrent").textContent.trim();
+  const msgEl = document.getElementById("regCodeMsg");
+  const newCode = prompt(
+    `🔐 ตั้งรหัสลงทะเบียนใหม่\n\n` +
+    `ค่าปัจจุบัน: ${cur}\n\n` +
+    `⚠️ ห้ามต่ำกว่า 4 ตัวอักษร — แนะนำ 6+ ตัวผสมตัวเลข\n` +
+    `เช่น: JTG2569, Truck@2026, 123456`,
+    cur
+  );
+  if (!newCode) return;
+  const trimmed = newCode.trim();
+  if (trimmed.length < 4) {
+    msgEl.style.color = "#e53935";
+    msgEl.textContent = "❌ รหัสต้องมีอย่างน้อย 4 ตัวอักษร";
+    return;
+  }
+  msgEl.style.color = "#888";
+  msgEl.textContent = "⏳ กำลังบันทึก...";
+  const res = await api("settings", {
+    method: "PUT",
+    body: JSON.stringify({ key: "registration_code", value: trimmed })
+  });
+  if (res?.success) {
+    document.getElementById("regCodeCurrent").textContent = trimmed;
+    msgEl.style.color = "#2e7d32";
+    msgEl.textContent = `✅ เปลี่ยนรหัสเป็น "${trimmed}" เรียบร้อย — คนขับใหม่ต้องใช้รหัสนี้`;
+    setTimeout(() => { msgEl.textContent = ""; }, 5000);
+  } else {
+    msgEl.style.color = "#e53935";
+    msgEl.textContent = "❌ " + (res?.error || "เปลี่ยนรหัสไม่สำเร็จ");
+  }
 }
 
 async function loadNotifTargets() {
