@@ -433,11 +433,27 @@ let selectedTirePositions = new Set();
 // ════════════════════════════════════════════════════════════
 // INIT
 // ════════════════════════════════════════════════════════════
+
+// Timeout wrapper — ถ้า promise ไม่ resolve ภายใน ms → reject
+function withTimeout(promise, ms, label) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timeout (${ms}ms)`)), ms)
+    )
+  ]);
+}
+
 async function init() {
+  // ── liff.init ─────────────────────────────────────────────
   try {
-    await liff.init({ liffId: LIFF_ID });
+    await withTimeout(
+      liff.init({ liffId: LIFF_ID }),
+      15000, "liff.init"
+    );
   } catch (e) {
-    showBlock("🚫", "LIFF โหลดไม่สำเร็จ", `กรุณาลองใหม่อีกครั้ง\n(${e.message})`);
+    showBlock("🚫", "LIFF โหลดไม่สำเร็จ",
+      `กรุณาปิดแล้วเปิดใหม่\n(${e.message})`);
     return;
   }
 
@@ -451,16 +467,16 @@ async function init() {
   // ── getProfile ──────────────────────────────────────────────────────────────
   let profile;
   try {
-    profile = await liff.getProfile();
+    profile = await withTimeout(liff.getProfile(), 10000, "getProfile");
   } catch (e) {
     showBlock("🚫", "ดึงข้อมูลไม่สำเร็จ",
-      `กรุณาลองปิดแล้วเปิดใหม่\n(${e.message})`);
+      `กรุณาปิดแล้วเปิดใหม่\n(${e.message})`);
     return;
   }
   lineUserId = profile.userId;
 
   const params   = new URLSearchParams(location.search);
-  const deepType = params.get("type");   // 'mileage' | 'fuel' | 'maintenance' | null
+  const deepType = params.get("type");
 
   await loadMenu(deepType);
 }
@@ -1031,10 +1047,22 @@ async function submitMaintenance() {
 // ════════════════════════════════════════════════════════════
 // START
 // ════════════════════════════════════════════════════════════
+
+// Global error handler — ป้องกัน LINE crash โดยแสดง error แทน
+window.onerror = function(msg, src, line) {
+  console.error("Global error:", msg, src, line);
+  showBlock("⚠️", "เกิดข้อผิดพลาด", `${msg}\nกรุณาปิดแล้วเปิดใหม่`);
+  return true;
+};
+window.onunhandledrejection = function(e) {
+  console.error("Unhandled rejection:", e.reason);
+  showBlock("⚠️", "เกิดข้อผิดพลาด", `${e.reason?.message || e.reason}\nกรุณาปิดแล้วเปิดใหม่`);
+};
+
 init().catch(err => {
   console.error(err);
-  document.getElementById("screenLoading").innerHTML =
-    `<div class="body loader">⚠️ เกิดข้อผิดพลาด: ${err.message}</div>`;
+  showBlock("⚠️", "โหลดไม่สำเร็จ",
+    `${err.message}\nกรุณาปิดแล้วเปิดใหม่`);
 });
 </script>
 </body>
