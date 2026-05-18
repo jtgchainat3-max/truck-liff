@@ -171,6 +171,15 @@ body{font-family:'Sarabun',sans-serif;background:#f5f5f5;color:#333;min-height:1
           <option value="transport">ขนส่ง — เลือกรถได้ทุกวัน</option>
         </select>
       </div>
+      <div class="field" id="warehouseField" style="display:none">
+        <label>โกดังที่ประจำ <span style="color:#e53935">*</span></label>
+        <select id="regWarehouse">
+          <option value="">-- เลือกโกดัง --</option>
+          <option value="ชัยนาท">ชัยนาท (โพนางดำตก)</option>
+          <option value="ลพบุรี">ลพบุรี (โคกสำโรง)</option>
+        </select>
+        <div style="font-size:12px;color:#888;margin-top:6px">รถที่เลือกได้จะเป็นรถในโกดังนี้</div>
+      </div>
       <div class="field" id="routeField">
         <label>สายที่ประจำ</label>
         <select id="regRoute">
@@ -269,7 +278,17 @@ body{font-family:'Sarabun',sans-serif;background:#f5f5f5;color:#333;min-height:1
 
     <!-- Step 1: ถ่ายรูป + กรอกเลข -->
     <div id="mileageStep1">
-      <!-- Truck picker สำหรับ transport -->
+      <!-- Current truck display — BIG plate -->
+      <div id="mileageCurrentTruck" class="card" style="display:none;padding:16px;background:linear-gradient(135deg,#e3f2fd,#bbdefb);border:2px solid #1a73e8">
+        <div style="text-align:center;margin-bottom:8px">
+          <div style="font-size:13px;color:#1a73e8;font-weight:600;letter-spacing:1px">🚛 รถที่ขับวันนี้</div>
+          <div id="mileageCurrentTruckText" style="font-size:32px;font-weight:900;color:#0d47a1;line-height:1.2;margin-top:4px;letter-spacing:1px">-</div>
+          <div id="mileageCurrentTruckSub" style="font-size:13px;color:#666;margin-top:4px"></div>
+        </div>
+        <button class="btn btn-gray" style="padding:8px 14px;font-size:13px;margin:0;width:100%" onclick="openTruckPicker('mileage')">🔄 เปลี่ยนรถ / ขับแทน</button>
+      </div>
+
+      <!-- Truck picker (transport หรือกดเปลี่ยนรถ) -->
       <div id="mileageTruckPicker" style="display:none">
         <div class="card">
           <div class="card-title">🚚 เลือกรถที่ขับวันนี้</div>
@@ -288,6 +307,7 @@ body{font-family:'Sarabun',sans-serif;background:#f5f5f5;color:#333;min-height:1
         <button class="btn btn-primary" id="mileagePhotoBtn" onclick="document.getElementById('mileageInput').click()">
           📷 ถ่ายรูปเลขไมล์
         </button>
+        <div id="mileageGpsStatus" style="display:none;margin-top:10px;padding:10px 12px;border-radius:8px;font-size:13px;text-align:center"></div>
       </div>
 
       <div class="card" id="mileageEntryCard" style="display:none">
@@ -322,56 +342,77 @@ body{font-family:'Sarabun',sans-serif;background:#f5f5f5;color:#333;min-height:1
     <div class="sub" id="fuelTruckSub">-</div>
   </div>
   <div class="body">
-    <!-- Truck picker สำหรับ transport -->
+    <!-- Current truck display — BIG plate -->
+    <div id="fuelCurrentTruck" class="card" style="display:none;padding:16px;background:linear-gradient(135deg,#fff8e1,#ffe082);border:2px solid #ff8f00">
+      <div style="text-align:center;margin-bottom:8px">
+        <div style="font-size:13px;color:#ff8f00;font-weight:600;letter-spacing:1px">⛽ เติมน้ำมันรถคันนี้</div>
+        <div id="fuelCurrentTruckText" style="font-size:32px;font-weight:900;color:#e65100;line-height:1.2;margin-top:4px;letter-spacing:1px">-</div>
+        <div id="fuelCurrentTruckSub" style="font-size:13px;color:#666;margin-top:4px"></div>
+      </div>
+      <button class="btn btn-gray" style="padding:8px 14px;font-size:13px;margin:0;width:100%" onclick="openTruckPicker('fuel')">🔄 เปลี่ยนรถ / เติมรถอื่น</button>
+    </div>
+
+    <!-- Truck picker -->
     <div id="fuelTruckPicker" style="display:none">
       <div class="card">
-        <div class="card-title">🚚 เลือกรถที่ขับวันนี้</div>
+        <div class="card-title">🚚 เลือกรถที่จะเติม</div>
         <div id="fuelTruckList" class="truck-list"></div>
       </div>
     </div>
 
-    <!-- ถ่ายรูปเลขไมล์ -->
-    <div class="card">
-      <div class="card-title">📷 ถ่ายรูปเลขไมล์ตอนเติม (จำเป็น)</div>
-      <div style="font-size:12px;color:#555;background:#f5f5f5;border-radius:8px;padding:8px 10px;margin:6px 0 12px;text-align:left;line-height:1.7">
-        📌 ถ่ายให้เห็น <b>เลขไมล์ชัดเจน</b> ระบบเก็บรูปไว้ตรวจสอบ
+    <!-- กรอกข้อมูล (แสดงทันทีเมื่อเข้าหน้า) -->
+    <div class="card" id="fuelDataCard">
+      <div class="card-title">💰 ยอดเงินที่เติม</div>
+      <div class="field">
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:8px">
+          <button class="btn btn-gray" style="padding:14px 0;font-size:16px;font-weight:700" onclick="setFuelTotal(500)">฿500</button>
+          <button class="btn btn-gray" style="padding:14px 0;font-size:16px;font-weight:700" onclick="setFuelTotal(1000)">฿1,000</button>
+          <button class="btn btn-gray" style="padding:14px 0;font-size:16px;font-weight:700" onclick="setFuelTotal(1500)">฿1,500</button>
+          <button class="btn btn-gray" style="padding:14px 0;font-size:16px;font-weight:700" onclick="setFuelTotal(2000)">฿2,000</button>
+        </div>
+        <input type="number" id="fuelTotalInput" placeholder="หรือพิมพ์ยอดเงินเอง (บาท)" inputmode="decimal" step="1" oninput="calcLitersFromTotal()" style="font-size:20px;text-align:center;font-weight:700">
       </div>
-      <img id="fuelPhotoPreview" class="photo-preview" alt="preview" style="display:none;margin-bottom:8px">
-      <input type="file" id="fuelPhotoInput" accept="image/*" capture="environment" style="display:none" onchange="onFuelPhoto(event)">
-      <button class="btn btn-primary" id="fuelPhotoBtn" onclick="document.getElementById('fuelPhotoInput').click()">📷 ถ่ายรูปเลขไมล์</button>
-    </div>
 
-    <!-- กรอกข้อมูล (แสดงหลังถ่ายรูป) -->
-    <div class="card" id="fuelDataCard" style="display:none">
-      <div class="card-title">⌨️ กรอกข้อมูลการเติม</div>
+      <div class="field">
+        <label>ราคาต่อลิตร (บาท) <span style="color:#e53935">*</span></label>
+        <input type="number" id="fuelPrice" placeholder="เช่น 33.50" inputmode="decimal" step="0.01" oninput="calcLitersFromTotal()" style="font-size:18px;text-align:center;font-weight:700">
+      </div>
+
+      <!-- ผลคำนวณ จำนวนลิตร -->
+      <div id="fuelCalcResult" style="display:none;background:linear-gradient(135deg,#e3f2fd,#bbdefb);border-radius:10px;padding:14px;text-align:center;margin-bottom:14px">
+        <div style="font-size:13px;color:#666;margin-bottom:4px">⛽ จำนวนน้ำมันที่ได้</div>
+        <div id="fuelLitersDisplay" style="font-size:32px;font-weight:700;color:#1a73e8">-</div>
+        <div style="font-size:13px;color:#888;margin-top:2px">ลิตร</div>
+      </div>
+
+      <div class="field">
+        <label>📷 รูปเลขไมล์ <span style="color:#e53935">*</span></label>
+        <img id="fuelPhotoPreview" class="photo-preview" alt="preview" style="display:none;margin-bottom:8px">
+        <input type="file" id="fuelPhotoInput" accept="image/*" capture="environment" style="display:none" onchange="onFuelPhoto(event)">
+        <button class="btn btn-primary" id="fuelPhotoBtn" onclick="document.getElementById('fuelPhotoInput').click()">📷 ถ่ายรูปเลขไมล์</button>
+        <div id="fuelGpsStatus" style="display:none;margin-top:10px;padding:10px 12px;border-radius:8px;font-size:13px;text-align:center"></div>
+      </div>
+
       <div class="field">
         <label>เลขไมล์ (กม.) <span style="color:#e53935">*</span></label>
         <input type="number" id="fuelMileage" placeholder="กรอกตามเลขที่เห็นในรูป" inputmode="numeric" style="font-size:20px;text-align:center;font-weight:700">
       </div>
+
       <div class="field">
-        <label>จำนวนลิตร <span style="color:#e53935">*</span></label>
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:8px">
-          <button class="btn btn-gray" style="padding:10px;font-size:14px" onclick="setLiters(20)">20 ล.</button>
-          <button class="btn btn-gray" style="padding:10px;font-size:14px" onclick="setLiters(30)">30 ล.</button>
-          <button class="btn btn-gray" style="padding:10px;font-size:14px" onclick="setLiters(40)">40 ล.</button>
-          <button class="btn btn-gray" style="padding:10px;font-size:14px" onclick="setLiters(50)">50 ล.</button>
-        </div>
-        <input type="number" id="fuelLiters" placeholder="หรือพิมพ์เอง" inputmode="decimal" step="0.01" oninput="calcTotal()">
+        <label>📷 รูปบิลน้ำมัน <span style="color:#e53935">*</span></label>
+        <img id="fuelBillPreview" class="photo-preview" alt="preview" style="display:none;margin-bottom:8px">
+        <input type="file" id="fuelBillInput" accept="image/*" capture="environment" style="display:none" onchange="onFuelBillPhoto(event)">
+        <button class="btn btn-orange" id="fuelBillBtn" onclick="document.getElementById('fuelBillInput').click()">📷 ถ่ายรูปบิลน้ำมัน</button>
+        <div id="fuelBillGpsStatus" style="display:none;margin-top:10px;padding:10px 12px;border-radius:8px;font-size:13px;text-align:center"></div>
       </div>
-      <div class="field">
-        <label>ราคาต่อลิตร (บาท)</label>
-        <input type="number" id="fuelPrice" placeholder="เช่น 33.50" inputmode="decimal" step="0.01" oninput="calcTotal()">
-      </div>
-      <div class="field" id="fuelTotalField" style="display:none">
-        <label>รวมทั้งหมด</label>
-        <div style="font-size:24px;font-weight:700;color:#1a73e8" id="fuelTotal">-</div>
-      </div>
+
       <div class="field">
         <label>ชื่อปั๊ม (ถ้ามี)</label>
         <input type="text" id="fuelStation" placeholder="เช่น ปตท. ถนนพหล">
       </div>
+
       <button class="btn btn-success" onclick="submitFuel()">✅ บันทึกการเติมน้ำมัน</button>
-      <button class="btn btn-gray" style="margin-top:8px" onclick="retakeFuelPhoto()">🔄 ถ่ายรูปใหม่</button>
+      <button class="btn btn-gray" style="margin-top:8px" onclick="goFuel()">🔄 เริ่มใหม่</button>
     </div>
 
     <button class="btn btn-gray" style="margin-top:8px" onclick="closeLiff()">✕ ปิด</button>
@@ -386,10 +427,21 @@ body{font-family:'Sarabun',sans-serif;background:#f5f5f5;color:#333;min-height:1
     <div class="sub" id="maintTruckSub">-</div>
   </div>
   <div class="body">
-    <!-- Truck picker สำหรับ transport -->
+    <!-- Current truck display + เปลี่ยนรถ button -->
+    <div id="maintCurrentTruck" class="card" style="display:none;padding:12px 14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+        <div>
+          <div style="font-size:12px;color:#888">🚛 รถที่จะซ่อม</div>
+          <div id="maintCurrentTruckText" style="font-size:18px;font-weight:700;color:#1a73e8">-</div>
+        </div>
+        <button class="btn btn-gray" style="width:auto;padding:8px 14px;font-size:13px;margin:0" onclick="openTruckPicker('maintenance')">🔄 เปลี่ยนรถ</button>
+      </div>
+    </div>
+
+    <!-- Truck picker -->
     <div id="maintTruckPicker" style="display:none">
       <div class="card">
-        <div class="card-title">🚚 เลือกรถที่ซ่อม</div>
+        <div class="card-title">🚚 เลือกรถที่จะซ่อม</div>
         <div id="maintTruckList" class="truck-list"></div>
       </div>
     </div>
@@ -414,12 +466,17 @@ body{font-family:'Sarabun',sans-serif;background:#f5f5f5;color:#333;min-height:1
         <label>ร้านที่ซ่อม</label>
         <input type="text" id="maintShop" placeholder="ชื่อร้าน/อู่">
       </div>
+      <!-- "ซ่อมอะไร" — แสดงเฉพาะตอนเลือก "อื่นๆ" -->
+      <div class="field" id="maintOtherDescField" style="display:none">
+        <label>📝 ซ่อมอะไร <span style="color:#e53935">*</span></label>
+        <input type="text" id="maintOtherDesc" placeholder="เช่น เปลี่ยนหม้อน้ำ / ซ่อมไฟหน้า / เปลี่ยนคลัตช์">
+      </div>
       <div class="field">
         <label>ค่าใช้จ่าย (บาท)</label>
         <input type="number" id="maintCost" placeholder="0" inputmode="numeric">
       </div>
       <div class="field" id="maintNextMileField">
-        <label id="maintNextMileLabel">ครั้งถัดไปที่ไมล์ (กม.) <span id="maintNextMileOptional" style="color:#aaa;font-weight:400">ไม่บังคับ</span><span id="maintNextMileRequired" style="color:#e53935;font-weight:400;display:none"> *จำเป็น</span></label>
+        <label id="maintNextMileLabel">ครั้งถัดไปที่ไมล์ (กม.) <span style="color:#e53935;font-weight:400">*จำเป็น</span></label>
         <input type="number" id="maintNextMile" placeholder="เช่น 130000" inputmode="numeric">
       </div>
       <!-- แจ้งเตือนสลับยาง -->
@@ -445,6 +502,7 @@ body{font-family:'Sarabun',sans-serif;background:#f5f5f5;color:#333;min-height:1
       <img id="maintMileagePreview" class="photo-preview" alt="preview">
       <input type="file" id="maintMileageInput" accept="image/*" capture="environment" style="display:none" onchange="onMaintMileagePhoto(event)">
       <button class="btn btn-primary" onclick="document.getElementById('maintMileageInput').click()">📷 ถ่ายรูปเลขไมล์</button>
+      <div id="maintMileageGpsStatus" style="display:none;margin-top:10px;padding:10px 12px;border-radius:8px;font-size:13px;text-align:center"></div>
     </div>
 
     <!-- รูปใบเสร็จ (ไม่บังคับ) -->
@@ -480,6 +538,7 @@ let driverInfo      = null;
 let currentType     = null;   // 'morning' | 'evening'
 let mileageBlob     = null;   // รูปไมล์ (มอนิ่ง/อิฟนิ่ง)
 let fuelBlob        = null;   // รูปไมล์ตอนเติมน้ำมัน
+let fuelBillBlob    = null;   // รูปบิลน้ำมัน (บังคับ)
 let maintMileageBlob = null;  // รูปไมล์ตอนซ่อม (บังคับ)
 let maintBillBlob   = null;   // รูปใบเสร็จ (ไม่บังคับ)
 let licenseBlob     = null;   // รูปใบขับขี่ (ตอนสมัคร)
@@ -726,11 +785,56 @@ async function apiFetch(path, opts = {}, timeoutMs = 12000) {
 
 function getGPS() {
   return new Promise((resolve, reject) => {
-    if (!navigator.geolocation) { reject(new Error("no geo")); return; }
+    if (!navigator.geolocation) { reject(new Error("ไม่มี GPS")); return; }
     navigator.geolocation.getCurrentPosition(resolve, reject, {
-      enableHighAccuracy: true, timeout: 8000, maximumAge: 30000,
+      enableHighAccuracy: true, timeout: 15000, maximumAge: 10000,
     });
   });
+}
+
+// ════════════════════════════════════════════════════════════
+// PHOTO GPS — เก็บพิกัดทุกครั้งที่ถ่ายรูป + แสดงสถานะบนจอ
+// ════════════════════════════════════════════════════════════
+const photoGPS = {};   // key → { latitude, longitude, accuracy }
+
+async function capturePhotoGPS(key, statusElId) {
+  photoGPS[key] = null;
+  const ind = document.getElementById(statusElId);
+  if (ind) {
+    ind.innerHTML = '📍 <span style="color:#1a73e8">กำลังขอตำแหน่ง GPS...</span>';
+    ind.style.background = "#e3f2fd";
+  }
+  try {
+    const pos = await getGPS();
+    photoGPS[key] = {
+      latitude:  pos.coords.latitude,
+      longitude: pos.coords.longitude,
+      accuracy:  pos.coords.accuracy,
+    };
+    if (ind) {
+      const acc = Math.round(photoGPS[key].accuracy);
+      ind.innerHTML = `✅ <b>บันทึกตำแหน่งแล้ว</b> <small>(แม่นยำ ±${acc} ม.)</small>`;
+      ind.style.background = "#e8f5e9";
+      ind.style.color = "#2e7d32";
+    }
+    return photoGPS[key];
+  } catch (e) {
+    if (ind) {
+      ind.innerHTML = `❌ <b>ไม่ได้ตำแหน่ง</b><br><small>กรุณาเปิด GPS / ให้สิทธิ์ Location แล้วถ่ายรูปใหม่</small>`;
+      ind.style.background = "#ffebee";
+      ind.style.color = "#c62828";
+    }
+    return null;
+  }
+}
+
+function appendGPSToFormData(fd, key) {
+  const gps = photoGPS[key];
+  if (!gps) return false;
+  fd.append("latitude",  gps.latitude);
+  fd.append("longitude", gps.longitude);
+  fd.append("accuracy",  gps.accuracy);
+  return true;
 }
 
 // ════════════════════════════════════════════════════════════
@@ -828,6 +932,7 @@ function onRegTypeChange() {
   const t = document.getElementById("regType").value;
   document.getElementById("routeField").style.display     = t === "van" ? "" : "none";
   document.getElementById("regTruckField").style.display  = t === "van" ? "" : "none";
+  document.getElementById("warehouseField").style.display = t === "transport" ? "" : "none";
 }
 
 // Format เลขบัตรประชาชนเป็น X-XXXX-XXXXX-XX-X
@@ -860,6 +965,7 @@ async function doRegister() {
   const licenseExpiry  = document.getElementById("regLicenseExpiry").value;
   const type           = document.getElementById("regType").value;
   const route          = document.getElementById("regRoute").value;
+  const warehouseSel   = document.getElementById("regWarehouse").value;
   const msgEl          = document.getElementById("regMsg");
 
   msgEl.style.color = "#e53935";
@@ -879,6 +985,10 @@ async function doRegister() {
     msgEl.textContent = "❌ กรุณาเลือกรถที่ขับก่อน";
     return;
   }
+  if (type === "transport" && !warehouseSel) {
+    msgEl.textContent = "❌ กรุณาเลือกโกดังที่ประจำ";
+    return;
+  }
 
   msgEl.style.color = "#888";
   msgEl.textContent = "⏳ กำลังลงทะเบียน...";
@@ -892,6 +1002,9 @@ async function doRegister() {
   if (type === "van") {
     if (route)            fd.append("route_code", route);
     if (selectedTruckId)  fd.append("truck_id", selectedTruckId);
+  }
+  if (type === "transport" && warehouseSel) {
+    fd.append("warehouse", warehouseSel);
   }
   if (idCard)            fd.append("id_card_number", idCard);
   if (address)           fd.append("address", address);
@@ -920,8 +1033,81 @@ async function doRegister() {
 }
 
 // ════════════════════════════════════════════════════════════
-// TRUCK PICKER (สำหรับ transport drivers)
+// TRUCK PICKER — รองรับทั้ง VAN (มีรถประจำ), transport, และ admin
 // ════════════════════════════════════════════════════════════
+
+// แสดงรถปัจจุบัน + ปุ่ม "เปลี่ยนรถ" สำหรับหน้านี้
+function renderCurrentTruck(screen) {
+  const displayId = screen === "mileage" ? "mileageCurrentTruck"
+                  : screen === "fuel"    ? "fuelCurrentTruck"
+                  : "maintCurrentTruck";
+  const textId    = screen === "mileage" ? "mileageCurrentTruckText"
+                  : screen === "fuel"    ? "fuelCurrentTruckText"
+                  : "maintCurrentTruckText";
+
+  if (!selectedTruckId) {
+    document.getElementById(displayId).style.display = "none";
+    return;
+  }
+
+  // หาข้อมูลรถจาก cache หรือ driverInfo
+  let truck = null;
+  if (allTrucksCache) {
+    truck = allTrucksCache.find(t => t.id === selectedTruckId);
+  }
+  if (!truck && driverInfo?.truck_id === selectedTruckId) {
+    truck = {
+      plate_number: driverInfo.truck_plate,
+      warehouse:    driverInfo.warehouse,
+      truck_type:   driverInfo.truck_type,
+    };
+  }
+
+  const plate = truck?.plate_number || `#${selectedTruckId}`;
+  const wh    = truck?.warehouse ? ` · ${truck.warehouse}` : "";
+  const type  = truck?.truck_type ? ` · ${truck.truck_type}` : "";
+  document.getElementById(textId).textContent = `${plate}${wh}${type}`;
+  document.getElementById(displayId).style.display = "";
+}
+
+// เปิด truck picker (แทนที่ current truck display)
+async function openTruckPicker(screen) {
+  // ซ่อน current truck display
+  const displayId = screen === "mileage" ? "mileageCurrentTruck"
+                  : screen === "fuel"    ? "fuelCurrentTruck"
+                  : "maintCurrentTruck";
+  document.getElementById(displayId).style.display = "none";
+
+  // แสดง picker
+  await showTruckPickerForScreen(screen);
+
+  // ผูก callback ให้เมื่อเลือกรถแล้ว → render current truck + ซ่อน picker
+  const listId = screen === "mileage" ? "mileageTruckList"
+                : screen === "fuel"   ? "fuelTruckList"
+                : "maintTruckList";
+  const pickerId = screen === "mileage" ? "mileageTruckPicker"
+                  : screen === "fuel"   ? "fuelTruckPicker"
+                  : "maintTruckPicker";
+
+  // wrap onclick ทุก chip เพื่อ trigger callback หลังเลือก
+  const chips = document.querySelectorAll(`#${listId} .truck-chip`);
+  chips.forEach(chip => {
+    const originalClick = chip.onclick;
+    chip.onclick = function() {
+      if (originalClick) originalClick.call(this);
+      // หลังเลือก → ซ่อน picker + แสดง current truck
+      setTimeout(() => {
+        if (selectedTruckId) {
+          document.getElementById(pickerId).style.display = "none";
+          renderCurrentTruck(screen);
+        }
+      }, 200);
+    };
+  });
+}
+
+let pickerShowAllWarehouses = false;  // toggle state per session
+
 async function showTruckPickerForScreen(screen) {
   // screen: "mileage" | "fuel" | "maintenance"
   const containerId = screen === "mileage" ? "mileageTruckPicker"
@@ -944,19 +1130,71 @@ async function showTruckPickerForScreen(screen) {
     allTrucksCache = data.trucks || [];
   }
 
+  renderTruckList(screen, listEl);
+}
+
+function renderTruckList(screen, listEl) {
+  const driverWh = driverInfo?.warehouse || null;
+  const trucksToShow = (driverWh && !pickerShowAllWarehouses)
+    ? allTrucksCache.filter(t => t.warehouse === driverWh)
+    : allTrucksCache;
+
   listEl.innerHTML = "";
-  selectedTruckId = null;
-  allTrucksCache.forEach(t => {
-    const el = document.createElement("div");
-    el.className = "truck-chip";
-    el.innerHTML = `<span class="plate">${t.plate_number}</span><div class="detail">${t.warehouse || ""} · ${t.truck_type || "4wheel"}${t.last_mileage ? ` · ไมล์ล่าสุด ${fmtNum(t.last_mileage)} กม.` : ""}</div>`;
-    el.onclick = () => {
-      listEl.querySelectorAll(".truck-chip").forEach(c => c.classList.remove("selected"));
-      el.classList.add("selected");
-      selectedTruckId = t.id;
-    };
-    listEl.appendChild(el);
-  });
+
+  if (trucksToShow.length === 0) {
+    listEl.innerHTML = `<div class="alert alert-warn">⚠️ ไม่มีรถในโกดัง ${driverWh || "ระบบ"}<br><small>กรุณาติดต่อแอดมินเพื่อเพิ่มรถ</small></div>`;
+    return;
+  }
+
+  // Header: แสดงโกดัง + toggle
+  if (driverWh) {
+    const header = document.createElement("div");
+    header.style.cssText = "display:flex;justify-content:space-between;align-items:center;font-size:13px;color:#666;margin-bottom:8px;padding:8px 10px;background:#f5f5f5;border-radius:6px";
+    header.innerHTML = `
+      <span>📍 ${pickerShowAllWarehouses ? "ทุกโกดัง" : `โกดัง <b>${driverWh}</b>`} (${trucksToShow.length} คัน)</span>
+      <a onclick="togglePickerWarehouse('${screen}')" style="color:#1a73e8;cursor:pointer;text-decoration:underline;font-size:12px">${pickerShowAllWarehouses ? "เฉพาะโกดังตัวเอง" : "ดูทุกโกดัง"}</a>
+    `;
+    listEl.appendChild(header);
+  }
+
+  // Group by warehouse ถ้าแสดงทุกโกดัง
+  if (pickerShowAllWarehouses) {
+    const byWh = {};
+    trucksToShow.forEach(t => {
+      const wh = t.warehouse || "อื่นๆ";
+      if (!byWh[wh]) byWh[wh] = [];
+      byWh[wh].push(t);
+    });
+    Object.keys(byWh).sort().forEach(wh => {
+      const whHeader = document.createElement("div");
+      whHeader.style.cssText = "font-size:12px;color:#888;margin:10px 0 4px;font-weight:600";
+      whHeader.textContent = `📍 ${wh}`;
+      listEl.appendChild(whHeader);
+      byWh[wh].forEach(t => listEl.appendChild(makeTruckChip(t, listEl)));
+    });
+  } else {
+    trucksToShow.forEach(t => listEl.appendChild(makeTruckChip(t, listEl)));
+  }
+}
+
+function makeTruckChip(t, listEl) {
+  const el = document.createElement("div");
+  el.className = "truck-chip" + (t.id === selectedTruckId ? " selected" : "");
+  el.innerHTML = `<span class="plate">${t.plate_number}</span><div class="detail">${t.truck_type || "4wheel"}${t.last_mileage ? ` · ไมล์ล่าสุด ${fmtNum(t.last_mileage)} กม.` : ""}</div>`;
+  el.onclick = () => {
+    listEl.querySelectorAll(".truck-chip").forEach(c => c.classList.remove("selected"));
+    el.classList.add("selected");
+    selectedTruckId = t.id;
+  };
+  return el;
+}
+
+function togglePickerWarehouse(screen) {
+  pickerShowAllWarehouses = !pickerShowAllWarehouses;
+  const listId = screen === "mileage" ? "mileageTruckList"
+                : screen === "fuel"   ? "fuelTruckList"
+                : "maintTruckList";
+  renderTruckList(screen, document.getElementById(listId));
 }
 
 // ════════════════════════════════════════════════════════════
@@ -984,11 +1222,13 @@ function goMileage(type) {
   document.getElementById("mileagePhotoBtn").textContent = "📷 ถ่ายรูปเลขไมล์";
   document.getElementById("mileageInputNum").value = "";
 
-  // Transport: แสดง truck picker
+  // Transport: แสดง truck picker | VAN: แสดงรถปัจจุบัน + ปุ่มเปลี่ยน
   if (driverInfo?.driver_type === "transport") {
+    document.getElementById("mileageCurrentTruck").style.display = "none";
     showTruckPickerForScreen("mileage");
   } else {
     document.getElementById("mileageTruckPicker").style.display = "none";
+    renderCurrentTruck("mileage");
   }
   showScreen("screenMileage");
 }
@@ -1007,6 +1247,10 @@ async function onMileagePhoto(event) {
   // เปลี่ยน label ปุ่ม + เผยกล่องกรอกเลข
   document.getElementById("mileagePhotoBtn").textContent = "🔄 ถ่ายใหม่";
   document.getElementById("mileageEntryCard").style.display = "";
+
+  // แสดง GPS status + capture พิกัด
+  document.getElementById("mileageGpsStatus").style.display = "block";
+  capturePhotoGPS("mileage", "mileageGpsStatus");
 
   // แสดงไมล์ล่าสุดเพื่อ reference
   const info = document.getElementById("mileageLastInfo");
@@ -1045,6 +1289,14 @@ async function confirmMileage() {
     alert("กรุณาถ่ายรูปเลขไมล์ก่อน");
     return;
   }
+  // บังคับมี GPS — ถ้ายังไม่ได้ ลอง capture ใหม่ก่อน
+  if (!photoGPS.mileage) {
+    await capturePhotoGPS("mileage", "mileageGpsStatus");
+    if (!photoGPS.mileage) {
+      alert("⚠️ ยังไม่ได้ตำแหน่ง GPS\nกรุณาเปิด GPS / ให้สิทธิ์ Location แล้วถ่ายรูปใหม่");
+      return;
+    }
+  }
 
   // เตือนถ้าไมล์ลดลงจากเดิม (น่าจะกรอกผิด)
   if (driverInfo?.last_evening_mileage && mileageVal < driverInfo.last_evening_mileage) {
@@ -1053,7 +1305,6 @@ async function confirmMileage() {
     }
   }
 
-  const pos = await getGPS().catch(() => null);
   const fd  = new FormData();
   fd.append("line_user_id",    lineUserId);
   fd.append("log_type",        currentType);
@@ -1061,11 +1312,7 @@ async function confirmMileage() {
   fd.append("photo_timestamp", photoTs);
   fd.append("truck_id",        selectedTruckId);
   fd.append("image",           mileageBlob, "mileage.jpg");
-  if (pos) {
-    fd.append("latitude",  pos.coords.latitude);
-    fd.append("longitude", pos.coords.longitude);
-    fd.append("accuracy",  pos.coords.accuracy);
-  }
+  appendGPSToFormData(fd, "mileage");
 
   const btnEntry = document.querySelector("#mileageEntryCard .btn-success");
   if (btnEntry) { btnEntry.disabled = true; btnEntry.textContent = "⏳ กำลังส่ง..."; }
@@ -1089,33 +1336,80 @@ async function confirmMileage() {
 }
 
 // ════════════════════════════════════════════════════════════
-// FUEL FLOW (ลบ OCR — ถ่ายรูป + กรอกเลขเอง)
+// FUEL FLOW — ใหม่: ยอดเงิน + ราคา/ลิตร → คำนวณลิตรอัตโนมัติ
 // ════════════════════════════════════════════════════════════
 function goFuel() {
   fuelBlob = null;
+  fuelBillBlob = null;
+  photoGPS.fuel = null;
+  photoGPS.fuelBill = null;
   selectedTruckId = driverInfo?.truck_id || null;
   document.getElementById("fuelTruckSub").textContent =
     (driverInfo?.truck_plate || "-") + (driverInfo?.route_code ? ` · ${driverInfo.route_code}` : "");
 
   // Reset UI
+  document.getElementById("fuelTotalInput").value = "";
+  document.getElementById("fuelPrice").value = "";
+  document.getElementById("fuelMileage").value = "";
+  document.getElementById("fuelStation").value = "";
+  document.getElementById("fuelCalcResult").style.display = "none";
+  document.getElementById("fuelLitersDisplay").textContent = "-";
   document.getElementById("fuelPhotoInput").value = "";
   document.getElementById("fuelPhotoPreview").style.display = "none";
-  document.getElementById("fuelDataCard").style.display = "none";
   document.getElementById("fuelPhotoBtn").textContent = "📷 ถ่ายรูปเลขไมล์";
-  document.getElementById("fuelMileage").value = "";
-  document.getElementById("fuelLiters").value = "";
-  document.getElementById("fuelPrice").value = "";
-  document.getElementById("fuelStation").value = "";
-  document.getElementById("fuelTotalField").style.display = "none";
+  document.getElementById("fuelGpsStatus").style.display = "none";
+  document.getElementById("fuelBillInput").value = "";
+  document.getElementById("fuelBillPreview").style.display = "none";
+  document.getElementById("fuelBillBtn").textContent = "📷 ถ่ายรูปบิลน้ำมัน";
+  document.getElementById("fuelBillGpsStatus").style.display = "none";
   document.getElementById("fuelMsg").textContent = "";
 
-  // Transport: แสดง truck picker
+  // Transport: picker | VAN: รถปัจจุบัน + ปุ่มเปลี่ยน
   if (driverInfo?.driver_type === "transport") {
+    document.getElementById("fuelCurrentTruck").style.display = "none";
     showTruckPickerForScreen("fuel");
   } else {
     document.getElementById("fuelTruckPicker").style.display = "none";
+    renderCurrentTruck("fuel");
   }
   showScreen("screenFuel");
+}
+
+function onFuelBillPhoto(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  fuelBillBlob = file;
+  const prev = document.getElementById("fuelBillPreview");
+  prev.src   = URL.createObjectURL(file);
+  prev.style.display = "block";
+  document.getElementById("fuelBillBtn").textContent = "🔄 ถ่ายบิลใหม่";
+
+  // GPS + status
+  document.getElementById("fuelBillGpsStatus").style.display = "block";
+  capturePhotoGPS("fuelBill", "fuelBillGpsStatus");
+}
+
+function setFuelTotal(amount) {
+  document.getElementById("fuelTotalInput").value = amount;
+  calcLitersFromTotal();
+  // เลื่อนไปช่องราคาต่อลิตรถ้ายังว่าง
+  const priceEl = document.getElementById("fuelPrice");
+  if (!priceEl.value) setTimeout(() => priceEl.focus(), 50);
+}
+
+function calcLitersFromTotal() {
+  const total = parseFloat(document.getElementById("fuelTotalInput").value) || 0;
+  const price = parseFloat(document.getElementById("fuelPrice").value) || 0;
+  const resultEl = document.getElementById("fuelCalcResult");
+  const litersEl = document.getElementById("fuelLitersDisplay");
+
+  if (total > 0 && price > 0) {
+    const liters = total / price;
+    litersEl.textContent = liters.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    resultEl.style.display = "";
+  } else {
+    resultEl.style.display = "none";
+  }
 }
 
 function onFuelPhoto(event) {
@@ -1129,65 +1423,71 @@ function onFuelPhoto(event) {
   prev.style.display = "block";
 
   document.getElementById("fuelPhotoBtn").textContent = "🔄 ถ่ายใหม่";
-  document.getElementById("fuelDataCard").style.display = "";
+
+  // แสดง GPS status + capture พิกัด
+  document.getElementById("fuelGpsStatus").style.display = "block";
+  capturePhotoGPS("fuel", "fuelGpsStatus");
+
+  // Focus ช่องเลขไมล์
   setTimeout(() => document.getElementById("fuelMileage").focus(), 100);
 }
 
-function retakeFuelPhoto() {
-  fuelBlob = null;
-  document.getElementById("fuelPhotoInput").value = "";
-  document.getElementById("fuelPhotoPreview").style.display = "none";
-  document.getElementById("fuelDataCard").style.display = "none";
-  document.getElementById("fuelPhotoBtn").textContent = "📷 ถ่ายรูปเลขไมล์";
-}
-
-function setLiters(n) {
-  document.getElementById("fuelLiters").value = n;
-  calcTotal();
-}
-
-function calcTotal() {
-  const l = parseFloat(document.getElementById("fuelLiters").value) || 0;
-  const p = parseFloat(document.getElementById("fuelPrice").value)  || 0;
-  if (l && p) {
-    document.getElementById("fuelTotal").textContent =
-      `฿${(l * p).toLocaleString("th-TH", { minimumFractionDigits: 2 })}`;
-    document.getElementById("fuelTotalField").style.display = "";
-  } else {
-    document.getElementById("fuelTotalField").style.display = "none";
-  }
-}
-
 async function submitFuel() {
+  const total = parseFloat(document.getElementById("fuelTotalInput").value);
+  if (!total || total <= 0) {
+    alert("กรุณากรอกยอดเงินที่เติม");
+    document.getElementById("fuelTotalInput").focus();
+    return;
+  }
+
+  const price = parseFloat(document.getElementById("fuelPrice").value);
+  if (!price || price <= 0) {
+    alert("กรุณากรอกราคาต่อลิตร");
+    document.getElementById("fuelPrice").focus();
+    return;
+  }
+
+  const liters = Math.round((total / price) * 100) / 100;  // ปัดทศนิยม 2 ตำแหน่ง
+  if (!liters || liters <= 0) {
+    alert("ระบบคำนวณลิตรไม่ถูกต้อง — กรุณาตรวจสอบยอดเงินและราคา");
+    return;
+  }
+
   if (!fuelBlob) { alert("กรุณาถ่ายรูปเลขไมล์ก่อน"); return; }
+  if (!fuelBillBlob) { alert("กรุณาถ่ายรูปบิลน้ำมันก่อน"); return; }
 
   const mileage = parseInt(document.getElementById("fuelMileage").value);
   if (!mileage) { alert("กรุณากรอกเลขไมล์"); document.getElementById("fuelMileage").focus(); return; }
 
-  const liters = parseFloat(document.getElementById("fuelLiters").value) || null;
-  if (!liters) { alert("กรุณาระบุจำนวนลิตร"); return; }
-
   const truckId = selectedTruckId || driverInfo?.truck_id;
   if (!truckId) { alert("กรุณาเลือกรถก่อน"); return; }
 
-  const price   = parseFloat(document.getElementById("fuelPrice").value) || null;
+  // บังคับมี GPS ของรูปเลขไมล์
+  if (!photoGPS.fuel) {
+    await capturePhotoGPS("fuel", "fuelGpsStatus");
+    if (!photoGPS.fuel) {
+      alert("⚠️ ยังไม่ได้ตำแหน่ง GPS ของรูปเลขไมล์\nกรุณาเปิด GPS แล้วถ่ายรูปใหม่");
+      return;
+    }
+  }
+  // GPS ของบิลน้ำมัน — ลอง capture แต่ไม่บังคับ (รูปเลขไมล์เป็นหลัก)
+  if (!photoGPS.fuelBill) {
+    await capturePhotoGPS("fuelBill", "fuelBillGpsStatus");
+  }
+
   const station = document.getElementById("fuelStation").value.trim() || null;
-  const pos     = await getGPS().catch(() => null);
 
   const fd = new FormData();
   fd.append("line_user_id",    lineUserId);
   fd.append("truck_id",        truckId);
   fd.append("photo_timestamp", photoTs || nowBKK());
   fd.append("image",           fuelBlob, "fuel_mileage.jpg");
+  fd.append("bill_image",      fuelBillBlob, "fuel_bill.jpg");
   fd.append("liters",          liters);
+  fd.append("price_per_liter", price);
   fd.append("mileage",         mileage);
-  if (price)   fd.append("price_per_liter", price);
   if (station) fd.append("station_name", station);
-  if (pos) {
-    fd.append("latitude",  pos.coords.latitude);
-    fd.append("longitude", pos.coords.longitude);
-    fd.append("accuracy",  pos.coords.accuracy);
-  }
+  appendGPSToFormData(fd, "fuel");
 
   const msgEl = document.getElementById("fuelMsg");
   msgEl.style.color = "#888";
@@ -1241,16 +1541,19 @@ function goMaintenance() {
   document.getElementById("maintMileageInput").value = "";
   document.getElementById("maintMileage").value = "";
   document.getElementById("maintShop").value = "";
+  document.getElementById("maintOtherDesc").value = "";
   document.getElementById("maintCost").value = "";
   document.getElementById("maintNextMile").value = "";
   document.getElementById("maintNotes").value = "";
   document.getElementById("maintMsg").textContent = "";
 
-  // Transport: แสดง truck picker
+  // Transport: picker | VAN: รถปัจจุบัน + ปุ่มเปลี่ยน
   if (driverInfo?.driver_type === "transport") {
+    document.getElementById("maintCurrentTruck").style.display = "none";
     showTruckPickerForScreen("maintenance");
   } else {
     document.getElementById("maintTruckPicker").style.display = "none";
+    renderCurrentTruck("maintenance");
   }
 
   onMaintTypeChange();
@@ -1260,10 +1563,15 @@ function goMaintenance() {
 function onMaintMileagePhoto(event) {
   const file = event.target.files[0];
   if (!file) return;
+  photoTs = nowBKK();
   maintMileageBlob = file;
   const el = document.getElementById("maintMileagePreview");
   el.src = URL.createObjectURL(file);
   el.style.display = "block";
+
+  // แสดง GPS status + capture พิกัด
+  document.getElementById("maintMileageGpsStatus").style.display = "block";
+  capturePhotoGPS("maintMileage", "maintMileageGpsStatus");
 }
 
 const TIRE_ROTATE_INTERVAL = 10000; // กม. ระยะสลับยาง
@@ -1283,14 +1591,12 @@ function onMaintTypeChange() {
     renderTireGrid();
   }
 
-  // ── เลขไมล์ครั้งถัดไป ──────────────────────────────────────────────────────
-  const showNext = ["oil_change","tire_rotate","tire_replace","brake"].includes(type);
-  document.getElementById("maintNextMileField").style.display = showNext ? "" : "none";
+  // ── ช่อง "ซ่อมอะไร" — แสดงเฉพาะ "อื่นๆ" ─────────────────────────────────────
+  document.getElementById("maintOtherDescField").style.display = type === "other" ? "" : "none";
 
-  // oil_change + tire_rotate = required, อื่นๆ = optional
-  const isRequired = ["oil_change","tire_rotate"].includes(type);
-  document.getElementById("maintNextMileOptional").style.display = isRequired ? "none" : "";
-  document.getElementById("maintNextMileRequired").style.display = isRequired ? "" : "none";
+  // ── เลขไมล์ครั้งถัดไป — แสดงเฉพาะ oil_change + tire_rotate (บังคับ) ────────
+  const showNext = ["oil_change","tire_rotate"].includes(type);
+  document.getElementById("maintNextMileField").style.display = showNext ? "" : "none";
 
   // ── แจ้งเตือนสลับยาง ──────────────────────────────────────────────────────
   const reminderEl = document.getElementById("tireRotateReminder");
@@ -1378,20 +1684,43 @@ async function submitMaintenance() {
   const truckId = selectedTruckId || driverInfo?.truck_id;
   if (!truckId) { alert("กรุณาเลือกรถก่อน"); return; }
 
-  const type     = document.getElementById("maintType").value;
-  const shop     = document.getElementById("maintShop").value.trim() || null;
-  const cost     = parseFloat(document.getElementById("maintCost").value) || null;
-  const nextMile = parseInt(document.getElementById("maintNextMile").value) || null;
+  const type      = document.getElementById("maintType").value;
+  const shop      = document.getElementById("maintShop").value.trim() || null;
+  const otherDesc = document.getElementById("maintOtherDesc").value.trim();
+  const cost      = parseFloat(document.getElementById("maintCost").value) || null;
+  const nextMile  = parseInt(document.getElementById("maintNextMile").value) || null;
 
-  // oil_change + tire_rotate: next mileage is required
+  // type=other → บังคับระบุงานซ่อม
+  if (type === "other" && !otherDesc) {
+    alert("กรุณาระบุว่าซ่อมอะไร");
+    document.getElementById("maintOtherDesc").focus();
+    return;
+  }
+
+  // oil_change + tire_rotate: next mileage is required (ประเภทอื่นไม่ใช้)
   if (["oil_change","tire_rotate"].includes(type) && !nextMile) {
     const label = type === "oil_change" ? "การเปลี่ยนน้ำมันเครื่อง" : "การสลับยาง";
     alert(`กรุณาระบุเลขไมล์ครั้งถัดไป (จำเป็นสำหรับ${label})`);
     document.getElementById("maintNextMile").focus();
     return;
   }
-  const notes    = document.getElementById("maintNotes").value.trim() || null;
-  const pos      = await getGPS().catch(() => null);
+  // บังคับมี GPS
+  if (!photoGPS.maintMileage) {
+    await capturePhotoGPS("maintMileage", "maintMileageGpsStatus");
+    if (!photoGPS.maintMileage) {
+      alert("⚠️ ยังไม่ได้ตำแหน่ง GPS\nกรุณาเปิด GPS / ให้สิทธิ์ Location แล้วถ่ายรูปใหม่");
+      return;
+    }
+  }
+
+  // รวม "ซ่อมอะไร" เข้า notes ถ้าเป็น type=other
+  const notesInput = document.getElementById("maintNotes").value.trim();
+  let notes = null;
+  if (type === "other") {
+    notes = `[ซ่อม: ${otherDesc}]` + (notesInput ? `\n${notesInput}` : "");
+  } else {
+    notes = notesInput || null;
+  }
 
   const fd = new FormData();
   fd.append("line_user_id",       lineUserId);
@@ -1406,11 +1735,7 @@ async function submitMaintenance() {
   if (notes)    fd.append("notes", notes);
   if (selectedTirePositions.size > 0)
     fd.append("tire_positions", [...selectedTirePositions].join(","));
-  if (pos) {
-    fd.append("latitude",  pos.coords.latitude);
-    fd.append("longitude", pos.coords.longitude);
-    fd.append("accuracy",  pos.coords.accuracy);
-  }
+  appendGPSToFormData(fd, "maintMileage");
 
   const msgEl = document.getElementById("maintMsg");
   msgEl.style.color = "#888";
