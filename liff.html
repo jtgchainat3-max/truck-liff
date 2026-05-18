@@ -256,12 +256,13 @@ body{font-family:'Sarabun',sans-serif;background:#f5f5f5;color:#333;min-height:1
           <div class="ocr-box">
             <div class="ocr-number" id="ocrNumber">-</div>
             <div class="ocr-label">ไมล์ที่อ่านได้ (กม.)</div>
-            <span class="ocr-edit" onclick="showMileageInput()">✏️ แก้ไขตัวเลข</span>
           </div>
         </div>
-        <div class="field" id="mileageInputField" style="display:none;margin-top:12px">
-          <label>พิมพ์เลขไมล์ (กม.)</label>
-          <input type="number" id="mileageManual" placeholder="เช่น 123456" inputmode="numeric">
+        <div id="ocrFailed" style="display:none">
+          <div class="alert alert-warn" style="text-align:center">
+            ⚠️ อ่านตัวเลขไม่ได้<br>กรุณาถ่ายใหม่ให้เห็นชัดขึ้น
+          </div>
+          <button class="btn btn-primary" onclick="retakeMileagePhoto()">🔄 ถ่ายใหม่</button>
         </div>
       </div>
 
@@ -727,8 +728,8 @@ async function cropAndOCR(file) {
           // ถ้าเป็น transport ให้ smart match
           if (!driverInfo?.truck_id) await loadSmartMatch();
         } else {
-          showMileageInput();
-          if (!driverInfo?.truck_id) await loadSmartMatch();
+          // OCR อ่านไม่ออก — ให้ถ่ายใหม่
+          document.getElementById("ocrFailed").style.display = "";
         }
 
         resolve(blob);
@@ -738,9 +739,16 @@ async function cropAndOCR(file) {
   });
 }
 
-function showMileageInput() {
-  document.getElementById("mileageInputField").style.display = "";
-  if (ocrMileage) document.getElementById("mileageManual").value = ocrMileage;
+function retakeMileagePhoto() {
+  ocrMileage  = null;
+  croppedBlob = null;
+  document.getElementById("mileageStep2").style.display  = "none";
+  document.getElementById("mileageStep1").style.display  = "";
+  document.getElementById("ocrFailed").style.display     = "none";
+  document.getElementById("ocrResult").style.display     = "none";
+  document.getElementById("mileagePreview").style.display = "none";
+  document.getElementById("mStep1").className = "step active";
+  document.getElementById("mStep2").className = "step";
 }
 
 async function loadSmartMatch() {
@@ -777,10 +785,9 @@ async function loadSmartMatch() {
 }
 
 async function confirmMileage() {
-  const manual  = document.getElementById("mileageManual").value;
-  const mileage = manual ? parseInt(manual) : ocrMileage;
+  const mileage = ocrMileage;
 
-  if (!mileage)        { alert("กรุณาระบุเลขไมล์"); return; }
+  if (!mileage)        { alert("ระบบยังอ่านเลขไม่ได้ กรุณาถ่ายใหม่"); return; }
   if (!selectedTruckId){ alert("กรุณาเลือกรถก่อน"); return; }
   if (!croppedBlob)    { alert("กรุณาถ่ายรูปก่อน"); return; }
 
