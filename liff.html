@@ -372,7 +372,8 @@ body{font-family:'Sarabun',sans-serif;background:#f5f5f5;color:#333;min-height:1
         <label>ประเภทงาน</label>
         <select id="maintType" onchange="onMaintTypeChange()">
           <option value="oil_change">🛢 เปลี่ยนน้ำมันเครื่อง</option>
-          <option value="tire">🔄 ยาง (เปลี่ยน/สลับ)</option>
+          <option value="tire_rotate">🔄 สลับยาง</option>
+          <option value="tire_replace">🔧 เปลี่ยนยาง</option>
           <option value="brake">🛑 เบรก</option>
           <option value="battery">🔋 แบตเตอรี่</option>
           <option value="other">🔩 อื่นๆ</option>
@@ -394,9 +395,14 @@ body{font-family:'Sarabun',sans-serif;background:#f5f5f5;color:#333;min-height:1
         <label id="maintNextMileLabel">ครั้งถัดไปที่ไมล์ (กม.) <span id="maintNextMileOptional" style="color:#aaa;font-weight:400">ไม่บังคับ</span><span id="maintNextMileRequired" style="color:#e53935;font-weight:400;display:none"> *จำเป็น</span></label>
         <input type="number" id="maintNextMile" placeholder="เช่น 130000" inputmode="numeric">
       </div>
-      <!-- ตำแหน่งยาง -->
+      <!-- แจ้งเตือนสลับยาง -->
+      <div id="tireRotateReminder" style="display:none;margin-bottom:4px">
+        <div id="tireRotateAlert" class="alert"></div>
+      </div>
+
+      <!-- ตำแหน่งยาง / ล้อเบรก -->
       <div class="field" id="tireSection" style="display:none">
-        <label>ตำแหน่งยางที่เปลี่ยน/สลับ (เลือกได้หลายตำแหน่ง)</label>
+        <label id="tireSectionLabel">เลือกตำแหน่ง (เลือกได้หลายตำแหน่ง)</label>
         <div id="tireGrid" class="tire-grid"></div>
       </div>
       <div class="field">
@@ -1038,16 +1044,68 @@ function goMaintenance() {
   showScreen("screenMaintenance");
 }
 
+const TIRE_ROTATE_INTERVAL = 10000; // กม. ระยะสลับยาง
+
 function onMaintTypeChange() {
   const type = document.getElementById("maintType").value;
-  document.getElementById("tireSection").style.display = (type === "tire") ? "" : "none";
-  document.getElementById("maintNextMileField").style.display =
-    ["oil_change","tire","brake"].includes(type) ? "" : "none";
-  // oil_change: required; tire/brake: optional
-  const isOilChange = (type === "oil_change");
-  document.getElementById("maintNextMileOptional").style.display = isOilChange ? "none" : "";
-  document.getElementById("maintNextMileRequired").style.display = isOilChange ? "" : "none";
-  if (type === "tire") renderTireGrid();
+
+  // ── ตำแหน่งยาง/ล้อ ──────────────────────────────────────────────────────────
+  const showWheel = ["tire_rotate","tire_replace","brake"].includes(type);
+  document.getElementById("tireSection").style.display = showWheel ? "" : "none";
+  if (showWheel) {
+    let label = "เลือกตำแหน่ง (เลือกได้หลายตำแหน่ง)";
+    if (type === "tire_rotate")  label = "🔄 ตำแหน่งยางที่สลับ (เลือกได้หลายตำแหน่ง)";
+    if (type === "tire_replace") label = "🔧 ตำแหน่งยางที่เปลี่ยน (เลือกได้หลายตำแหน่ง)";
+    if (type === "brake")        label = "🛑 ตำแหน่งล้อเบรกที่ซ่อม/เปลี่ยน (เลือกได้หลายตำแหน่ง)";
+    document.getElementById("tireSectionLabel").textContent = label;
+    renderTireGrid();
+  }
+
+  // ── เลขไมล์ครั้งถัดไป ──────────────────────────────────────────────────────
+  const showNext = ["oil_change","tire_rotate","tire_replace","brake"].includes(type);
+  document.getElementById("maintNextMileField").style.display = showNext ? "" : "none";
+
+  // oil_change + tire_rotate = required, อื่นๆ = optional
+  const isRequired = ["oil_change","tire_rotate"].includes(type);
+  document.getElementById("maintNextMileOptional").style.display = isRequired ? "none" : "";
+  document.getElementById("maintNextMileRequired").style.display = isRequired ? "" : "none";
+
+  // ── แจ้งเตือนสลับยาง ──────────────────────────────────────────────────────
+  const reminderEl = document.getElementById("tireRotateReminder");
+  const alertEl    = document.getElementById("tireRotateAlert");
+  if (type === "tire_rotate") {
+    reminderEl.style.display = "";
+    const lastMile    = driverInfo?.last_tire_rotate_mileage ?? null;
+    const currentMile = driverInfo?.last_evening_mileage ?? null;
+    if (lastMile) {
+      const diff = currentMile ? currentMile - lastMile : null;
+      const lastDateStr = driverInfo?.last_tire_rotate_date
+        ? `  (${driverInfo.last_tire_rotate_date})`
+        : "";
+      if (diff !== null && diff >= TIRE_ROTATE_INTERVAL) {
+        alertEl.className = "alert alert-err";
+        alertEl.textContent =
+          `⚠️ ถึงเวลาสลับยางแล้ว!\n` +
+          `ครั้งล่าสุด: ${lastMile.toLocaleString("th-TH")} กม.${lastDateStr}\n` +
+          `ผ่านมาแล้ว: ${diff.toLocaleString("th-TH")} กม. (เกิน ${(diff-TIRE_ROTATE_INTERVAL).toLocaleString("th-TH")} กม.)`;
+      } else if (diff !== null) {
+        const remaining = TIRE_ROTATE_INTERVAL - diff;
+        alertEl.className = "alert alert-ok";
+        alertEl.textContent =
+          `✅ ยังไม่ถึงเวลาสลับยาง\n` +
+          `ครั้งล่าสุด: ${lastMile.toLocaleString("th-TH")} กม.${lastDateStr}\n` +
+          `เหลืออีก: ~${remaining.toLocaleString("th-TH")} กม.`;
+      } else {
+        alertEl.className = "alert alert-warn";
+        alertEl.textContent = `ℹ️ ครั้งล่าสุดสลับยางที่: ${lastMile.toLocaleString("th-TH")} กม.${lastDateStr}\n(ควรสลับทุก ${TIRE_ROTATE_INTERVAL.toLocaleString("th-TH")} กม.)`;
+      }
+    } else {
+      alertEl.className = "alert alert-warn";
+      alertEl.textContent = `ℹ️ ยังไม่มีประวัติการสลับยาง\nควรสลับยางทุก ${TIRE_ROTATE_INTERVAL.toLocaleString("th-TH")} กม.`;
+    }
+  } else {
+    reminderEl.style.display = "none";
+  }
 }
 
 function renderTireGrid() {
@@ -1093,9 +1151,10 @@ async function submitMaintenance() {
   const cost     = parseFloat(document.getElementById("maintCost").value) || null;
   const nextMile = parseInt(document.getElementById("maintNextMile").value) || null;
 
-  // oil_change: next mileage is required
-  if (type === "oil_change" && !nextMile) {
-    alert("กรุณาระบุเลขไมล์ครั้งถัดไป (จำเป็นสำหรับการเปลี่ยนน้ำมันเครื่อง)");
+  // oil_change + tire_rotate: next mileage is required
+  if (["oil_change","tire_rotate"].includes(type) && !nextMile) {
+    const label = type === "oil_change" ? "การเปลี่ยนน้ำมันเครื่อง" : "การสลับยาง";
+    alert(`กรุณาระบุเลขไมล์ครั้งถัดไป (จำเป็นสำหรับ${label})`);
     document.getElementById("maintNextMile").focus();
     return;
   }
