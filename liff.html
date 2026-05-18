@@ -103,12 +103,14 @@ body{font-family:'Sarabun',sans-serif;background:#f5f5f5;color:#333;min-height:1
 
 <!-- ═══ SCREEN: Loading ═══ -->
 <div class="screen active" id="screenLoading">
-  <div class="body" style="display:flex;align-items:center;justify-content:center">
+  <div class="body" style="display:flex;align-items:center;justify-content:center;flex-direction:column">
     <div class="loader">
       <div class="spinner"></div>
-      <div id="loadingMsg">กำลังโหลด...</div>
+      <div id="loadingMsg">กำลังเริ่มต้น...</div>
       <div id="loadingStep" style="font-size:12px;color:#bbb;margin-top:6px"></div>
     </div>
+    <div id="loadingDebug" style="display:none;margin-top:20px;padding:12px;background:#fff3e0;border:1px solid #ffcc80;border-radius:8px;max-width:90%;font-size:11px;color:#555;white-space:pre-wrap;font-family:monospace"></div>
+    <button id="loadingRetry" onclick="location.reload()" style="display:none;margin-top:14px;padding:10px 24px;background:#1a73e8;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer">🔄 โหลดใหม่</button>
   </div>
 </div>
 
@@ -436,10 +438,10 @@ body{font-family:'Sarabun',sans-serif;background:#f5f5f5;color:#333;min-height:1
   </div>
 </div>
 
-<!-- Tesseract.js -->
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-<!-- LIFF SDK -->
+<!-- LIFF SDK (เล็ก ~50KB โหลด sync) -->
 <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<!-- Tesseract.js (~3MB) โหลดแบบ lazy ตอนผู้ใช้ถ่ายรูปครั้งแรก ไม่ block initial load -->
+
 
 <script>
 // ════════════════════════════════════════════════════════════
@@ -464,8 +466,47 @@ let selectedTruckId = null;
 let selectedTirePositions = new Set();
 
 // ════════════════════════════════════════════════════════════
+// TESSERACT LAZY LOADER — โหลด ~3MB ตอนผู้ใช้ถ่ายรูปครั้งแรก
+// ════════════════════════════════════════════════════════════
+let tesseractPromise = null;
+function loadTesseract() {
+  if (tesseractPromise) return tesseractPromise;
+  tesseractPromise = new Promise((resolve, reject) => {
+    if (typeof Tesseract !== "undefined") { resolve(); return; }
+    const s = document.createElement("script");
+    s.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+    s.onload  = () => resolve();
+    s.onerror = () => reject(new Error("โหลด OCR library ไม่สำเร็จ"));
+    document.head.appendChild(s);
+  });
+  return tesseractPromise;
+}
+
+// ════════════════════════════════════════════════════════════
 // INIT
 // ════════════════════════════════════════════════════════════
+
+// Debug log — แสดงข้อความบนหน้า loading (ใช้เมื่อ console เปิดไม่ได้)
+const debugLog = [];
+function dlog(msg) {
+  // ใช้ Bangkok time ตลอด — timeStrBKK ประกาศข้างล่าง แต่ hoist ไม่ได้
+  // จึง inline call เอง
+  const t = new Date().toLocaleTimeString("en-GB", { timeZone: "Asia/Bangkok", hour12: false });
+  const line = `[${t}] ${msg}`;
+  debugLog.push(line);
+  console.log(line);
+  const el = document.getElementById("loadingDebug");
+  if (el) el.textContent = debugLog.slice(-15).join("\n");
+}
+
+// ถ้า init ค้างเกิน 8 วินาที → แสดงปุ่ม debug + retry
+let stuckTimer = setTimeout(() => {
+  const dbg = document.getElementById("loadingDebug");
+  const btn = document.getElementById("loadingRetry");
+  if (dbg) dbg.style.display = "block";
+  if (btn) btn.style.display = "inline-block";
+  dlog("⚠️ โหลดนานเกินคาด — แสดง debug info");
+}, 8000);
 
 // Timeout wrapper — ถ้า promise ไม่ resolve ภายใน ms → reject
 function withTimeout(promise, ms, label) {
@@ -478,21 +519,39 @@ function withTimeout(promise, ms, label) {
 }
 
 async function init() {
+  dlog("init() เริ่มทำงาน");
+  dlog(`User-Agent: ${navigator.userAgent.slice(0, 60)}...`);
+  dlog(`URL: ${location.href.slice(0, 80)}`);
+
+  // ── ตรวจว่า LIFF SDK โหลดสำเร็จไหม ─────────────────────────────────
+  if (typeof liff === "undefined") {
+    dlog("❌ LIFF SDK ไม่ได้โหลด (typeof liff === undefined)");
+    showBlock("🚫", "LIFF SDK โหลดไม่สำเร็จ",
+      "เน็ตเวิร์คอาจมีปัญหา\nกรุณาปิดแล้วเปิดใหม่");
+    return;
+  }
+  dlog("✓ LIFF SDK โหลดแล้ว");
+
   // ── liff.init ─────────────────────────────────────────────
   setLoadingMsg("กำลังเชื่อมต่อ LINE...", "ขั้นตอน 1/3");
+  dlog(`เรียก liff.init({ liffId: ${LIFF_ID} })...`);
   try {
     await withTimeout(
       liff.init({ liffId: LIFF_ID }),
       15000, "liff.init"
     );
+    dlog("✓ liff.init สำเร็จ");
   } catch (e) {
+    dlog(`❌ liff.init error: ${e.message}`);
     showBlock("🚫", "LIFF โหลดไม่สำเร็จ",
       `กรุณาปิดแล้วเปิดใหม่\n(${e.message})`);
     return;
   }
 
   // ── ต้องเปิดใน LINE เท่านั้น ─────────────────────────────────────────────
-  if (!liff.isInClient()) {
+  const inClient = liff.isInClient();
+  dlog(`liff.isInClient() = ${inClient}`);
+  if (!inClient) {
     showBlock("🚫", "เปิดจาก LINE เท่านั้น",
       "กรุณาเปิดลิงก์นี้ผ่านแอป LINE\nไม่สามารถเข้าใช้งานผ่านบราวเซอร์ได้");
     return;
@@ -500,10 +559,13 @@ async function init() {
 
   // ── getProfile ──────────────────────────────────────────────────────────────
   setLoadingMsg("กำลังดึงข้อมูล LINE...", "ขั้นตอน 2/3");
+  dlog("เรียก liff.getProfile()...");
   let profile;
   try {
     profile = await withTimeout(liff.getProfile(), 10000, "getProfile");
+    dlog(`✓ ได้ profile: ${profile.userId?.slice(0, 8)}...`);
   } catch (e) {
+    dlog(`❌ getProfile error: ${e.message}`);
     showBlock("🚫", "ดึงข้อมูลไม่สำเร็จ",
       `กรุณาปิดแล้วเปิดใหม่\n(${e.message})`);
     return;
@@ -513,8 +575,12 @@ async function init() {
   setLoadingMsg("กำลังโหลดข้อมูลระบบ...", "ขั้นตอน 3/3");
   const params   = new URLSearchParams(location.search);
   const deepType = params.get("type");
+  dlog(`deepType = ${deepType || "(none)"}`);
+  dlog("เรียก loadMenu()...");
 
   await loadMenu(deepType);
+  clearTimeout(stuckTimer);
+  dlog("✓ init() เสร็จสมบูรณ์");
 }
 
 // ── แสดง Block Screen ─────────────────────────────────────────────────────────
@@ -538,7 +604,8 @@ function showBlock(icon, title, msg, addFriendUrl = null) {
 // ════════════════════════════════════════════════════════════
 function showScreen(id) {
   document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
-  document.getElementById(id).classList.add("active");
+  const target = document.getElementById(id);
+  if (target) target.classList.add("active");
 }
 
 function setLoadingMsg(msg, step = "") {
@@ -548,8 +615,57 @@ function setLoadingMsg(msg, step = "") {
   if (s) s.textContent = step;
 }
 
+// ════════════════════════════════════════════════════════════
+// BKK DATETIME — sync กับ supabase/functions/_shared/datetime.ts
+// กฎ: ห้ามใช้ new Date().toISOString() ห้ามใช้ Date raw ที่อื่น
+// ════════════════════════════════════════════════════════════
+const BKK_TZ = "Asia/Bangkok";
+
+/** วันที่ปัจจุบัน Bangkok → "YYYY-MM-DD" */
+function todayBKK() {
+  return new Date().toLocaleDateString("sv-SE", { timeZone: BKK_TZ });
+}
+
+/** timestamp ตอนนี้ Bangkok → "2026-05-18T09:35:00+07:00" */
 function nowBKK() {
-  return new Date().toLocaleString("sv-SE", { timeZone: "Asia/Bangkok" }).replace(" ", "T") + "+07:00";
+  const parts = new Date().toLocaleString("sv-SE", { timeZone: BKK_TZ });
+  return parts.replace(" ", "T") + "+07:00";
+}
+
+/** เวลาตอนนี้ Bangkok → "09-35" (สำหรับชื่อไฟล์) */
+function timeBKK() {
+  return new Date()
+    .toLocaleTimeString("sv-SE", { timeZone: BKK_TZ, hour: "2-digit", minute: "2-digit" })
+    .replace(":", "-");
+}
+
+/** จำนวนวันจากวันนี้ Bangkok ถึง dateStr — บวก=ยังไม่ถึง, ลบ=เลยแล้ว */
+function daysUntil(dateStr) {
+  if (!dateStr) return null;
+  const today = new Date(todayBKK() + "T12:00:00+07:00");
+  const due   = new Date(dateStr   + "T12:00:00+07:00");
+  return Math.round((due.getTime() - today.getTime()) / 86400000);
+}
+
+/** เวลาปัจจุบัน Bangkok แบบ "HH:MM:SS" (สำหรับ debug log) */
+function timeStrBKK() {
+  return new Date().toLocaleTimeString("en-GB", { timeZone: BKK_TZ, hour12: false });
+}
+
+/** YYYY-MM-DD → "18 พฤษภาคม 2569" */
+function thaiDateLong(dateStr) {
+  if (!dateStr) return "-";
+  return new Date(dateStr + "T12:00:00+07:00").toLocaleDateString("th-TH", {
+    timeZone: BKK_TZ, year: "numeric", month: "long", day: "numeric"
+  });
+}
+
+/** YYYY-MM-DD → "18/05/69" */
+function thaiDateShort(dateStr) {
+  if (!dateStr) return "-";
+  return new Date(dateStr + "T12:00:00+07:00").toLocaleDateString("th-TH", {
+    timeZone: BKK_TZ, year: "2-digit", month: "2-digit", day: "2-digit"
+  });
 }
 
 function fmtNum(n) {
@@ -559,6 +675,8 @@ function fmtNum(n) {
 async function apiFetch(path, opts = {}, timeoutMs = 12000) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const shortPath = path.split("?")[0];
+  if (typeof dlog === "function") dlog(`→ API: ${shortPath}`);
   try {
     const res = await fetch(`${API_BASE}/${path}`, {
       headers: { "Content-Type": "application/json" },
@@ -567,10 +685,15 @@ async function apiFetch(path, opts = {}, timeoutMs = 12000) {
     });
     clearTimeout(timer);
     const text = await res.text();
+    if (typeof dlog === "function") dlog(`← API ${shortPath} status=${res.status}`);
     try { return JSON.parse(text); }
-    catch { return { error: `Server error (${res.status}): ${text.slice(0, 100)}` }; }
+    catch {
+      if (typeof dlog === "function") dlog(`❌ ${shortPath} ไม่ใช่ JSON: ${text.slice(0, 60)}`);
+      return { error: `Server error (${res.status}): ${text.slice(0, 100)}` };
+    }
   } catch (e) {
     clearTimeout(timer);
+    if (typeof dlog === "function") dlog(`❌ ${shortPath} error: ${e.message}`);
     if (e.name === "AbortError")
       return { error: "server ตอบช้าเกินไป (timeout 12s) — กรุณาลองใหม่" };
     return { error: `เชื่อมต่อไม่ได้: ${e.message}` };
@@ -776,7 +899,7 @@ async function onMileagePhoto(event) {
   document.getElementById("mileageStep2").style.display = "";
   document.getElementById("ocrLoading").style.display   = "";
   document.getElementById("ocrResult").style.display    = "none";
-  document.getElementById("mileageInputField").style.display = "none";
+  document.getElementById("ocrFailed").style.display    = "none";
   document.getElementById("truckMatchSection").style.display = "none";
   document.getElementById("mStep1").className = "step done";
   document.getElementById("mStep2").className = "step active";
@@ -808,6 +931,7 @@ function applyContrastGray(ctx, w, h) {
 
 // ลอง OCR บน canvas ที่ crop แล้ว — คืน number หรือ null
 async function ocrCanvas(canvas) {
+  await loadTesseract();
   const blob = await new Promise(r => canvas.toBlob(r, "image/png")); // PNG ดีกว่า JPEG สำหรับ OCR
   const result = await Tesseract.recognize(blob, "eng", {
     tessedit_char_whitelist: "0123456789 ",
@@ -1090,7 +1214,10 @@ async function submitFuel() {
   const fd = new FormData();
   fd.append("line_user_id",    lineUserId);
   fd.append("truck_id",        truckId);
-  fd.append("photo_timestamp", photoTs || nowBKK());
+  // ใช้ photoTs เดิม (เวลาที่ถ่ายรูปจริงๆ) ไม่ใช่เวลาตอนกดส่ง
+  // เพราะ backend ตรวจว่ารูปสดไม่เกิน 10 นาที — ส่งเวลาถ่ายจริง
+  if (!photoTs) photoTs = nowBKK();
+  fd.append("photo_timestamp", photoTs);
   fd.append("image",           fuelOcrBlob, "fuel_mileage.jpg");
   fd.append("liters",          liters);
   fd.append("mileage",         fuelOcrMileage);
@@ -1310,18 +1437,21 @@ async function submitMaintenance() {
 // ════════════════════════════════════════════════════════════
 
 // Global error handler — ป้องกัน LINE crash โดยแสดง error แทน
-window.onerror = function(msg, src, line) {
-  console.error("Global error:", msg, src, line);
-  showBlock("⚠️", "เกิดข้อผิดพลาด", `${msg}\nกรุณาปิดแล้วเปิดใหม่`);
+window.onerror = function(msg, src, line, col, err) {
+  console.error("Global error:", msg, src, line, col, err);
+  if (typeof dlog === "function") dlog(`💥 JS Error: ${msg} (line ${line})`);
+  showBlock("⚠️", "เกิดข้อผิดพลาด", `${msg}\n(line ${line})\nกรุณาปิดแล้วเปิดใหม่`);
   return true;
 };
 window.onunhandledrejection = function(e) {
   console.error("Unhandled rejection:", e.reason);
+  if (typeof dlog === "function") dlog(`💥 Promise reject: ${e.reason?.message || e.reason}`);
   showBlock("⚠️", "เกิดข้อผิดพลาด", `${e.reason?.message || e.reason}\nกรุณาปิดแล้วเปิดใหม่`);
 };
 
 init().catch(err => {
   console.error(err);
+  if (typeof dlog === "function") dlog(`💥 init() failed: ${err.message}`);
   showBlock("⚠️", "โหลดไม่สำเร็จ",
     `${err.message}\nกรุณาปิดแล้วเปิดใหม่`);
 });
