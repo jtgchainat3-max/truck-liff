@@ -151,6 +151,8 @@ tr:hover td{background:#fafafa}
   <div class="tab" onclick="switchTab('daily')">📋 ไมล์รายวัน</div>
   <div class="tab" onclick="switchTab('fuel')">⛽ น้ำมัน</div>
   <div class="tab" onclick="switchTab('maintenance')">🔧 ซ่อมบำรุง</div>
+  <div class="tab" onclick="switchTab('verify')">🔍 ตรวจสอบบิล</div>
+  <div class="tab" onclick="switchTab('accounting')">📒 ส่งบัญชี</div>
   <div class="tab" onclick="switchTab('anomalies')">⚠️ ผิดปกติ</div>
   <div class="tab" onclick="switchTab('documents')">📋 ภาษี/ประกัน</div>
   <div class="tab" onclick="switchTab('trucks')">🚛 รถ</div>
@@ -228,6 +230,67 @@ tr:hover td{background:#fafafa}
     </div>
   </div>
   <div id="maintContent"><div class="loader"><div class="spinner"></div>กำลังโหลด...</div></div>
+</div>
+
+<!-- ═══════════════════════════════════ VERIFY BILLS ═══════════════════════════════════ -->
+<div id="sec-verify" class="section">
+  <div class="filter-row">
+    <div class="form-group" style="flex:0 0 180px">
+      <label>ประเภท</label>
+      <select id="verifyType" onchange="loadVerifyQueue()">
+        <option value="fuel">⛽ น้ำมัน</option>
+        <option value="maintenance">🔧 ซ่อมบำรุง</option>
+      </select>
+    </div>
+    <div class="form-group" style="flex:0 0 180px">
+      <label>แสดง</label>
+      <select id="verifyFilter" onchange="loadVerifyQueue()">
+        <option value="unverified">ยังไม่ตรวจ</option>
+        <option value="all">ทั้งหมด</option>
+      </select>
+    </div>
+    <div style="flex:1;text-align:right">
+      <button class="btn btn-gray" style="width:auto;padding:10px 20px" onclick="loadVerifyQueue()">🔄 รีเฟรช</button>
+    </div>
+  </div>
+  <div style="background:#fff3e0;border:1px solid #ffcc80;border-radius:8px;padding:12px;margin-bottom:14px;font-size:13px;line-height:1.6">
+    💡 <b>วิธีใช้:</b> ดูรูปเลขไมล์ vs บิลทีละคู่ → เทียบเลขไมล์ → ติ๊ก ✅ ตรง / ❌ ไม่ตรง พร้อมหมายเหตุ (ถ้าจำเป็น)
+  </div>
+  <div id="verifyContent"><div class="loader"><div class="spinner"></div>กำลังโหลด...</div></div>
+</div>
+
+<!-- ═══════════════════════════════════ ACCOUNTING ═══════════════════════════════════ -->
+<div id="sec-accounting" class="section">
+  <div class="filter-row">
+    <div class="form-group" style="flex:0 0 130px">
+      <label>ปี</label>
+      <select id="acctYear" onchange="loadAccounting()"></select>
+    </div>
+    <div class="form-group" style="flex:0 0 130px">
+      <label>เดือน</label>
+      <select id="acctMonth" onchange="loadAccounting()">
+        <option value="01">ม.ค.</option><option value="02">ก.พ.</option>
+        <option value="03">มี.ค.</option><option value="04">เม.ย.</option>
+        <option value="05">พ.ค.</option><option value="06">มิ.ย.</option>
+        <option value="07">ก.ค.</option><option value="08">ส.ค.</option>
+        <option value="09">ก.ย.</option><option value="10">ต.ค.</option>
+        <option value="11">พ.ย.</option><option value="12">ธ.ค.</option>
+      </select>
+    </div>
+    <div class="form-group" style="flex:0 0 200px">
+      <label>รถ</label>
+      <select id="acctTruck" onchange="loadAccounting()">
+        <option value="">ทั้งหมด</option>
+      </select>
+    </div>
+    <div style="flex:1;text-align:right">
+      <button class="btn btn-gray" style="width:auto;padding:10px 20px" onclick="loadAccounting()">🔄 รีเฟรช</button>
+    </div>
+  </div>
+  <div style="background:#e3f2fd;border:1px solid #90caf9;border-radius:8px;padding:12px;margin-bottom:14px;font-size:13px;line-height:1.6">
+    💡 <b>วิธีใช้:</b> รวมบิลที่คนขับส่งเข้ามา → ติ๊กรายการที่ <b>ได้รับบิลกระดาษแล้ว</b> เพื่อนำส่งบัญชี
+  </div>
+  <div id="accountingContent"><div class="loader"><div class="spinner"></div>กำลังโหลด...</div></div>
 </div>
 
 <!-- ═══════════════════════════════════ ANOMALIES ═══════════════════════════════════ -->
@@ -338,7 +401,68 @@ tr:hover td{background:#fafafa}
 
     <div class="modal-actions" style="margin-top:16px">
       <button class="btn btn-gray" style="width:auto;padding:10px 20px" onclick="closeModal('driverDetailModal')">ปิด</button>
+      <button class="btn btn-primary" style="width:auto;padding:10px 20px" onclick="openEditDriver()">✏️ แก้ไข</button>
       <button id="dd_toggleBtn" class="btn btn-gray" style="width:auto;padding:10px 20px" onclick="toggleDriverFromDetail()">-</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL: Edit Driver ═══ -->
+<div class="modal-overlay" id="editDriverModal">
+  <div class="modal-box" style="max-width:600px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <h3>✏️ แก้ไขข้อมูลคนขับ</h3>
+      <button onclick="closeModal('editDriverModal')" style="background:none;border:none;font-size:24px;color:#999;cursor:pointer">×</button>
+    </div>
+    <div class="field"><label>ชื่อ-นามสกุล *</label><input type="text" id="ed_name"></div>
+    <div class="form-row">
+      <div class="field"><label>เบอร์โทร</label><input type="tel" id="ed_phone"></div>
+      <div class="field"><label>เลขบัตรประชาชน</label><input type="text" id="ed_idcard" maxlength="13"></div>
+    </div>
+    <div class="field"><label>ที่อยู่</label><textarea id="ed_address" rows="2"></textarea></div>
+    <div class="form-row">
+      <div class="field"><label>เลขใบขับขี่</label><input type="text" id="ed_license"></div>
+      <div class="field"><label>วันหมดอายุใบขับขี่</label><input type="date" id="ed_license_exp"></div>
+    </div>
+    <div class="form-row">
+      <div class="field">
+        <label>ประเภท *</label>
+        <select id="ed_type" onchange="onEditTypeChange()">
+          <option value="van">🚐 VAN — มีรถประจำ</option>
+          <option value="transport">🚛 ขนส่ง — เลือกได้ทุกคัน</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>โกดัง</label>
+        <select id="ed_warehouse">
+          <option value="">-- เลือก --</option>
+          <option value="ชัยนาท">ชัยนาท</option>
+          <option value="ลพบุรี">ลพบุรี</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row" id="ed_vanFields">
+      <div class="field">
+        <label>สาย (V01-V12)</label>
+        <select id="ed_route">
+          <option value="">-- ไม่มี --</option>
+          <option value="V01">V01</option><option value="V02">V02</option>
+          <option value="V03">V03</option><option value="V04">V04</option>
+          <option value="V05">V05</option><option value="V06">V06</option>
+          <option value="V07">V07</option><option value="V08">V08</option>
+          <option value="V09">V09</option><option value="V10">V10</option>
+          <option value="V11">V11</option><option value="V12">V12</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>รถประจำ</label>
+        <select id="ed_truck"><option value="">-- ไม่ระบุ --</option></select>
+      </div>
+    </div>
+    <div id="editDriverErr" style="color:#e53935;font-size:13px;min-height:18px;margin-top:6px"></div>
+    <div class="modal-actions" style="margin-top:14px">
+      <button class="btn btn-gray" style="width:auto;padding:10px 20px" onclick="closeModal('editDriverModal')">ยกเลิก</button>
+      <button class="btn btn-primary" style="width:auto;padding:10px 20px" onclick="submitEditDriver()">บันทึก</button>
     </div>
   </div>
 </div>
@@ -810,6 +934,8 @@ const TAB_LOADERS = {
   daily:       () => { document.getElementById("dailyDate").value = todayISO(); loadDaily(); },
   fuel:        () => { document.getElementById("fuelFrom").value = todayISO(); document.getElementById("fuelTo").value = todayISO(); loadFuel(); },
   maintenance: () => { populateMaintTruckFilter(); loadMaintenance(); },
+  verify:      () => loadVerifyQueue(),
+  accounting:  () => { populateAccountingFilters(); loadAccounting(); },
   anomalies:   loadAnomalies,
   documents:   loadDocuments,
   trucks:      loadTrucks,
@@ -1046,6 +1172,238 @@ function populateMaintTruckFilter() {
   if (cur) sel.value = cur;
 }
 
+// ════════════════════════════════════════════════════════════
+// VERIFY BILLS — ตรวจสอบบิล (เทียบรูปเลขไมล์ vs บิล)
+// ════════════════════════════════════════════════════════════
+async function loadVerifyQueue() {
+  const type = document.getElementById("verifyType").value;
+  const filter = document.getElementById("verifyFilter").value;
+  const el = document.getElementById("verifyContent");
+  el.innerHTML = `<div class="loader"><div class="spinner"></div>กำลังโหลด...</div>`;
+
+  let q = `verification-queue?type=${type}`;
+  if (filter === "all") q += "&only_unverified=false";
+
+  const data = await api(q);
+  if (!data || data.error) {
+    el.innerHTML = `<div class="alert alert-err">${data?.error || "โหลดไม่สำเร็จ"}</div>`;
+    return;
+  }
+  if (data.length === 0) {
+    el.innerHTML = `<div class="card" style="text-align:center;padding:30px;color:#888">✨ ไม่มีรายการที่รอตรวจสอบ</div>`;
+    return;
+  }
+
+  let html = `<div style="display:flex;flex-direction:column;gap:14px">`;
+  for (const r of data) {
+    const dateField = type === "fuel" ? r.log_date : r.maintenance_date;
+    const isFuel = type === "fuel";
+    const mileagePhoto = isFuel ? r.image_path : r.mileage_image_path;
+    const billPhoto    = isFuel ? r.bill_image_path : r.bill_image_path;
+    const verifyTag = r.verified_at
+      ? (r.mileage_match === true  ? `<span class="badge b-ok">✅ ตรวจแล้ว: ตรง</span>`
+        : r.mileage_match === false ? `<span class="badge b-exp">❌ ตรวจแล้ว: ไม่ตรง</span>`
+        : `<span class="badge b-sent">ตรวจแล้ว</span>`)
+      : `<span class="badge b-warn">⏳ รอตรวจ</span>`;
+
+    html += `
+      <div class="card" style="padding:0;overflow:hidden">
+        <div style="background:#1a73e8;color:#fff;padding:10px 14px;display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <b>${r.trucks?.plate_number || "-"}</b>
+            <span style="opacity:.85;font-size:13px"> · ${thaiDateShort(dateField)} · ${r.drivers?.name || "-"}</span>
+          </div>
+          <div>${verifyTag}</div>
+        </div>
+        <div style="padding:14px">
+          <!-- Photos side by side, full size -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:12px">
+            <div>
+              <div style="font-size:13px;font-weight:600;color:#555;margin-bottom:6px">📷 รูปเลขไมล์</div>
+              ${mileagePhoto
+                ? `<a href="${mileagePhoto}" target="_blank"><img src="${mileagePhoto}" style="width:100%;border-radius:8px;border:1px solid #e0e0e0"></a>`
+                : `<div style="padding:30px;background:#f5f5f5;border-radius:8px;text-align:center;color:#aaa">ไม่มีรูป</div>`}
+              <div style="margin-top:8px;text-align:center"><span style="font-size:13px;color:#666">เลขในระบบ:</span> <b style="font-size:18px">${fmtNum(isFuel ? r.mileage : r.mileage_at_service)}</b></div>
+            </div>
+            <div>
+              <div style="font-size:13px;font-weight:600;color:#555;margin-bottom:6px">🧾 รูปบิล</div>
+              ${billPhoto
+                ? `<a href="${billPhoto}" target="_blank"><img src="${billPhoto}" style="width:100%;border-radius:8px;border:1px solid #e0e0e0"></a>`
+                : `<div style="padding:30px;background:#f5f5f5;border-radius:8px;text-align:center;color:#aaa">ไม่มีรูป</div>`}
+              <div style="margin-top:8px;text-align:center"><span style="font-size:13px;color:#666">${isFuel ? "ยอดในระบบ:" : "ราคาในระบบ:"}</span> <b style="font-size:18px">฿${fmtNum(isFuel ? r.total_cost : r.cost)}</b></div>
+            </div>
+          </div>
+
+          <!-- Info row -->
+          <div style="background:#f5f5f5;border-radius:6px;padding:8px 12px;font-size:13px;color:#555;margin-bottom:10px">
+            ${isFuel
+              ? `${fmtNum(r.liters)} ลิตร · ราคา/ลิตร ฿${fmtNum(r.price_per_liter)} · ${r.km_per_liter ? r.km_per_liter + " กม./ล." : ""} · ${r.station_name || "-"}`
+              : `${MAINT_LABELS[r.maintenance_type] || r.maintenance_type} · ร้าน: ${r.shop_name || "-"} ${r.notes ? `· ${r.notes}` : ""}`
+            }
+          </div>
+
+          <!-- Verify input -->
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <input type="text" id="vnote_${type}_${r.id}" placeholder="หมายเหตุ (ถ้ามี)" style="flex:1;min-width:200px;padding:8px 12px;border:1px solid #e0e0e0;border-radius:6px;font-size:13px" value="${r.verification_note || ""}">
+            <button class="btn btn-success" style="width:auto;padding:8px 16px;font-size:13px" onclick="verifyBill('${type}', ${r.id}, true)">✅ ตรง</button>
+            <button class="btn btn-red" style="width:auto;padding:8px 16px;font-size:13px" onclick="verifyBill('${type}', ${r.id}, false)">❌ ไม่ตรง</button>
+          </div>
+        </div>
+      </div>`;
+  }
+  html += `</div>`;
+  el.innerHTML = html;
+}
+
+async function verifyBill(type, id, match) {
+  const note = document.getElementById(`vnote_${type}_${id}`).value.trim();
+  const path = type === "fuel" ? "verify-fuel" : "verify-maintenance";
+  const res = await api(path, {
+    method: "POST",
+    body: JSON.stringify({ id, mileage_match: match, verification_note: note || null })
+  });
+  if (res?.success) {
+    loadVerifyQueue();
+  } else {
+    alert(res?.error || "บันทึกไม่สำเร็จ");
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// ACCOUNTING — เช็คบิลส่งบัญชี (สิ้นเดือน)
+// ════════════════════════════════════════════════════════════
+function populateAccountingFilters() {
+  const yearSel = document.getElementById("acctYear");
+  if (!yearSel.options.length) {
+    const now = new Date();
+    const thisYear = now.getFullYear();
+    for (let y = thisYear; y >= thisYear - 3; y--) {
+      yearSel.innerHTML += `<option value="${y}">${y + 543}</option>`;
+    }
+    yearSel.value = thisYear;
+  }
+  const monthSel = document.getElementById("acctMonth");
+  if (!monthSel.value) {
+    monthSel.value = String(new Date().getMonth() + 1).padStart(2, "0");
+  }
+  const truckSel = document.getElementById("acctTruck");
+  const cur = truckSel.value;
+  truckSel.innerHTML = `<option value="">ทุกคัน</option>` +
+    allTrucks.map(t => `<option value="${t.id}">${t.plate_number} (${t.warehouse})</option>`).join("");
+  if (cur) truckSel.value = cur;
+}
+
+async function loadAccounting() {
+  const year  = document.getElementById("acctYear").value;
+  const month = document.getElementById("acctMonth").value;
+  const truckId = document.getElementById("acctTruck").value;
+  const el = document.getElementById("accountingContent");
+  el.innerHTML = `<div class="loader"><div class="spinner"></div>กำลังโหลด...</div>`;
+
+  let q = `accounting-monthly?year=${year}&month=${month}`;
+  if (truckId) q += `&truck_id=${truckId}`;
+  const data = await api(q);
+  if (!data || data.error) {
+    el.innerHTML = `<div class="alert alert-err">${data?.error || "โหลดไม่สำเร็จ"}</div>`;
+    return;
+  }
+
+  const monthThaiName = ["มกราคม","กุมภาพันธ์","มีนาคม","เมษายน","พฤษภาคม","มิถุนายน","กรกฎาคม","สิงหาคม","กันยายน","ตุลาคม","พฤศจิกายน","ธันวาคม"][parseInt(month) - 1];
+  const yearThai = parseInt(year) + 543;
+
+  let html = `
+    <div class="summary-grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));margin-bottom:14px">
+      <div class="sbox blue"><div class="num">${data.fuel.length}</div><div class="lbl">รายการน้ำมัน</div></div>
+      <div class="sbox orange"><div class="num">฿${fmtNum(Math.round(data.fuel_total))}</div><div class="lbl">ยอดน้ำมันรวม</div></div>
+      <div class="sbox green"><div class="num">${data.fuel_received}/${data.fuel.length}</div><div class="lbl">ได้รับบิลแล้ว</div></div>
+      <div class="sbox red"><div class="num">${data.fuel_pending}</div><div class="lbl">รอบิล</div></div>
+    </div>
+    <h3 style="margin-bottom:10px">⛽ น้ำมัน — ${monthThaiName} ${yearThai}</h3>`;
+
+  if (data.fuel.length === 0) {
+    html += `<div class="card" style="text-align:center;color:#888;padding:20px">— ไม่มีรายการ —</div>`;
+  } else {
+    html += `<div class="card" style="padding:0"><div class="tbl-wrap"><table>
+      <tr><th style="width:36px"></th><th>วันที่</th><th>ทะเบียน</th><th>คนขับ</th><th>เลขไมล์</th><th>ลิตร</th><th>ยอด</th><th>ปั๊ม</th><th>รับบิลโดย/เมื่อ</th><th>รูป</th></tr>`;
+    for (const r of data.fuel) {
+      const checked = r.bill_received ? "checked" : "";
+      const rowBg = r.bill_received ? "background:#f5fdf5" : "";
+      const receivedInfo = r.bill_received
+        ? `<small style="color:#2e7d32">${r.bill_received_by || "-"}<br>${r.bill_received_at ? thaiDateShort(r.bill_received_at.slice(0, 10)) : ""}</small>`
+        : `<small style="color:#aaa">—</small>`;
+      html += `<tr style="${rowBg}">
+        <td><input type="checkbox" style="transform:scale(1.4);cursor:pointer" ${checked} onchange="toggleBillReceived('fuel', ${r.id}, this.checked)"></td>
+        <td>${thaiDateShort(r.log_date)}</td>
+        <td><b>${r.trucks?.plate_number || "-"}</b></td>
+        <td>${r.drivers?.name || "-"}</td>
+        <td>${fmtNum(r.mileage)}</td>
+        <td>${fmtNum(r.liters)} ล.</td>
+        <td><b>฿${fmtNum(r.total_cost)}</b></td>
+        <td>${r.station_name || "-"}</td>
+        <td>${receivedInfo}</td>
+        <td>
+          ${r.image_path ? `<a href="${r.image_path}" target="_blank" class="img-link">📷</a> ` : ""}
+          ${r.bill_image_path ? `<a href="${r.bill_image_path}" target="_blank" class="img-link">🧾</a>` : ""}
+        </td>
+      </tr>`;
+    }
+    html += `</table></div></div>`;
+  }
+
+  // Maintenance section
+  html += `<h3 style="margin:20px 0 10px">🔧 ซ่อมบำรุง — ${monthThaiName} ${yearThai}</h3>
+    <div class="summary-grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));margin-bottom:14px">
+      <div class="sbox blue"><div class="num">${data.maintenance.length}</div><div class="lbl">รายการ</div></div>
+      <div class="sbox orange"><div class="num">฿${fmtNum(Math.round(data.maint_total))}</div><div class="lbl">ยอดรวม</div></div>
+      <div class="sbox green"><div class="num">${data.maint_received}/${data.maintenance.length}</div><div class="lbl">ได้รับบิลแล้ว</div></div>
+      <div class="sbox red"><div class="num">${data.maint_pending}</div><div class="lbl">รอบิล</div></div>
+    </div>`;
+
+  if (data.maintenance.length === 0) {
+    html += `<div class="card" style="text-align:center;color:#888;padding:20px">— ไม่มีรายการ —</div>`;
+  } else {
+    html += `<div class="card" style="padding:0"><div class="tbl-wrap"><table>
+      <tr><th style="width:36px"></th><th>วันที่</th><th>ทะเบียน</th><th>ประเภท</th><th>ร้าน</th><th>ยอด</th><th>รับบิลโดย/เมื่อ</th><th>รูป</th></tr>`;
+    for (const r of data.maintenance) {
+      const checked = r.bill_received ? "checked" : "";
+      const rowBg = r.bill_received ? "background:#f5fdf5" : "";
+      const receivedInfo = r.bill_received
+        ? `<small style="color:#2e7d32">${r.bill_received_by || "-"}<br>${r.bill_received_at ? thaiDateShort(r.bill_received_at.slice(0, 10)) : ""}</small>`
+        : `<small style="color:#aaa">—</small>`;
+      html += `<tr style="${rowBg}">
+        <td><input type="checkbox" style="transform:scale(1.4);cursor:pointer" ${checked} onchange="toggleBillReceived('maintenance', ${r.id}, this.checked)"></td>
+        <td>${thaiDateShort(r.maintenance_date)}</td>
+        <td><b>${r.trucks?.plate_number || "-"}</b></td>
+        <td><span class="badge b-blue">${MAINT_LABELS[r.maintenance_type] || r.maintenance_type}</span></td>
+        <td>${r.shop_name || "-"}</td>
+        <td><b>฿${fmtNum(r.cost)}</b></td>
+        <td>${receivedInfo}</td>
+        <td>
+          ${r.mileage_image_path ? `<a href="${r.mileage_image_path}" target="_blank" class="img-link">📷</a> ` : ""}
+          ${r.bill_image_path ? `<a href="${r.bill_image_path}" target="_blank" class="img-link">🧾</a>` : ""}
+        </td>
+      </tr>`;
+    }
+    html += `</table></div></div>`;
+  }
+
+  el.innerHTML = html;
+}
+
+async function toggleBillReceived(type, id, received) {
+  const res = await api("mark-bill-received", {
+    method: "POST",
+    body: JSON.stringify({ type, id, received })
+  });
+  if (!res?.success) {
+    alert(res?.error || "บันทึกไม่สำเร็จ");
+    loadAccounting();  // reload to restore checkbox
+  } else {
+    // Refresh เพื่ออัปเดต summary tiles + ผู้บันทึก
+    loadAccounting();
+  }
+}
+
 async function loadMaintenance() {
   const typeFilter  = document.getElementById("maintFilter").value;
   const truckFilter = document.getElementById("maintTruckFilter").value;
@@ -1057,7 +1415,11 @@ async function loadMaintenance() {
   if (truckFilter) params.push(`truck_id=${truckFilter}`);
   const q = "maintenance" + (params.length ? "?" + params.join("&") : "");
   const data = await api(q);
-  if (!data) return;
+  if (!data || data.error) {
+    el.innerHTML = `<div class="alert alert-err">${data?.error || "โหลดไม่สำเร็จ"}</div>`;
+    return;
+  }
+  allMaintCache = data;
 
   const totalCost = data.reduce((s, r) => s + (r.cost || 0), 0);
 
@@ -1066,34 +1428,88 @@ async function loadMaintenance() {
       <div class="sbox blue"><div class="num">${data.length}</div><div class="lbl">รายการ</div></div>
       <div class="sbox red"><div class="num">฿${fmtNum(Math.round(totalCost))}</div><div class="lbl">ค่าใช้จ่ายรวม</div></div>
     </div>
-    <div class="card"><h3>ประวัติซ่อมบำรุง</h3><div class="tbl-wrap"><table>
-      <tr><th>วันที่</th><th>ทะเบียน</th><th>ประเภท</th><th>ไมล์</th><th>ค่าใช้จ่าย</th><th>ร้าน</th><th>ครั้งถัดไป</th><th>ตรวจแล้ว</th><th>รูปบิล</th><th>พิกัด</th></tr>`;
+    <div class="card"><h3>ประวัติซ่อมบำรุง <small style="color:#888;font-weight:400">(กดที่แถวเพื่อดูรูป)</small></h3><div class="tbl-wrap"><table>
+      <tr><th>วันที่</th><th>ทะเบียน</th><th>ประเภท</th><th>ไมล์</th><th>ค่าใช้จ่าย</th><th>ร้าน</th><th>ครั้งถัดไป</th><th>ตรวจแล้ว</th><th>รูป</th></tr>`;
 
   for (const r of data) {
-    html += `<tr>
+    html += `<tr style="cursor:pointer" onclick="showMaintDetail(${r.id})">
       <td>${thaiDateShort(r.maintenance_date)}</td>
       <td><b>${r.trucks?.plate_number || "-"}</b><br><small style="color:#aaa">${r.trucks?.warehouse || ""}</small></td>
       <td><span class="badge b-blue">${MAINT_LABELS[r.maintenance_type] || r.maintenance_type}</span>
         ${r.tire_positions?.length ? `<br><small>${r.tire_positions.join(",")}</small>` : ""}</td>
       <td>${fmtNum(r.mileage_at_service)}</td>
-      <td>${r.cost ? `฿${fmtNum(r.cost)}` : "-"}</td>
+      <td>${r.cost ? `<b>฿${fmtNum(r.cost)}</b>` : "-"}</td>
       <td>${r.shop_name || "-"}</td>
-      <td>${r.next_service_mileage ? `${fmtNum(r.next_service_mileage)} กม.` : ""}${r.next_service_date ? `<br>${thaiDateShort(r.next_service_date)}` : ""}</td>
+      <td>${r.next_service_mileage ? `${fmtNum(r.next_service_mileage)} กม.` : "-"}${r.next_service_date ? `<br>${thaiDateShort(r.next_service_date)}` : ""}</td>
       <td>${r.verified_by
-        ? `<span class="badge b-ok">✅ ${r.verified_by}</span>`
-        : `<button class="btn btn-sm btn-success" onclick="verifyMaint(${r.id})">ตรวจสอบ</button>`}</td>
-      <td>${r.bill_image_path ? `<a href="${r.bill_image_path}" target="_blank" class="img-link">📷 บิล</a>` : "-"}</td>
-      <td>${mapLink(r.latitude, r.longitude)}</td>
+        ? `<span class="badge ${r.mileage_match === false ? 'b-exp' : 'b-ok'}">${r.mileage_match === false ? '❌' : '✅'} ${r.verified_by}</span>`
+        : `<span class="badge b-warn">⏳ รอตรวจ</span>`}</td>
+      <td>
+        ${r.mileage_image_path ? "📷" : ""}
+        ${r.bill_image_path ? "🧾" : ""}
+        ${!r.mileage_image_path && !r.bill_image_path ? "<span style='color:#aaa'>-</span>" : ""}
+      </td>
     </tr>`;
   }
   html += `</table></div></div>`;
   el.innerHTML = html;
 }
 
-async function verifyMaint(id) {
-  const res = await api("verify-maintenance", { method: "POST", body: JSON.stringify({ id, verified_by: "admin" }) });
-  if (res?.success) loadMaintenance();
-  else alert(res?.error || "เกิดข้อผิดพลาด");
+let allMaintCache = [];
+
+function showMaintDetail(id) {
+  const r = allMaintCache.find(x => x.id === id);
+  if (!r) { alert("ไม่พบรายการ"); return; }
+
+  document.getElementById("fd_title").textContent = `🔧 ${MAINT_LABELS[r.maintenance_type] || r.maintenance_type} — ${r.trucks?.plate_number || "-"}`;
+
+  const row = (label, value) => `
+    <div style="display:flex;padding:8px 0;border-bottom:1px solid #f0f0f0">
+      <div style="flex:0 0 130px;font-size:13px;color:#777;font-weight:600">${label}</div>
+      <div style="flex:1;font-size:14px;color:#333">${value || "<span style='color:#aaa'>-</span>"}</div>
+    </div>`;
+  const photoBox = (label, url) => url ? `
+    <div style="margin-bottom:12px">
+      <div style="font-size:13px;color:#777;font-weight:600;margin-bottom:6px">${label}</div>
+      <a href="${url}" target="_blank">
+        <img src="${url}" style="width:100%;max-height:280px;object-fit:contain;border-radius:8px;border:1px solid #e0e0e0;background:#fff">
+      </a>
+    </div>
+  ` : `<div style="margin-bottom:12px;padding:14px;text-align:center;background:#f5f5f5;border-radius:8px;color:#aaa;font-size:13px">— ไม่มี${label} —</div>`;
+
+  const gpsLink = (r.latitude && r.longitude)
+    ? `<a href="https://www.google.com/maps?q=${r.latitude},${r.longitude}" target="_blank" style="color:#1a73e8">📍 ดูบนแผนที่</a>` : null;
+
+  const verifyTag = r.verified_at
+    ? (r.mileage_match === true  ? `<span class="badge b-ok">✅ ตรวจแล้ว: ตรง</span>`
+      : r.mileage_match === false ? `<span class="badge b-exp">❌ ตรวจแล้ว: ไม่ตรง</span>`
+      : `<span class="badge b-sent">ตรวจแล้ว</span>`) + ` <small style="color:#666">โดย ${r.verified_by}</small>`
+    : `<span class="badge b-warn">⏳ ยังไม่ตรวจ</span>`;
+
+  document.getElementById("fd_content").innerHTML = `
+    <div style="margin-bottom:12px">${verifyTag}</div>
+    ${photoBox("📷 รูปเลขไมล์", r.mileage_image_path)}
+    ${photoBox("🧾 รูปบิลซ่อม", r.bill_image_path)}
+    <div style="background:#f9f9f9;border-radius:8px;padding:12px 14px;margin-top:12px">
+      <div style="font-size:12px;color:#1a73e8;font-weight:700;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">🔧 ข้อมูลการซ่อม</div>
+      ${row("วันที่", thaiDateLong(r.maintenance_date))}
+      ${row("ประเภท", MAINT_LABELS[r.maintenance_type] || r.maintenance_type)}
+      ${row("เลขไมล์", r.mileage_at_service ? `<b>${fmtNum(r.mileage_at_service)}</b> กม.` : null)}
+      ${row("ค่าใช้จ่าย", r.cost ? `<b style="color:#e53935;font-size:18px">฿${fmtNum(r.cost)}</b>` : null)}
+      ${row("ร้าน/อู่", r.shop_name)}
+      ${row("ครั้งถัดไป", r.next_service_mileage ? `${fmtNum(r.next_service_mileage)} กม.` : null)}
+      ${row("ตำแหน่งล้อ", r.tire_positions?.length ? r.tire_positions.join(", ") : null)}
+      ${row("หมายเหตุ", r.notes ? `<div style="white-space:pre-line">${r.notes}</div>` : null)}
+      ${row("ตำแหน่ง", gpsLink)}
+      ${row("ผลตรวจสอบ", r.verification_note)}
+    </div>
+    <div style="background:#f9f9f9;border-radius:8px;padding:12px 14px;margin-top:12px">
+      <div style="font-size:12px;color:#1a73e8;font-weight:700;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">👤 คนขับ</div>
+      ${row("ชื่อ", r.drivers?.name)}
+      ${row("โกดัง", r.trucks?.warehouse)}
+    </div>
+  `;
+  document.getElementById("fuelDetailModal").classList.add("open");
 }
 
 // ════════════════════════════════════════════════════════════
@@ -1477,6 +1893,87 @@ async function toggleDriverFromDetail() {
   });
   closeModal("driverDetailModal");
   loadDrivers();
+}
+
+// ── เปิด Modal แก้ไขคนขับ ────────────────────────────────────
+function openEditDriver() {
+  const d = currentDriverDetail;
+  if (!d) return;
+
+  document.getElementById("ed_name").value         = d.name || "";
+  document.getElementById("ed_phone").value        = d.phone || "";
+  document.getElementById("ed_idcard").value       = d.id_card_number || "";
+  document.getElementById("ed_address").value      = d.address || "";
+  document.getElementById("ed_license").value      = d.license_number || "";
+  document.getElementById("ed_license_exp").value  = d.license_expiry_date || "";
+  document.getElementById("ed_type").value         = d.driver_type || "van";
+  document.getElementById("ed_warehouse").value    = d.warehouse || d.trucks?.warehouse || "";
+  document.getElementById("ed_route").value        = d.route_code || "";
+
+  // โหลดรายการรถ
+  const truckSel = document.getElementById("ed_truck");
+  truckSel.innerHTML = `<option value="">-- ไม่ระบุ --</option>` +
+    allTrucks.map(t => `<option value="${t.id}" ${t.id === d.truck_id ? "selected" : ""}>${t.plate_number} (${t.warehouse})</option>`).join("");
+
+  onEditTypeChange();
+  document.getElementById("editDriverErr").textContent = "";
+  closeModal("driverDetailModal");
+  document.getElementById("editDriverModal").classList.add("open");
+}
+
+function onEditTypeChange() {
+  const isVan = document.getElementById("ed_type").value === "van";
+  document.getElementById("ed_vanFields").style.display = isVan ? "" : "none";
+}
+
+async function submitEditDriver() {
+  const errEl = document.getElementById("editDriverErr");
+  const name    = document.getElementById("ed_name").value.trim();
+  const phone   = document.getElementById("ed_phone").value.trim();
+  const idCard  = document.getElementById("ed_idcard").value.replace(/\D/g, "");
+  const address = document.getElementById("ed_address").value.trim();
+  const license = document.getElementById("ed_license").value.trim();
+  const licExp  = document.getElementById("ed_license_exp").value;
+  const type    = document.getElementById("ed_type").value;
+  const warehouse = document.getElementById("ed_warehouse").value;
+  const route   = document.getElementById("ed_route").value;
+  const truckId = document.getElementById("ed_truck").value;
+
+  if (!name) { errEl.textContent = "❌ กรุณากรอกชื่อ"; return; }
+  if (idCard && idCard.length !== 13) { errEl.textContent = "❌ เลขบัตรประชาชนต้องเป็น 13 หลัก"; return; }
+
+  errEl.style.color = "#888";
+  errEl.textContent = "⏳ กำลังบันทึก...";
+
+  const body = {
+    name,
+    phone: phone || null,
+    id_card_number: idCard || null,
+    address: address || null,
+    license_number: license || null,
+    license_expiry_date: licExp || null,
+    driver_type: type,
+    warehouse: warehouse || null,
+    route_code: type === "van" ? (route || null) : null,
+    truck_id: type === "van" && truckId ? parseInt(truckId) : null,
+  };
+
+  const res = await api(`drivers/${currentDriverDetail.id}`, {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
+
+  if (res?.success) {
+    errEl.style.color = "#2e7d32";
+    errEl.textContent = "✅ บันทึกแล้ว";
+    setTimeout(() => {
+      closeModal("editDriverModal");
+      loadDrivers();
+    }, 800);
+  } else {
+    errEl.style.color = "#e53935";
+    errEl.textContent = "❌ " + (res?.error || "บันทึกไม่สำเร็จ");
+  }
 }
 
 // ─── Modal: Add Driver ──────────────────────────────────────────────────────
