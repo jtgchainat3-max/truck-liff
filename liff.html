@@ -935,7 +935,7 @@ function renderRegisterScreen(trucks) {
     trucks.forEach(t => {
       const el = document.createElement("div");
       el.className = "truck-chip";
-      el.innerHTML = `<span class="plate">${t.plate_number}</span><div class="detail">${t.warehouse || ""} · ${t.truck_type || "4wheel"}</div>`;
+      el.innerHTML = `<span class="plate">${t.plate_number}</span><div class="detail">${t.warehouse || ""} · ${truckTypeLabel(t.truck_type)}</div>`;
       el.onclick   = () => {
         list.querySelectorAll(".truck-chip").forEach(c => c.classList.remove("selected"));
         el.classList.add("selected");
@@ -1110,13 +1110,13 @@ function renderCurrentTruck(screen) {
 
   const plate    = truck?.plate_number || `#${selectedTruckId}`;
   const wh       = truck?.warehouse || "";
-  const type     = truck?.truck_type || "";
+  const typeLbl  = truckTypeLabel(truck?.truck_type);
   const lastMile = truck?.last_mileage ? ` · ไมล์ล่าสุด ${fmtNum(truck.last_mileage)} กม.` : "";
 
   // ทะเบียน — ใหญ่ ตัวหนา
   document.getElementById(textId).textContent = plate;
   // sub line: โกดัง · ประเภท · ไมล์
-  const subParts = [wh, type].filter(Boolean);
+  const subParts = [wh, typeLbl].filter(Boolean);
   document.getElementById(subId).textContent = subParts.join(" · ") + lastMile;
   document.getElementById(displayId).style.display = "";
 }
@@ -1207,7 +1207,7 @@ function renderTruckList(screen, listEl) {
 function makeTruckChip(t, listEl, screen) {
   const el = document.createElement("div");
   el.className = "truck-chip" + (t.id === selectedTruckId ? " selected" : "");
-  el.innerHTML = `<span class="plate">${t.plate_number}</span><div class="detail">${t.truck_type || "4wheel"}${t.last_mileage ? ` · ไมล์ล่าสุด ${fmtNum(t.last_mileage)} กม.` : ""}</div>`;
+  el.innerHTML = `<span class="plate">${t.plate_number}</span><div class="detail">${truckTypeLabel(t.truck_type)}${t.last_mileage ? ` · ไมล์ล่าสุด ${fmtNum(t.last_mileage)} กม.` : ""}</div>`;
   el.onclick = () => {
     listEl.querySelectorAll(".truck-chip").forEach(c => c.classList.remove("selected"));
     el.classList.add("selected");
@@ -1611,7 +1611,11 @@ async function submitFuel() {
 // MAINTENANCE FLOW
 // ════════════════════════════════════════════════════════════
 const TIRE_POSITIONS = {
-  "4wheel":  [
+  pickup: [
+    { code:"FL", label:"หน้าซ้าย" }, { code:"FR", label:"หน้าขวา" },
+    { code:"RL", label:"หลังซ้าย" }, { code:"RR", label:"หลังขวา" }
+  ],
+  "4wheel": [   // backward-compat สำหรับข้อมูลเก่า
     { code:"FL", label:"หน้าซ้าย" }, { code:"FR", label:"หน้าขวา" },
     { code:"RL", label:"หลังซ้าย" }, { code:"RR", label:"หลังขวา" }
   ],
@@ -1627,7 +1631,28 @@ const TIRE_POSITIONS = {
     { code:"R1L", label:"หลังในซ้าย" }, { code:"R1R", label:"หลังนอกซ้าย" },
     { code:"R2L", label:"หลังในขวา" }, { code:"R2R", label:"หลังนอกขวา" }
   ],
+  forklift: [
+    { code:"FL", label:"หน้าซ้าย" }, { code:"FR", label:"หน้าขวา" },
+    { code:"RL", label:"หลังซ้าย" }, { code:"RR", label:"หลังขวา" }
+  ],
+  motorcycle: [
+    { code:"F", label:"หน้า" }, { code:"R", label:"หลัง" }
+  ],
+  other: [
+    { code:"FL", label:"หน้าซ้าย" }, { code:"FR", label:"หน้าขวา" },
+    { code:"RL", label:"หลังซ้าย" }, { code:"RR", label:"หลังขวา" }
+  ],
 };
+
+// แปลง truck_type code → label (สำหรับแสดงผล)
+const TRUCK_TYPE_LABELS = {
+  pickup:"🛻 กระบะ", "4wheel":"🛻 กระบะ",
+  "6wheel":"🚚 6 ล้อ", "10wheel":"🚛 10 ล้อ",
+  forklift:"🏗 Forklift",
+  motorcycle:"🏍 มอไซต์",
+  other:"📦 อื่นๆ"
+};
+function truckTypeLabel(t) { return TRUCK_TYPE_LABELS[t] || t || ""; }
 
 function goMaintenance() {
   maintBillBlob       = null;
@@ -1738,9 +1763,12 @@ function onMaintTypeChange() {
 }
 
 function renderTireGrid() {
-  const truckType = driverInfo?.truck_type || "4wheel";
-  const positions = TIRE_POSITIONS[truckType] || TIRE_POSITIONS["4wheel"];
-  const cols      = truckType === "4wheel" ? 2 : truckType === "6wheel" ? 3 : 4;
+  const truckType = driverInfo?.truck_type || "pickup";
+  const positions = TIRE_POSITIONS[truckType] || TIRE_POSITIONS["pickup"];
+  const cols      = (truckType === "pickup" || truckType === "4wheel" || truckType === "forklift") ? 2
+                  : truckType === "motorcycle" ? 2
+                  : truckType === "6wheel" ? 3
+                  : 4;
   const grid      = document.getElementById("tireGrid");
   grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
   grid.innerHTML = positions.map(p =>
