@@ -1,0 +1,1126 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin — Truck Tracker</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Sarabun',sans-serif;background:#f0f2f5;color:#333;font-size:14px}
+/* Top bar */
+.topbar{background:#1a73e8;color:#fff;padding:0 20px;display:flex;align-items:center;height:56px;gap:16px;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.2)}
+.topbar h1{font-size:18px;font-weight:700;flex:1}
+.topbar .sub{font-size:13px;opacity:.8}
+/* Tabs */
+.tabs{background:#fff;display:flex;overflow-x:auto;border-bottom:2px solid #e0e0e0;position:sticky;top:56px;z-index:99;box-shadow:0 2px 4px rgba(0,0,0,.06)}
+.tab{padding:12px 18px;cursor:pointer;white-space:nowrap;font-size:14px;font-weight:600;color:#777;border-bottom:3px solid transparent;transition:.15s;flex-shrink:0}
+.tab:hover{color:#1a73e8;background:#f5f5f5}
+.tab.active{color:#1a73e8;border-bottom-color:#1a73e8}
+/* Main */
+.main{max-width:1200px;margin:0 auto;padding:20px}
+/* Section */
+.section{display:none}
+.section.active{display:block}
+/* Cards */
+.card{background:#fff;border-radius:10px;padding:18px;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.card h3{font-size:15px;font-weight:700;color:#333;margin-bottom:14px;border-bottom:1px solid #f0f0f0;padding-bottom:8px}
+/* Summary boxes */
+.summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
+.sbox{background:#fff;border-radius:10px;padding:16px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.sbox .num{font-size:32px;font-weight:700}
+.sbox .lbl{font-size:13px;color:#888;margin-top:4px}
+.sbox.blue .num{color:#1a73e8}
+.sbox.green .num{color:#34a853}
+.sbox.red .num{color:#ea4335}
+.sbox.orange .num{color:#ff7043}
+.sbox.yellow .num{color:#fbbc04}
+/* Table */
+.tbl-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{background:#f8f9fa;padding:10px 12px;text-align:left;font-weight:700;color:#555;border-bottom:2px solid #e0e0e0;white-space:nowrap}
+td{padding:9px 12px;border-bottom:1px solid #f0f0f0;vertical-align:middle}
+tr:hover td{background:#fafafa}
+/* Status badges */
+.badge{display:inline-block;padding:3px 9px;border-radius:12px;font-size:12px;font-weight:600;white-space:nowrap}
+.b-ok{background:#e8f5e9;color:#2e7d32}
+.b-warn{background:#fff3e0;color:#e65100}
+.b-crit{background:#ffebee;color:#c62828}
+.b-exp{background:#efebe9;color:#4e342e}
+.b-sent{background:#e3f2fd;color:#0d47a1}
+.b-miss{background:#fce4ec;color:#880e4f}
+.b-na{background:#f5f5f5;color:#9e9e9e}
+.b-blue{background:#e8eaf6;color:#3949ab}
+/* Buttons */
+.btn{display:inline-block;padding:8px 16px;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;transition:.15s}
+.btn-sm{padding:5px 10px;font-size:12px}
+.btn-primary{background:#1a73e8;color:#fff}
+.btn-primary:hover{background:#1558b0}
+.btn-success{background:#34a853;color:#fff}
+.btn-danger{background:#ea4335;color:#fff}
+.btn-danger:hover{background:#c62828}
+.btn-gray{background:#e8e8e8;color:#555}
+.btn-gray:hover{background:#d0d0d0}
+.btn-orange{background:#ff7043;color:#fff}
+/* Form */
+.form-row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.form-group{flex:1;min-width:150px}
+.form-group label{display:block;font-size:13px;font-weight:600;color:#555;margin-bottom:5px}
+.form-group input,.form-group select,.form-group textarea{width:100%;padding:8px 10px;border:1.5px solid #ddd;border-radius:6px;font-size:14px;outline:none;font-family:inherit;transition:.15s}
+.form-group input:focus,.form-group select:focus{border-color:#1a73e8}
+.form-group textarea{height:70px;resize:vertical}
+/* Image link */
+.img-link{color:#1a73e8;text-decoration:none;font-size:12px}
+.img-link:hover{text-decoration:underline}
+/* Date filter row */
+.filter-row{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px}
+.filter-row .form-group{margin-bottom:0;min-width:140px}
+/* Loader */
+.loader{text-align:center;padding:40px;color:#aaa;font-size:15px}
+.spinner{width:30px;height:30px;border:3px solid #e0e0e0;border-top:3px solid #1a73e8;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 12px}
+@keyframes spin{to{transform:rotate(360deg)}}
+/* Modal */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center}
+.modal-bg.open{display:flex}
+.modal{background:#fff;border-radius:12px;padding:24px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;margin:16px}
+.modal h3{font-size:17px;font-weight:700;margin-bottom:16px}
+.modal-footer{margin-top:16px;display:flex;gap:10px;justify-content:flex-end}
+/* Map link */
+.map-link{color:#1a73e8;font-size:12px;text-decoration:none}
+/* Alert box */
+.alert{padding:12px 14px;border-radius:8px;font-size:13px;margin-bottom:12px}
+.alert-warn{background:#fff3e0;color:#e65100;border:1px solid #ffcc80}
+.alert-info{background:#e3f2fd;color:#0d47a1;border:1px solid #90caf9}
+/* Login screen */
+#loginScreen{position:fixed;inset:0;background:#f0f2f5;display:flex;align-items:center;justify-content:center;z-index:9999}
+.login-box{background:#fff;border-radius:16px;padding:36px 32px;width:100%;max-width:380px;box-shadow:0 4px 24px rgba(0,0,0,.12);text-align:center}
+.login-box .logo{font-size:48px;margin-bottom:8px}
+.login-box h2{font-size:22px;font-weight:700;color:#333;margin-bottom:4px}
+.login-box p{font-size:14px;color:#888;margin-bottom:24px}
+.login-box input{width:100%;padding:12px 14px;border:2px solid #e0e0e0;border-radius:8px;font-size:16px;outline:none;margin-bottom:12px;transition:.15s}
+.login-box input:focus{border-color:#1a73e8}
+.login-box button{width:100%;padding:14px;background:#1a73e8;color:#fff;border:none;border-radius:8px;font-size:16px;font-weight:700;cursor:pointer;transition:.15s}
+.login-box button:hover{background:#1558b0}
+.login-err{color:#e53935;font-size:13px;margin-top:8px;min-height:20px}
+</style>
+</head>
+<body>
+
+<!-- ═══ LOGIN SCREEN ═══ -->
+<div id="loginScreen">
+  <div class="login-box">
+    <div class="logo">🚚</div>
+    <h2>Truck Tracker Admin</h2>
+    <p>กรอก Username และ Password เพื่อเข้าระบบ</p>
+    <input type="text" id="loginUser" placeholder="Username" autocomplete="username" onkeydown="if(event.key==='Enter')document.getElementById('loginPass').focus()">
+    <input type="password" id="loginPass" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+    <button onclick="doLogin()">🔓 เข้าสู่ระบบ</button>
+    <div class="login-err" id="loginErr"></div>
+  </div>
+</div>
+
+<div id="mainContent" style="display:none">
+<div class="topbar">
+  <h1>🚚 Truck Tracker Admin</h1>
+  <span class="sub" id="topDate">-</span>
+  <button class="btn btn-gray btn-sm" onclick="doLogout()" style="margin-left:auto">ออกจากระบบ</button>
+</div>
+
+<!-- TABS -->
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('summary')">📊 ภาพรวม</div>
+  <div class="tab" onclick="switchTab('daily')">📋 ไมล์รายวัน</div>
+  <div class="tab" onclick="switchTab('fuel')">⛽ น้ำมัน</div>
+  <div class="tab" onclick="switchTab('maintenance')">🔧 ซ่อมบำรุง</div>
+  <div class="tab" onclick="switchTab('anomalies')">⚠️ ผิดปกติ</div>
+  <div class="tab" onclick="switchTab('documents')">📋 ภาษี/ประกัน</div>
+  <div class="tab" onclick="switchTab('trucks')">🚛 รถ</div>
+  <div class="tab" onclick="switchTab('drivers')">👤 คนขับ</div>
+  <div class="tab" onclick="switchTab('settings')">⚙️ ตั้งค่า</div>
+</div>
+
+<div class="main">
+
+<!-- ═══════════════════════════════════ SUMMARY ═══════════════════════════════════ -->
+<div id="sec-summary" class="section active">
+  <div id="summaryContent"><div class="loader"><div class="spinner"></div>กำลังโหลด...</div></div>
+</div>
+
+<!-- ═══════════════════════════════════ DAILY ═══════════════════════════════════ -->
+<div id="sec-daily" class="section">
+  <div class="filter-row">
+    <div class="form-group">
+      <label>วันที่</label>
+      <input type="date" id="dailyDate" onchange="loadDaily()">
+    </div>
+    <div class="form-group" style="flex:0">
+      <label>&nbsp;</label>
+      <button class="btn btn-gray" onclick="document.getElementById('dailyDate').value=todayISO();loadDaily()">วันนี้</button>
+    </div>
+  </div>
+  <div id="dailyContent"><div class="loader"><div class="spinner"></div>กำลังโหลด...</div></div>
+</div>
+
+<!-- ═══════════════════════════════════ FUEL ═══════════════════════════════════ -->
+<div id="sec-fuel" class="section">
+  <div class="filter-row">
+    <div class="form-group">
+      <label>จาก</label>
+      <input type="date" id="fuelFrom">
+    </div>
+    <div class="form-group">
+      <label>ถึง</label>
+      <input type="date" id="fuelTo">
+    </div>
+    <div class="form-group" style="flex:0">
+      <label>&nbsp;</label>
+      <button class="btn btn-primary" onclick="loadFuel()">🔍 ค้นหา</button>
+    </div>
+  </div>
+  <div id="fuelContent"><div class="loader"><div class="spinner"></div>กำลังโหลด...</div></div>
+</div>
+
+<!-- ═══════════════════════════════════ MAINTENANCE ═══════════════════════════════════ -->
+<div id="sec-maintenance" class="section">
+  <div class="filter-row">
+    <div class="form-group">
+      <label>ประเภท</label>
+      <select id="maintFilter" onchange="loadMaintenance()">
+        <option value="">ทั้งหมด</option>
+        <option value="oil_change">เปลี่ยนน้ำมันเครื่อง</option>
+        <option value="tire">ยาง</option>
+        <option value="brake">เบรก</option>
+        <option value="battery">แบตเตอรี่</option>
+        <option value="other">อื่นๆ</option>
+      </select>
+    </div>
+    <div class="form-group" style="flex:0">
+      <label>&nbsp;</label>
+      <button class="btn btn-primary" onclick="openAddMaintModal()">+ เพิ่มบำรุงรักษา</button>
+    </div>
+  </div>
+  <div id="maintContent"><div class="loader"><div class="spinner"></div>กำลังโหลด...</div></div>
+</div>
+
+<!-- ═══════════════════════════════════ ANOMALIES ═══════════════════════════════════ -->
+<div id="sec-anomalies" class="section">
+  <div class="filter-row">
+    <div class="form-group">
+      <label>ย้อนหลัง (วัน)</label>
+      <select id="anomalyDays" onchange="loadAnomalies()">
+        <option value="7" selected>7 วัน</option>
+        <option value="14">14 วัน</option>
+        <option value="30">30 วัน</option>
+      </select>
+    </div>
+    <div class="form-group" style="flex:0">
+      <label>&nbsp;</label>
+      <button class="btn btn-gray" onclick="loadAnomalies()">🔄 รีเฟรช</button>
+    </div>
+  </div>
+  <div id="anomalyContent"><div class="loader"><div class="spinner"></div>กำลังโหลด...</div></div>
+</div>
+
+<!-- ═══════════════════════════════════ DOCUMENTS ═══════════════════════════════════ -->
+<div id="sec-documents" class="section">
+  <div id="docContent"><div class="loader"><div class="spinner"></div>กำลังโหลด...</div></div>
+</div>
+
+<!-- ═══════════════════════════════════ TRUCKS ═══════════════════════════════════ -->
+<div id="sec-trucks" class="section">
+  <div style="margin-bottom:14px;text-align:right">
+    <button class="btn btn-primary" onclick="openAddTruckModal()">+ เพิ่มรถ</button>
+  </div>
+  <div id="trucksContent"><div class="loader"><div class="spinner"></div>กำลังโหลด...</div></div>
+</div>
+
+<!-- ═══════════════════════════════════ DRIVERS ═══════════════════════════════════ -->
+<div id="sec-drivers" class="section">
+  <div id="driversContent"><div class="loader"><div class="spinner"></div>กำลังโหลด...</div></div>
+</div>
+
+<!-- ═══════════════════════════════════ SETTINGS ═══════════════════════════════════ -->
+<div id="sec-settings" class="section">
+  <div class="card">
+    <h3>🔔 เป้าหมายแจ้งเตือน (กลุ่มไลน์ / แอดมิน)</h3>
+    <div id="notifTargets"><div class="loader"><div class="spinner"></div>กำลังโหลด...</div></div>
+    <div style="margin-top:12px">
+      <button class="btn btn-primary" onclick="openAddNotifModal()">+ เพิ่มกลุ่ม/แอดมิน</button>
+    </div>
+  </div>
+  <div class="card">
+    <h3>⚙️ ตั้งค่าระบบ</h3>
+    <div id="settingsContent"><div class="loader"><div class="spinner"></div>กำลังโหลด...</div></div>
+  </div>
+  <div class="card">
+    <h3>📨 ทดสอบส่งแจ้งเตือน</h3>
+    <div class="form-row">
+      <button class="btn btn-primary" onclick="testReminder('morning')">ทดสอบเตือนไมล์เช้า</button>
+      <button class="btn btn-primary" onclick="testReminder('evening')">ทดสอบเตือนไมล์เย็น</button>
+      <button class="btn btn-orange" onclick="testReminder('doc')">ทดสอบเตือนเอกสาร</button>
+    </div>
+    <div id="testMsg" style="margin-top:10px;font-size:13px;color:#555"></div>
+  </div>
+</div>
+
+</div><!-- /main -->
+
+<!-- ══════════════════ MODALS ══════════════════ -->
+
+<!-- Add Truck Modal -->
+<div class="modal-bg" id="addTruckModal">
+  <div class="modal">
+    <h3>+ เพิ่มรถ</h3>
+    <div class="form-row">
+      <div class="form-group"><label>ทะเบียนรถ *</label><input id="at_plate" placeholder="เช่น กก 1234 ลพ"></div>
+      <div class="form-group"><label>โกดัง *</label>
+        <select id="at_warehouse"><option value="ชัยนาท">ชัยนาท</option><option value="ลพบุรี">ลพบุรี</option></select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>ยี่ห้อ</label><input id="at_brand" placeholder="เช่น Isuzu"></div>
+      <div class="form-group"><label>รุ่น</label><input id="at_model" placeholder="เช่น NLR"></div>
+      <div class="form-group"><label>ปีรถ</label><input id="at_year" type="number" placeholder="2567"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>ประเภทรถ</label>
+        <select id="at_type">
+          <option value="4wheel">4 ล้อ</option>
+          <option value="6wheel">6 ล้อ</option>
+          <option value="10wheel">10 ล้อ</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>หมดอายุภาษี</label><input id="at_tax" type="date"></div>
+      <div class="form-group"><label>หมดอายุประกัน</label><input id="at_ins" type="date"></div>
+      <div class="form-group"><label>หมดอายุ พรบ.</label><input id="at_comp" type="date"></div>
+    </div>
+    <div class="form-group"><label>หมายเหตุ</label><textarea id="at_notes"></textarea></div>
+    <div class="modal-footer">
+      <button class="btn btn-gray" onclick="closeModal('addTruckModal')">ยกเลิก</button>
+      <button class="btn btn-primary" onclick="doAddTruck()">บันทึก</button>
+    </div>
+    <div id="addTruckMsg" style="margin-top:8px;font-size:13px;text-align:center"></div>
+  </div>
+</div>
+
+<!-- Edit Truck Modal -->
+<div class="modal-bg" id="editTruckModal">
+  <div class="modal">
+    <h3>✏️ แก้ไขข้อมูลรถ</h3>
+    <input type="hidden" id="et_id">
+    <div class="form-row">
+      <div class="form-group"><label>ทะเบียนรถ</label><input id="et_plate"></div>
+      <div class="form-group"><label>โกดัง</label>
+        <select id="et_warehouse"><option value="ชัยนาท">ชัยนาท</option><option value="ลพบุรี">ลพบุรี</option></select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>ยี่ห้อ</label><input id="et_brand"></div>
+      <div class="form-group"><label>รุ่น</label><input id="et_model"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>ประเภทรถ</label>
+        <select id="et_type">
+          <option value="4wheel">4 ล้อ</option>
+          <option value="6wheel">6 ล้อ</option>
+          <option value="10wheel">10 ล้อ</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>หมดอายุภาษี</label><input id="et_tax" type="date"></div>
+      <div class="form-group"><label>หมดอายุประกัน</label><input id="et_ins" type="date"></div>
+      <div class="form-group"><label>หมดอายุ พรบ.</label><input id="et_comp" type="date"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-gray" onclick="closeModal('editTruckModal')">ยกเลิก</button>
+      <button class="btn btn-primary" onclick="doEditTruck()">บันทึก</button>
+    </div>
+    <div id="editTruckMsg" style="margin-top:8px;font-size:13px;text-align:center"></div>
+  </div>
+</div>
+
+<!-- Add Maintenance Modal -->
+<div class="modal-bg" id="addMaintModal">
+  <div class="modal">
+    <h3>+ บันทึกซ่อมบำรุง</h3>
+    <div class="form-row">
+      <div class="form-group"><label>รถ *</label><select id="am_truck"></select></div>
+      <div class="form-group"><label>ประเภท *</label>
+        <select id="am_type">
+          <option value="oil_change">เปลี่ยนน้ำมันเครื่อง</option>
+          <option value="tire">ยาง</option>
+          <option value="brake">เบรก</option>
+          <option value="battery">แบตเตอรี่</option>
+          <option value="other">อื่นๆ</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>วันที่ *</label><input id="am_date" type="date"></div>
+      <div class="form-group"><label>ไมล์ตอนซ่อม</label><input id="am_mile" type="number" placeholder="กม."></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>ค่าใช้จ่าย (฿)</label><input id="am_cost" type="number" placeholder="0"></div>
+      <div class="form-group"><label>ร้านที่ซ่อม</label><input id="am_shop" placeholder="ชื่อร้าน/อู่"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>ซ่อมครั้งถัดไปที่ไมล์</label><input id="am_nextmile" type="number" placeholder="กม."></div>
+      <div class="form-group"><label>วันซ่อมครั้งถัดไป</label><input id="am_nextdate" type="date"></div>
+    </div>
+    <div class="form-group"><label>หมายเหตุ</label><textarea id="am_notes"></textarea></div>
+    <div class="modal-footer">
+      <button class="btn btn-gray" onclick="closeModal('addMaintModal')">ยกเลิก</button>
+      <button class="btn btn-success" onclick="doAddMaint()">บันทึก</button>
+    </div>
+    <div id="addMaintMsg" style="margin-top:8px;font-size:13px;text-align:center"></div>
+  </div>
+</div>
+
+<!-- Edit Mileage Modal -->
+<div class="modal-bg" id="editMileageModal">
+  <div class="modal">
+    <h3>✏️ แก้ไขเลขไมล์</h3>
+    <input type="hidden" id="em_id">
+    <div class="form-group"><label>เลขไมล์ใหม่ (กม.)</label><input id="em_mileage" type="number"></div>
+    <div class="form-group"><label>เหตุผลที่แก้ไข</label><textarea id="em_note"></textarea></div>
+    <div class="modal-footer">
+      <button class="btn btn-gray" onclick="closeModal('editMileageModal')">ยกเลิก</button>
+      <button class="btn btn-primary" onclick="doEditMileage()">บันทึก</button>
+    </div>
+    <div id="editMileageMsg" style="margin-top:8px;font-size:13px;text-align:center"></div>
+  </div>
+</div>
+
+<!-- Add Notification Target Modal -->
+<div class="modal-bg" id="addNotifModal">
+  <div class="modal">
+    <h3>+ เพิ่มกลุ่ม LINE / แอดมิน</h3>
+    <div class="alert alert-info">💡 ทะเบียน LINE Group ID: เพิ่ม OA เข้ากลุ่ม แล้วดู Group ID จาก webhook log</div>
+    <div class="form-row">
+      <div class="form-group"><label>ประเภท</label>
+        <select id="nt_type">
+          <option value="group">กลุ่มไลน์</option>
+          <option value="admin">แอดมิน (LINE User)</option>
+        </select>
+      </div>
+      <div class="form-group"><label>โกดัง</label>
+        <select id="nt_warehouse">
+          <option value="">ทุกโกดัง</option>
+          <option value="ชัยนาท">ชัยนาท</option>
+          <option value="ลพบุรี">ลพบุรี</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group"><label>ชื่อ (สำหรับอ้างอิง)</label><input id="nt_name" placeholder="เช่น กลุ่มโกดังชัยนาท"></div>
+    <div class="form-group"><label>LINE Group ID / User ID *</label><input id="nt_lineid" placeholder="Cxxxxxxx หรือ Uxxxxxxx"></div>
+    <div class="modal-footer">
+      <button class="btn btn-gray" onclick="closeModal('addNotifModal')">ยกเลิก</button>
+      <button class="btn btn-primary" onclick="doAddNotif()">บันทึก</button>
+    </div>
+    <div id="addNotifMsg" style="margin-top:8px;font-size:13px;text-align:center"></div>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════
+// CONFIG — แก้ YOUR_PROJECT เป็น project ref จาก Supabase
+// ════════════════════════════════════════════════════════════
+const API_BASE      = "https://joevecrppgctnemaqgan.supabase.co/functions/v1/admin-api";
+const REMIND_BASE   = "https://joevecrppgctnemaqgan.supabase.co/functions/v1/send-reminders";
+// ════════════════════════════════════════════════════════════
+// AUTH — set ตอน login
+// ════════════════════════════════════════════════════════════
+let AUTH_HEADER = "";
+
+async function api(path, opts = {}) {
+  const res = await fetch(`${API_BASE}/${path}`, {
+    headers: { "Authorization": AUTH_HEADER, "Content-Type": "application/json", ...opts.headers },
+    ...opts
+  });
+  if (!res.ok && res.status === 401) { alert("Unauthorized — ตรวจสอบ username/password"); return null; }
+  return res.json();
+}
+
+// ════════════════════════════════════════════════════════════
+// DATE HELPERS
+// ════════════════════════════════════════════════════════════
+const TZ = "Asia/Bangkok";
+const THAI_MONTHS = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
+
+function todayISO() {
+  return new Date().toLocaleDateString("sv-SE", { timeZone: TZ });
+}
+
+function thaiDateShort(d) {
+  if (!d) return "-";
+  const dt = new Date(d + "T12:00:00+07:00");
+  const y  = dt.toLocaleDateString("th-TH", { timeZone: TZ, year: "2-digit" });
+  const m  = THAI_MONTHS[dt.getMonth()];
+  const day = String(dt.getDate()).padStart(2, "0");
+  return `${day} ${m} ${y}`;
+}
+
+function daysLeftLabel(d) {
+  if (!d) return `<span class="badge b-na">ไม่มีข้อมูล</span>`;
+  const today = new Date(new Date().toLocaleString("en-US", { timeZone: TZ }));
+  const due   = new Date(d + "T12:00:00+07:00");
+  const days  = Math.round((due - today) / 86400000);
+  if (days < 0)    return `<span class="badge b-exp">หมดแล้ว ${Math.abs(days)} วัน</span>`;
+  if (days <= 7)   return `<span class="badge b-crit">🚨 เหลือ ${days} วัน</span>`;
+  if (days <= 30)  return `<span class="badge b-warn">⚠️ เหลือ ${days} วัน</span>`;
+  return `<span class="badge b-ok">เหลือ ${days} วัน</span>`;
+}
+
+function fmtNum(n) {
+  return (n !== null && n !== undefined) ? Number(n).toLocaleString("th-TH") : "-";
+}
+
+function mapLink(lat, lon) {
+  if (!lat || !lon) return "-";
+  return `<a href="https://maps.google.com/?q=${lat},${lon}" target="_blank" class="map-link">📍 แผนที่</a>`;
+}
+
+// ════════════════════════════════════════════════════════════
+// TABS
+// ════════════════════════════════════════════════════════════
+const TAB_LOADERS = {
+  summary:     loadSummary,
+  daily:       () => { document.getElementById("dailyDate").value = todayISO(); loadDaily(); },
+  fuel:        () => { document.getElementById("fuelFrom").value = todayISO(); document.getElementById("fuelTo").value = todayISO(); loadFuel(); },
+  maintenance: loadMaintenance,
+  anomalies:   loadAnomalies,
+  documents:   loadDocuments,
+  trucks:      loadTrucks,
+  drivers:     loadDrivers,
+  settings:    loadSettings,
+};
+
+function switchTab(tab) {
+  document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+  document.querySelectorAll(".section").forEach(s => s.classList.remove("active"));
+  const idx = Object.keys(TAB_LOADERS).indexOf(tab);
+  document.querySelectorAll(".tab")[idx].classList.add("active");
+  document.getElementById(`sec-${tab}`).classList.add("active");
+  if (TAB_LOADERS[tab]) TAB_LOADERS[tab]();
+}
+
+// ════════════════════════════════════════════════════════════
+// SUMMARY
+// ════════════════════════════════════════════════════════════
+async function loadSummary() {
+  const el = document.getElementById("summaryContent");
+  el.innerHTML = `<div class="loader"><div class="spinner"></div>กำลังโหลด...</div>`;
+  const data = await api("summary");
+  if (!data) return;
+  el.innerHTML = `
+    <div class="summary-grid">
+      <div class="sbox blue"><div class="num">${data.total_trucks}</div><div class="lbl">รถทั้งหมด</div></div>
+      <div class="sbox green"><div class="num">${data.sent_morning}</div><div class="lbl">ส่งไมล์เช้าแล้ว</div></div>
+      <div class="sbox ${data.missing_morning > 0 ? 'red' : 'green'}"><div class="num">${data.missing_morning}</div><div class="lbl">ยังไม่ส่งไมล์เช้า</div></div>
+      <div class="sbox green"><div class="num">${data.sent_evening}</div><div class="lbl">ส่งไมล์เย็นแล้ว</div></div>
+      <div class="sbox ${data.missing_evening > 0 ? 'red' : 'green'}"><div class="num">${data.missing_evening}</div><div class="lbl">ยังไม่ส่งไมล์เย็น</div></div>
+      <div class="sbox ${data.doc_critical > 0 ? 'red' : data.doc_warning > 0 ? 'orange' : 'green'}"><div class="num">${data.doc_critical}</div><div class="lbl">เอกสารวิกฤต</div></div>
+      <div class="sbox ${data.doc_warning > 0 ? 'orange' : 'green'}"><div class="num">${data.doc_warning}</div><div class="lbl">เอกสารใกล้หมด</div></div>
+      <div class="sbox ${data.recent_anomalies > 0 ? 'orange' : 'green'}"><div class="num">${data.recent_anomalies}</div><div class="lbl">ผิดปกติ (7วัน)</div></div>
+    </div>
+    <div class="card">
+      <h3>วันนี้ — ${data.date}</h3>
+      <p style="color:#888;font-size:13px">คลิกที่แท็บด้านบนเพื่อดูรายละเอียด</p>
+    </div>
+  `;
+}
+
+// ════════════════════════════════════════════════════════════
+// DAILY
+// ════════════════════════════════════════════════════════════
+async function loadDaily() {
+  const date = document.getElementById("dailyDate").value || todayISO();
+  const el   = document.getElementById("dailyContent");
+  el.innerHTML = `<div class="loader"><div class="spinner"></div>กำลังโหลด...</div>`;
+
+  const data = await api(`daily?date=${date}`);
+  if (!data) return;
+
+  const s = data.summary;
+  let html = `
+    <div class="summary-grid" style="grid-template-columns:repeat(auto-fit,minmax(120px,1fr))">
+      <div class="sbox blue"><div class="num">${s.total}</div><div class="lbl">รถทั้งหมด</div></div>
+      <div class="sbox green"><div class="num">${s.sent_morning}</div><div class="lbl">ส่งเช้า</div></div>
+      <div class="sbox ${s.missing_morning > 0 ? 'red' : 'green'}"><div class="num">${s.missing_morning}</div><div class="lbl">ขาดเช้า</div></div>
+      <div class="sbox green"><div class="num">${s.sent_evening}</div><div class="lbl">ส่งเย็น</div></div>
+      <div class="sbox ${s.missing_evening > 0 ? 'red' : 'green'}"><div class="num">${s.missing_evening}</div><div class="lbl">ขาดเย็น</div></div>
+      <div class="sbox ${s.anomalies > 0 ? 'orange' : 'green'}"><div class="num">${s.anomalies}</div><div class="lbl">ผิดปกติ</div></div>
+    </div>
+    <div class="card">
+      <h3>รายละเอียดรายคัน — ${thaiDateShort(date)}</h3>
+      <div class="tbl-wrap"><table>
+        <tr>
+          <th>ทะเบียน</th><th>โกดัง</th><th>คนขับ</th><th>สาย</th>
+          <th>ไมล์เช้า</th><th>ไมล์เย็น</th><th>กม./วัน</th>
+          <th>พิกัดเช้า</th><th>พิกัดเย็น</th><th>รูป</th><th>แก้ไข</th>
+        </tr>`;
+
+  for (const t of data.trucks) {
+    const m = t.morning, e = t.evening;
+    const anomalyClass = (m?.anomaly_flag || e?.anomaly_flag) ? "style='background:#fff3e0'" : "";
+    html += `<tr ${anomalyClass}>
+      <td><b>${t.plate_number}</b></td>
+      <td>${t.warehouse}</td>
+      <td>${t.driver_name || "<span style='color:#aaa'>-</span>"}</td>
+      <td>${t.route_code || "-"}</td>
+      <td>${m ? `${fmtNum(m.mileage)} <span class="badge b-sent">✅</span>${m.anomaly_flag ? ` <span class="badge b-crit" title="${m.anomaly_note}">⚠️</span>` : ""}` : `<span class="badge b-miss">ยังไม่ส่ง</span>`}</td>
+      <td>${e ? `${fmtNum(e.mileage)} <span class="badge b-sent">✅</span>${e.anomaly_flag ? ` <span class="badge b-crit" title="${e.anomaly_note}">⚠️</span>` : ""}` : `<span class="badge b-miss">ยังไม่ส่ง</span>`}</td>
+      <td>${t.km_today !== null ? fmtNum(t.km_today) + " กม." : "-"}</td>
+      <td>${mapLink(m?.latitude, m?.longitude)}</td>
+      <td>${mapLink(e?.latitude, e?.longitude)}</td>
+      <td>${m?.image_path ? `<a href="${m.image_path}" target="_blank" class="img-link">เช้า</a>` : ""} ${e?.image_path ? `<a href="${e.image_path}" target="_blank" class="img-link">เย็น</a>` : ""}</td>
+      <td>
+        ${m ? `<button class="btn btn-sm btn-gray" onclick="openEditMileage(${m.id || "null"}, ${m.mileage})">เช้า</button>` : ""}
+        ${e ? `<button class="btn btn-sm btn-gray" onclick="openEditMileage(${e.id || "null"}, ${e.mileage})">เย็น</button>` : ""}
+      </td>
+    </tr>`;
+  }
+
+  html += `</table></div></div>`;
+
+  // ค่าน้ำมันวันนี้
+  if (data.trucks.some((t) => t.fuel?.length > 0)) {
+    html += `<div class="card"><h3>น้ำมันวันนี้</h3><div class="tbl-wrap"><table>
+      <tr><th>ทะเบียน</th><th>ไมล์</th><th>ลิตร</th><th>ราคา/ล.</th><th>รวม</th><th>กม./ล.</th><th>ปั๊ม</th><th>รูป</th></tr>`;
+    for (const t of data.trucks) {
+      for (const f of t.fuel || []) {
+        html += `<tr>
+          <td><b>${t.plate_number}</b></td>
+          <td>${fmtNum(f.mileage)}</td>
+          <td>${fmtNum(f.liters)} ล.</td>
+          <td>${fmtNum(f.price_per_liter)} ฿</td>
+          <td>${fmtNum(f.total_cost)} ฿</td>
+          <td>${f.km_per_liter ? f.km_per_liter + " กม./ล." : "-"}${f.anomaly_flag ? ` <span class="badge b-crit">⚠️</span>` : ""}</td>
+          <td>${f.station_name || "-"}</td>
+          <td>${f.image_path ? `<a href="${f.image_path}" target="_blank" class="img-link">มิเตอร์</a>` : ""}
+              ${f.bill_image_path ? `<a href="${f.bill_image_path}" target="_blank" class="img-link">บิล</a>` : ""}</td>
+        </tr>`;
+      }
+    }
+    html += `</table></div></div>`;
+  }
+
+  el.innerHTML = html;
+}
+
+// ════════════════════════════════════════════════════════════
+// FUEL
+// ════════════════════════════════════════════════════════════
+async function loadFuel() {
+  const from = document.getElementById("fuelFrom").value;
+  const to   = document.getElementById("fuelTo").value;
+  const el   = document.getElementById("fuelContent");
+  el.innerHTML = `<div class="loader"><div class="spinner"></div>กำลังโหลด...</div>`;
+
+  let q = "fuel-summary";
+  if (from) q += `?date_from=${from}`;
+  if (to)   q += (q.includes("?") ? "&" : "?") + `date_to=${to}`;
+
+  const data = await api(q);
+  if (!data) return;
+
+  const totalCost  = data.reduce((s, r) => s + (r.total_cost || 0), 0);
+  const totalLiters = data.reduce((s, r) => s + (r.liters || 0), 0);
+
+  let html = `
+    <div class="summary-grid" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr))">
+      <div class="sbox blue"><div class="num">${data.length}</div><div class="lbl">รายการ</div></div>
+      <div class="sbox orange"><div class="num">${fmtNum(Math.round(totalLiters))}</div><div class="lbl">ลิตรรวม</div></div>
+      <div class="sbox red"><div class="num">฿${fmtNum(Math.round(totalCost))}</div><div class="lbl">ค่าน้ำมันรวม</div></div>
+    </div>
+    <div class="card"><h3>ประวัติเติมน้ำมัน</h3><div class="tbl-wrap"><table>
+      <tr><th>วันที่</th><th>ทะเบียน</th><th>โกดัง</th><th>คนขับ</th><th>ไมล์</th><th>ลิตร</th><th>ราคา/ล.</th><th>รวม</th><th>กม./ล.</th><th>ปั๊ม</th><th>รูป</th></tr>`;
+
+  for (const r of data) {
+    html += `<tr>
+      <td>${thaiDateShort(r.log_date)}</td>
+      <td><b>${r.trucks?.plate_number || "-"}</b></td>
+      <td>${r.trucks?.warehouse || "-"}</td>
+      <td>${r.drivers?.name || "-"}</td>
+      <td>${fmtNum(r.mileage)}</td>
+      <td>${fmtNum(r.liters)} ล.</td>
+      <td>${fmtNum(r.price_per_liter)} ฿</td>
+      <td>${fmtNum(r.total_cost)} ฿</td>
+      <td>${r.km_per_liter ? r.km_per_liter + " กม./ล." : "-"}${r.anomaly_flag ? ` <span class="badge b-crit" title="${r.anomaly_note}">⚠️</span>` : ""}</td>
+      <td>${r.station_name || "-"}</td>
+      <td>
+        ${r.image_path ? `<a href="${r.image_path}" target="_blank" class="img-link">มิเตอร์</a>` : ""}
+        ${r.bill_image_path ? `<a href="${r.bill_image_path}" target="_blank" class="img-link">บิล</a>` : ""}
+        ${mapLink(r.latitude, r.longitude)}
+      </td>
+    </tr>`;
+  }
+  html += `</table></div></div>`;
+  el.innerHTML = html;
+}
+
+// ════════════════════════════════════════════════════════════
+// MAINTENANCE
+// ════════════════════════════════════════════════════════════
+const MAINT_LABELS = { oil_change:"เปลี่ยนน้ำมัน", tire:"ยาง", brake:"เบรก", battery:"แบตเตอรี่", other:"อื่นๆ" };
+
+async function loadMaintenance() {
+  const filter = document.getElementById("maintFilter").value;
+  const el     = document.getElementById("maintContent");
+  el.innerHTML = `<div class="loader"><div class="spinner"></div>กำลังโหลด...</div>`;
+
+  let q = "maintenance";
+  if (filter) q += `?type=${filter}`;
+  const data = await api(q);
+  if (!data) return;
+
+  const totalCost = data.reduce((s, r) => s + (r.cost || 0), 0);
+
+  let html = `
+    <div class="summary-grid" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr))">
+      <div class="sbox blue"><div class="num">${data.length}</div><div class="lbl">รายการ</div></div>
+      <div class="sbox red"><div class="num">฿${fmtNum(Math.round(totalCost))}</div><div class="lbl">ค่าใช้จ่ายรวม</div></div>
+    </div>
+    <div class="card"><h3>ประวัติซ่อมบำรุง</h3><div class="tbl-wrap"><table>
+      <tr><th>วันที่</th><th>ทะเบียน</th><th>ประเภท</th><th>ไมล์</th><th>ค่าใช้จ่าย</th><th>ร้าน</th><th>ครั้งถัดไป</th><th>ตรวจแล้ว</th><th>รูปบิล</th><th>พิกัด</th></tr>`;
+
+  for (const r of data) {
+    html += `<tr>
+      <td>${thaiDateShort(r.maintenance_date)}</td>
+      <td><b>${r.trucks?.plate_number || "-"}</b><br><small style="color:#aaa">${r.trucks?.warehouse || ""}</small></td>
+      <td><span class="badge b-blue">${MAINT_LABELS[r.maintenance_type] || r.maintenance_type}</span>
+        ${r.tire_positions?.length ? `<br><small>${r.tire_positions.join(",")}</small>` : ""}</td>
+      <td>${fmtNum(r.mileage_at_service)}</td>
+      <td>${r.cost ? `฿${fmtNum(r.cost)}` : "-"}</td>
+      <td>${r.shop_name || "-"}</td>
+      <td>${r.next_service_mileage ? `${fmtNum(r.next_service_mileage)} กม.` : ""}${r.next_service_date ? `<br>${thaiDateShort(r.next_service_date)}` : ""}</td>
+      <td>${r.verified_by
+        ? `<span class="badge b-ok">✅ ${r.verified_by}</span>`
+        : `<button class="btn btn-sm btn-success" onclick="verifyMaint(${r.id})">ตรวจสอบ</button>`}</td>
+      <td>${r.bill_image_path ? `<a href="${r.bill_image_path}" target="_blank" class="img-link">📷 บิล</a>` : "-"}</td>
+      <td>${mapLink(r.latitude, r.longitude)}</td>
+    </tr>`;
+  }
+  html += `</table></div></div>`;
+  el.innerHTML = html;
+}
+
+async function verifyMaint(id) {
+  const res = await api("verify-maintenance", { method: "POST", body: JSON.stringify({ id, verified_by: "admin" }) });
+  if (res?.success) loadMaintenance();
+  else alert(res?.error || "เกิดข้อผิดพลาด");
+}
+
+// ════════════════════════════════════════════════════════════
+// ANOMALIES
+// ════════════════════════════════════════════════════════════
+async function loadAnomalies() {
+  const days = document.getElementById("anomalyDays").value;
+  const el   = document.getElementById("anomalyContent");
+  el.innerHTML = `<div class="loader"><div class="spinner"></div>กำลังโหลด...</div>`;
+
+  const data = await api(`anomalies?days=${days}`);
+  if (!data) return;
+
+  let html = `<div class="summary-grid">
+    <div class="sbox orange"><div class="num">${data.total}</div><div class="lbl">รายการผิดปกติ</div></div>
+  </div>`;
+
+  if (data.mileage_anomalies.length > 0) {
+    html += `<div class="card"><h3>⚠️ ไมล์ผิดปกติ</h3><div class="tbl-wrap"><table>
+      <tr><th>วันที่</th><th>ทะเบียน</th><th>ประเภท</th><th>ไมล์</th><th>หมายเหตุ</th><th>จัดการ</th></tr>`;
+    for (const r of data.mileage_anomalies) {
+      html += `<tr style="background:#fff3e0">
+        <td>${thaiDateShort(r.log_date)}</td>
+        <td><b>${r.trucks?.plate_number || "-"}</b></td>
+        <td>${r.log_type === "morning" ? "เช้า" : "เย็น"}</td>
+        <td>${fmtNum(r.mileage)}</td>
+        <td style="color:#e65100">${r.anomaly_note || "-"}</td>
+        <td>
+          <button class="btn btn-sm btn-gray" onclick="openEditMileage(${r.id}, ${r.mileage})">แก้ไข</button>
+          <button class="btn btn-sm btn-success" onclick="resolveAnomaly('mileage', ${r.id})">ล้าง</button>
+        </td>
+      </tr>`;
+    }
+    html += `</table></div></div>`;
+  }
+
+  if (data.fuel_anomalies.length > 0) {
+    html += `<div class="card"><h3>⚠️ น้ำมันผิดปกติ</h3><div class="tbl-wrap"><table>
+      <tr><th>วันที่</th><th>ทะเบียน</th><th>ลิตร</th><th>กม./ล.</th><th>หมายเหตุ</th><th>จัดการ</th></tr>`;
+    for (const r of data.fuel_anomalies) {
+      html += `<tr style="background:#fff3e0">
+        <td>${thaiDateShort(r.log_date)}</td>
+        <td><b>${r.trucks?.plate_number || "-"}</b></td>
+        <td>${fmtNum(r.liters)}</td>
+        <td>${r.km_per_liter ? r.km_per_liter + " กม./ล." : "-"}</td>
+        <td style="color:#e65100">${r.anomaly_note || "-"}</td>
+        <td><button class="btn btn-sm btn-success" onclick="resolveAnomaly('fuel', ${r.id})">ล้าง</button></td>
+      </tr>`;
+    }
+    html += `</table></div></div>`;
+  }
+
+  if (data.total === 0) html += `<div class="card" style="text-align:center;padding:30px;color:#aaa">✅ ไม่พบรายการผิดปกติในช่วงนี้</div>`;
+
+  el.innerHTML = html;
+}
+
+async function resolveAnomaly(table, id) {
+  const note = prompt("บันทึกเหตุผล (ถ้ามี):");
+  const res  = await api("resolve-anomaly", { method: "PUT", body: JSON.stringify({ table, id, note }) });
+  if (res?.success) loadAnomalies();
+  else alert(res?.error || "เกิดข้อผิดพลาด");
+}
+
+// ════════════════════════════════════════════════════════════
+// DOCUMENTS
+// ════════════════════════════════════════════════════════════
+async function loadDocuments() {
+  const el = document.getElementById("docContent");
+  el.innerHTML = `<div class="loader"><div class="spinner"></div>กำลังโหลด...</div>`;
+
+  const data = await api("document-expiry");
+  if (!data) return;
+
+  const critical = data.filter(d => d.status === "critical" || d.status === "expired");
+  const warning  = data.filter(d => d.status === "warning");
+
+  let html = `
+    <div class="summary-grid">
+      <div class="sbox red"><div class="num">${critical.length}</div><div class="lbl">วิกฤต / หมดแล้ว</div></div>
+      <div class="sbox orange"><div class="num">${warning.length}</div><div class="lbl">ใกล้หมด (≤30 วัน)</div></div>
+      <div class="sbox green"><div class="num">${data.length - critical.length - warning.length}</div><div class="lbl">ปกติ</div></div>
+    </div>
+    <div class="card"><h3>สถานะเอกสารทั้งหมด</h3>
+    <div class="tbl-wrap"><table>
+      <tr><th>ทะเบียน</th><th>โกดัง</th><th>ภาษีรถ</th><th>ประกันภัย</th><th>พรบ.</th><th>จัดการ</th></tr>`;
+
+  // จัดกลุ่มตามรถ
+  const byTruck = {};
+  for (const d of data) {
+    if (!byTruck[d.truck_id]) byTruck[d.truck_id] = { plate: d.plate_number, warehouse: d.warehouse, docs: {} };
+    byTruck[d.truck_id].docs[d.document] = d;
+  }
+
+  for (const [id, t] of Object.entries(byTruck)) {
+    const tax  = t.docs["ภาษีรถ"];
+    const ins  = t.docs["ประกันภัย"];
+    const comp = t.docs["พรบ"];
+    html += `<tr>
+      <td><b>${t.plate}</b></td>
+      <td>${t.warehouse}</td>
+      <td>${tax?.due_date ? `${thaiDateShort(tax.due_date)}<br>${daysLeftLabel(tax.due_date)}` : "<span class='badge b-na'>ไม่มีข้อมูล</span>"}</td>
+      <td>${ins?.due_date ? `${thaiDateShort(ins.due_date)}<br>${daysLeftLabel(ins.due_date)}` : "<span class='badge b-na'>ไม่มีข้อมูล</span>"}</td>
+      <td>${comp?.due_date ? `${thaiDateShort(comp.due_date)}<br>${daysLeftLabel(comp.due_date)}` : "<span class='badge b-na'>ไม่มีข้อมูล</span>"}</td>
+      <td><button class="btn btn-sm btn-gray" onclick="openEditTruck(${id})">✏️ แก้ไข</button></td>
+    </tr>`;
+  }
+  html += `</table></div></div>`;
+  el.innerHTML = html;
+}
+
+// ════════════════════════════════════════════════════════════
+// TRUCKS
+// ════════════════════════════════════════════════════════════
+let allTrucks = [];
+async function loadTrucks() {
+  const el = document.getElementById("trucksContent");
+  el.innerHTML = `<div class="loader"><div class="spinner"></div>กำลังโหลด...</div>`;
+
+  const data = await api("trucks");
+  if (!data) return;
+  allTrucks = data;
+
+  let html = `<div class="card"><h3>รายการรถ (${data.length} คัน)</h3><div class="tbl-wrap"><table>
+    <tr><th>ทะเบียน</th><th>โกดัง</th><th>ประเภท</th><th>ยี่ห้อ/รุ่น</th><th>คนขับ</th><th>ภาษี</th><th>ประกัน</th><th>พรบ.</th><th>จัดการ</th></tr>`;
+
+  for (const t of data) {
+    const driver = (t.drivers || []).find(d => d.is_active);
+    html += `<tr>
+      <td><b>${t.plate_number}</b></td>
+      <td>${t.warehouse}</td>
+      <td>${t.truck_type || "4wheel"}</td>
+      <td>${t.brand || ""} ${t.model || ""}</td>
+      <td>${driver?.name || "<span style='color:#aaa'>-</span>"}</td>
+      <td>${daysLeftLabel(t.tax_due_date)}</td>
+      <td>${daysLeftLabel(t.insurance_due_date)}</td>
+      <td>${daysLeftLabel(t.compulsory_insurance_due_date)}</td>
+      <td><button class="btn btn-sm btn-gray" onclick="openEditTruck(${t.id})">✏️ แก้ไข</button></td>
+    </tr>`;
+  }
+  html += `</table></div></div>`;
+  el.innerHTML = html;
+}
+
+// ════════════════════════════════════════════════════════════
+// DRIVERS
+// ════════════════════════════════════════════════════════════
+async function loadDrivers() {
+  const el = document.getElementById("driversContent");
+  el.innerHTML = `<div class="loader"><div class="spinner"></div>กำลังโหลด...</div>`;
+
+  const data = await api("drivers");
+  if (!data) return;
+
+  let html = `<div class="card"><h3>คนขับที่ลงทะเบียน (${data.length} คน)</h3><div class="tbl-wrap"><table>
+    <tr><th>ชื่อ</th><th>ประเภท</th><th>สาย</th><th>รถประจำ</th><th>โกดัง</th><th>เบอร์โทร</th><th>LINE User ID</th></tr>`;
+
+  for (const d of data) {
+    html += `<tr>
+      <td><b>${d.name}</b></td>
+      <td><span class="badge ${d.driver_type === 'van' ? 'b-blue' : 'b-warn'}">${d.driver_type === 'van' ? 'VAN' : 'ขนส่ง'}</span></td>
+      <td>${d.route_code || "-"}</td>
+      <td>${d.trucks?.plate_number || "<span style='color:#aaa'>-</span>"}</td>
+      <td>${d.warehouse || d.trucks?.warehouse || "-"}</td>
+      <td>${d.phone || "-"}</td>
+      <td><small style="font-family:monospace;color:#888">${d.line_user_id}</small></td>
+    </tr>`;
+  }
+  html += `</table></div></div>`;
+  el.innerHTML = html;
+}
+
+// ════════════════════════════════════════════════════════════
+// SETTINGS
+// ════════════════════════════════════════════════════════════
+async function loadSettings() {
+  await Promise.all([loadNotifTargets(), loadSystemSettings()]);
+}
+
+async function loadNotifTargets() {
+  const el  = document.getElementById("notifTargets");
+  const data = await api("notification-targets");
+  if (!data) return;
+
+  if (data.length === 0) {
+    el.innerHTML = `<p style="color:#aaa">ยังไม่มีกลุ่มหรือแอดมิน กด + เพิ่มได้เลย</p>`;
+    return;
+  }
+
+  let html = `<div class="tbl-wrap"><table>
+    <tr><th>ประเภท</th><th>ชื่อ</th><th>LINE ID</th><th>โกดัง</th><th>แจ้งรายวัน</th><th>แจ้งเอกสาร</th><th>แจ้งผิดปกติ</th></tr>`;
+  for (const t of data) {
+    html += `<tr>
+      <td><span class="badge ${t.target_type === 'group' ? 'b-blue' : 'b-ok'}">${t.target_type === 'group' ? 'กลุ่ม' : 'แอดมิน'}</span></td>
+      <td>${t.target_name}</td>
+      <td><small style="font-family:monospace">${t.line_id}</small></td>
+      <td>${t.warehouse || "ทุกโกดัง"}</td>
+      <td>${t.notify_daily ? "✅" : "—"}</td>
+      <td>${t.notify_doc ? "✅" : "—"}</td>
+      <td>${t.notify_anomaly ? "✅" : "—"}</td>
+    </tr>`;
+  }
+  html += `</table></div>`;
+  el.innerHTML = html;
+}
+
+async function loadSystemSettings() {
+  const el   = document.getElementById("settingsContent");
+  const data = await api("settings");
+  if (!data) return;
+
+  let html = `<div class="tbl-wrap"><table><tr><th>ค่า</th><th>ความหมาย</th><th>ค่าปัจจุบัน</th><th>แก้ไข</th></tr>`;
+  for (const s of data) {
+    html += `<tr>
+      <td><code>${s.key}</code></td>
+      <td>${s.note || "-"}</td>
+      <td><b>${s.value}</b></td>
+      <td><button class="btn btn-sm btn-gray" onclick="editSetting('${s.key}', '${s.value}')">แก้ไข</button></td>
+    </tr>`;
+  }
+  html += `</table></div>`;
+  el.innerHTML = html;
+}
+
+async function editSetting(key, current) {
+  const val = prompt(`แก้ไข ${key}\nค่าปัจจุบัน: ${current}\n\nค่าใหม่:`, current);
+  if (val === null) return;
+  const res = await api("settings", { method: "PUT", body: JSON.stringify({ key, value: val }) });
+  if (res?.success) { alert("บันทึกสำเร็จ"); loadSystemSettings(); }
+  else alert(res?.error || "เกิดข้อผิดพลาด");
+}
+
+async function testReminder(type) {
+  const el = document.getElementById("testMsg");
+  el.textContent = "⏳ กำลังส่ง...";
+  const res = await fetch(`${REMIND_BASE}`, {
+    method: "POST",
+    headers: { "Authorization": AUTH_HEADER, "Content-Type": "application/json" },
+    body: JSON.stringify({ type })
+  }).then(r => r.json()).catch(e => ({ error: e.message }));
+  el.textContent = res.error ? `❌ ${res.error}` : `✅ ส่งสำเร็จ: missing=${res.missing}, sent=${res.sent}`;
+}
+
+// ════════════════════════════════════════════════════════════
+// MODALS
+// ════════════════════════════════════════════════════════════
+function openModal(id) { document.getElementById(id).classList.add("open"); }
+function closeModal(id) { document.getElementById(id).classList.remove("open"); }
+
+// Close on background click
+document.querySelectorAll(".modal-bg").forEach(bg => {
+  bg.addEventListener("click", (e) => { if (e.target === bg) bg.classList.remove("open"); });
+});
+
+function openAddTruckModal() { openModal("addTruckModal"); }
+
+async function doAddTruck() {
+  const body = {
+    plate_number:                  document.getElementById("at_plate").value.trim(),
+    warehouse:                     document.getElementById("at_warehouse").value,
+    brand:                         document.getElementById("at_brand").value.trim(),
+    model:                         document.getElementById("at_model").value.trim(),
+    year:                          parseInt(document.getElementById("at_year").value) || null,
+    truck_type:                    document.getElementById("at_type").value,
+    tax_due_date:                  document.getElementById("at_tax").value || null,
+    insurance_due_date:            document.getElementById("at_ins").value || null,
+    compulsory_insurance_due_date: document.getElementById("at_comp").value || null,
+    notes:                         document.getElementById("at_notes").value || null,
+  };
+  if (!body.plate_number) { alert("กรุณากรอกทะเบียนรถ"); return; }
+  const res = await api("add-truck", { method: "POST", body: JSON.stringify(body) });
+  if (res?.success) { closeModal("addTruckModal"); loadTrucks(); }
+  else { document.getElementById("addTruckMsg").textContent = res?.error || "เกิดข้อผิดพลาด"; }
+}
+
+function openEditTruck(id) {
+  const truck = allTrucks.find(t => t.id === id);
+  if (!truck) { alert("ไม่พบข้อมูลรถ"); return; }
+  document.getElementById("et_id").value        = truck.id;
+  document.getElementById("et_plate").value     = truck.plate_number || "";
+  document.getElementById("et_warehouse").value = truck.warehouse || "ชัยนาท";
+  document.getElementById("et_brand").value     = truck.brand || "";
+  document.getElementById("et_model").value     = truck.model || "";
+  document.getElementById("et_type").value      = truck.truck_type || "4wheel";
+  document.getElementById("et_tax").value       = truck.tax_due_date || "";
+  document.getElementById("et_ins").value       = truck.insurance_due_date || "";
+  document.getElementById("et_comp").value      = truck.compulsory_insurance_due_date || "";
+  openModal("editTruckModal");
+}
+
+async function doEditTruck() {
+  const id = parseInt(document.getElementById("et_id").value);
+  const body = {
+    id,
+    plate_number:                  document.getElementById("et_plate").value.trim(),
+    warehouse:                     document.getElementById("et_warehouse").value,
+    brand:                         document.getElementById("et_brand").value || null,
+    model:                         document.getElementById("et_model").value || null,
+    truck_type:                    document.getElementById("et_type").value,
+    tax_due_date:                  document.getElementById("et_tax").value || null,
+    insurance_due_date:            document.getElementById("et_ins").value || null,
+    compulsory_insurance_due_date: document.getElementById("et_comp").value || null,
+  };
+  const res = await api("update-truck", { method: "PUT", body: JSON.stringify(body) });
+  if (res?.success) { closeModal("editTruckModal"); loadTrucks(); loadDocuments(); }
+  else { document.getElementById("editTruckMsg").textContent = res?.error || "เกิดข้อผิดพลาด"; }
+}
+
+function openAddMaintModal() {
+  // เติมรายการรถ
+  const sel = document.getElementById("am_truck");
+  sel.innerHTML = allTrucks.map(t => `<option value="${t.id}">${t.plate_number} (${t.warehouse})</option>`).join("");
+  document.getElementById("am_date").value = todayISO();
+  openModal("addMaintModal");
+}
+
+async function doAddMaint() {
+  const body = {
+    truck_id:             parseInt(document.getElementById("am_truck").value),
+    maintenance_type:     document.getElementById("am_type").value,
+    maintenance_date:     document.getElementById("am_date").value,
+    mileage_at_service:   parseInt(document.getElementById("am_mile").value) || null,
+    cost:                 parseFloat(document.getElementById("am_cost").value) || null,
+    shop_name:            document.getElementById("am_shop").value || null,
+    next_service_mileage: parseInt(document.getElementById("am_nextmile").value) || null,
+    next_service_date:    document.getElementById("am_nextdate").value || null,
+    notes:                document.getElementById("am_notes").value || null,
+  };
+  const res = await api("add-maintenance", { method: "POST", body: JSON.stringify(body) });
+  if (res?.success) { closeModal("addMaintModal"); loadMaintenance(); }
+  else { document.getElementById("addMaintMsg").textContent = res?.error || "เกิดข้อผิดพลาด"; }
+}
+
+function openEditMileage(id, mileage) {
+  document.getElementById("em_id").value      = id;
+  document.getElementById("em_mileage").value = mileage;
+  document.getElementById("em_note").value    = "";
+  document.getElementById("editMileageMsg").textContent = "";
+  openModal("editMileageModal");
+}
+
+async function doEditMileage() {
+  const id      = parseInt(document.getElementById("em_id").value);
+  const mileage = parseInt(document.getElementById("em_mileage").value);
+  const note    = document.getElementById("em_note").value.trim();
+  if (!mileage) { alert("กรุณาระบุเลขไมล์"); return; }
+  const res = await api("edit-mileage", { method: "PUT", body: JSON.stringify({ id, mileage, edit_note: note, edited_by: "admin" }) });
+  if (res?.success) { closeModal("editMileageModal"); loadDaily(); loadAnomalies(); }
+  else { document.getElementById("editMileageMsg").textContent = res?.error || "เกิดข้อผิดพลาด"; }
+}
+
+function openAddNotifModal() { openModal("addNotifModal"); }
+
+async function doAddNotif() {
+  const body = {
+    target_type: document.getElementById("nt_type").value,
+    target_name: document.getElementById("nt_name").value.trim(),
+    line_id:     document.getElementById("nt_lineid").value.trim(),
+    warehouse:   document.getElementById("nt_warehouse").value || null,
+  };
+  if (!body.target_name || !body.line_id) { alert("กรุณากรอกชื่อและ LINE ID"); return; }
+  const res = await api("add-notification-target", { method: "POST", body: JSON.stringify(body) });
+  if (res?.success) { closeModal("addNotifModal"); loadNotifTargets(); }
+  else { document.getElementById("addNotifMsg").textContent = res?.error || "เกิดข้อผิดพลาด"; }
+}
+
+// ════════════════════════════════════════════════════════════
+// INIT
+// ════════════════════════════════════════════════════════════
+document.getElementById("topDate").textContent = new Date().toLocaleDateString("th-TH", {
+  timeZone: TZ, year: "numeric", month: "long", day: "numeric", weekday: "long"
+});
+
+// โหลด Summary ก่อน + โหลด trucks เพื่อใช้ใน modals
+function startApp() {
+  Promise.all([loadSummary(), api("trucks").then(d => { if (d) allTrucks = d; })]);
+}
+
+// ── Login / Logout ────────────────────────────────────────────────────────────
+async function doLogin() {
+  const user  = document.getElementById("loginUser").value.trim();
+  const pass  = document.getElementById("loginPass").value;
+  const errEl = document.getElementById("loginErr");
+  if (!user || !pass) { errEl.textContent = "กรุณากรอก Username และ Password"; return; }
+
+  AUTH_HEADER = "Basic " + btoa(user + ":" + pass);
+  sessionStorage.setItem("adminUser", user);
+  sessionStorage.setItem("adminPass", pass);
+
+  document.getElementById("loginScreen").style.display = "none";
+  document.getElementById("mainContent").style.display = "block";
+  startApp();
+}
+
+function doLogout() {
+  sessionStorage.removeItem("adminUser");
+  sessionStorage.removeItem("adminPass");
+  location.reload();
+}
+
+// ── Check saved session ───────────────────────────────────────────────────────
+const savedUser = sessionStorage.getItem("adminUser");
+const savedPass = sessionStorage.getItem("adminPass");
+if (savedUser && savedPass) {
+  AUTH_HEADER = "Basic " + btoa(savedUser + ":" + savedPass);
+  document.getElementById("loginScreen").style.display = "none";
+  document.getElementById("mainContent").style.display = "block";
+  startApp();
+}
+</script>
+</div><!-- /mainContent -->
+</body>
+</html>
