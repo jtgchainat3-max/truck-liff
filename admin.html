@@ -101,7 +101,27 @@ tr:hover td{background:#fafafa}
 .login-box button{width:100%;padding:14px;background:#1a73e8;color:#fff;border:none;border-radius:8px;font-size:16px;font-weight:700;cursor:pointer;transition:.15s}
 .login-box button:hover{background:#1558b0}
 .login-err{color:#e53935;font-size:13px;margin-top:8px;min-height:20px}
+/* QR cards */
+.qr-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+@media(max-width:600px){.qr-grid{grid-template-columns:1fr}}
+.qr-card{background:#fff;border-radius:12px;padding:20px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.qr-card h4{font-size:15px;font-weight:700;margin-bottom:4px;color:#333}
+.qr-card p{font-size:13px;color:#888;margin-bottom:14px}
+.qr-card canvas,.qr-card img{margin:0 auto 10px}
+.qr-url{font-size:11px;color:#1a73e8;word-break:break-all;margin-top:6px}
+/* Modal */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;display:none;align-items:center;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal-box{background:#fff;border-radius:14px;padding:28px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;margin:16px}
+.modal-box h3{font-size:18px;font-weight:700;margin-bottom:18px}
+.modal-box .field{margin-bottom:14px}
+.modal-box .field label{display:block;font-size:14px;font-weight:600;color:#555;margin-bottom:6px}
+.modal-box .field input,.modal-box .field select{width:100%;padding:11px 13px;border:2px solid #e0e0e0;border-radius:8px;font-size:15px;outline:none;font-family:inherit}
+.modal-box .field input:focus,.modal-box .field select:focus{border-color:#1a73e8}
+.modal-actions{display:flex;gap:10px;margin-top:18px}
+.modal-actions button{flex:1;padding:13px;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer}
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body>
 
@@ -235,7 +255,68 @@ tr:hover td{background:#fafafa}
 
 <!-- ═══════════════════════════════════ DRIVERS ═══════════════════════════════════ -->
 <div id="sec-drivers" class="section">
+
+  <!-- QR Onboarding -->
+  <div class="qr-grid">
+    <div class="qr-card">
+      <h4>📲 แอดเฟรน LINE OA</h4>
+      <p>คนขับสแกนเพื่อเพิ่มเพื่อน OA ก่อน</p>
+      <div id="qrFriend"></div>
+      <div class="qr-url">https://line.me/ti/p/@057rszew</div>
+    </div>
+    <div class="qr-card">
+      <h4>📋 ลงทะเบียนคนขับ</h4>
+      <p>สแกนเพื่อเปิดฟอร์มลงทะเบียนใน LINE</p>
+      <div id="qrRegister"></div>
+      <div class="qr-url">https://liff.line.me/2010109104-FF5HuJuq</div>
+    </div>
+  </div>
+
+  <!-- Driver list + add button -->
+  <div style="margin-bottom:14px;display:flex;gap:10px;align-items:center">
+    <button class="btn btn-primary" style="width:auto;padding:10px 20px" onclick="openAddDriverModal()">+ เพิ่มคนขับ (แอดมิน)</button>
+    <button class="btn btn-gray" style="width:auto;padding:10px 20px" onclick="loadDrivers()">🔄 รีเฟรช</button>
+  </div>
   <div id="driversContent"><div class="loader"><div class="spinner"></div>กำลังโหลด...</div></div>
+</div>
+
+<!-- ═══ MODAL: Add Driver ═══ -->
+<div class="modal-overlay" id="addDriverModal">
+  <div class="modal-box">
+    <h3>➕ เพิ่มคนขับใหม่</h3>
+    <div class="field">
+      <label>ชื่อ-นามสกุล *</label>
+      <input type="text" id="newDriverName" placeholder="เช่น สมชาย ใจดี">
+    </div>
+    <div class="field">
+      <label>LINE User ID *</label>
+      <input type="text" id="newDriverLineId" placeholder="Uxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
+    </div>
+    <div class="field">
+      <label>ประเภท *</label>
+      <select id="newDriverType">
+        <option value="van">VAN (เงินสด)</option>
+        <option value="transport">ขนส่ง</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>รถประจำ</label>
+      <select id="newDriverTruck"><option value="">— ไม่ระบุ —</option></select>
+    </div>
+    <div class="field">
+      <label>รหัสสาย</label>
+      <input type="text" id="newDriverRoute" placeholder="เช่น A1, B2">
+    </div>
+    <div class="field">
+      <label>เบอร์โทร</label>
+      <input type="text" id="newDriverPhone" placeholder="0812345678">
+    </div>
+    <div id="addDriverErr" style="color:#e53935;font-size:13px;min-height:18px"></div>
+    <div class="modal-actions">
+      <button style="background:#e0e0e0;color:#555" onclick="closeAddDriverModal()">ยกเลิก</button>
+      <button style="background:#1a73e8;color:#fff" onclick="submitAddDriver()">บันทึก</button>
+    </div>
+  </div>
 </div>
 
 <!-- ═══════════════════════════════════ SETTINGS ═══════════════════════════════════ -->
@@ -858,29 +939,112 @@ async function loadTrucks() {
 // ════════════════════════════════════════════════════════════
 // DRIVERS
 // ════════════════════════════════════════════════════════════
+
+// Generate QR codes (เรียกครั้งแรกที่แท็บ drivers เปิด)
+let qrGenerated = false;
+function generateQRCodes() {
+  if (qrGenerated) return;
+  qrGenerated = true;
+  new QRCode(document.getElementById("qrFriend"), {
+    text: "https://line.me/ti/p/@057rszew",
+    width: 160, height: 160,
+    colorDark: "#000", colorLight: "#fff",
+    correctLevel: QRCode.CorrectLevel.M
+  });
+  new QRCode(document.getElementById("qrRegister"), {
+    text: "https://liff.line.me/2010109104-FF5HuJuq",
+    width: 160, height: 160,
+    colorDark: "#1a73e8", colorLight: "#fff",
+    correctLevel: QRCode.CorrectLevel.M
+  });
+}
+
 async function loadDrivers() {
+  generateQRCodes();
   const el = document.getElementById("driversContent");
   el.innerHTML = `<div class="loader"><div class="spinner"></div>กำลังโหลด...</div>`;
 
   const data = await api("drivers");
   if (!data) return;
 
+  if (data.length === 0) {
+    el.innerHTML = `<div class="card"><p style="color:#aaa;text-align:center;padding:20px">ยังไม่มีคนขับลงทะเบียน — ให้คนขับสแกน QR ด้านบนเพื่อลงทะเบียน</p></div>`;
+    return;
+  }
+
   let html = `<div class="card"><h3>คนขับที่ลงทะเบียน (${data.length} คน)</h3><div class="tbl-wrap"><table>
-    <tr><th>ชื่อ</th><th>ประเภท</th><th>สาย</th><th>รถประจำ</th><th>โกดัง</th><th>เบอร์โทร</th><th>LINE User ID</th></tr>`;
+    <tr><th>ชื่อ</th><th>ประเภท</th><th>สาย</th><th>รถประจำ</th><th>โกดัง</th><th>เบอร์โทร</th><th>สถานะ</th><th></th></tr>`;
 
   for (const d of data) {
     html += `<tr>
       <td><b>${d.name}</b></td>
-      <td><span class="badge ${d.driver_type === 'van' ? 'b-blue' : 'b-warn'}">${d.driver_type === 'van' ? 'VAN' : 'ขนส่ง'}</span></td>
+      <td><span class="badge ${d.driver_type === 'van' ? 'b-sent' : 'b-warn'}">${d.driver_type === 'van' ? 'VAN' : 'ขนส่ง'}</span></td>
       <td>${d.route_code || "-"}</td>
       <td>${d.trucks?.plate_number || "<span style='color:#aaa'>-</span>"}</td>
       <td>${d.warehouse || d.trucks?.warehouse || "-"}</td>
       <td>${d.phone || "-"}</td>
-      <td><small style="font-family:monospace;color:#888">${d.line_user_id}</small></td>
+      <td><span class="badge ${d.is_active ? 'b-ok' : 'b-exp'}">${d.is_active ? 'ใช้งาน' : 'ปิด'}</span></td>
+      <td><button class="btn btn-gray" style="padding:4px 10px;font-size:12px;width:auto" onclick="toggleDriver(${d.id},${d.is_active})">${d.is_active ? 'ปิด' : 'เปิด'}</button></td>
     </tr>`;
   }
   html += `</table></div></div>`;
   el.innerHTML = html;
+}
+
+async function toggleDriver(id, currentActive) {
+  if (!confirm(currentActive ? "ปิดการใช้งานคนขับนี้?" : "เปิดการใช้งานคนขับนี้?")) return;
+  await api(`drivers/${id}`, {
+    method: "PUT",
+    body: JSON.stringify({ is_active: !currentActive })
+  });
+  loadDrivers();
+}
+
+// ─── Modal: Add Driver ──────────────────────────────────────────────────────
+function openAddDriverModal() {
+  // โหลดรายการรถ
+  const sel = document.getElementById("newDriverTruck");
+  sel.innerHTML = `<option value="">— ไม่ระบุ —</option>`;
+  allTrucks.forEach(t => {
+    const opt = document.createElement("option");
+    opt.value = t.id;
+    opt.textContent = `${t.plate_number} (${t.warehouse === 'chainat' ? 'ชัยนาท' : 'ลพบุรี'})`;
+    sel.appendChild(opt);
+  });
+  document.getElementById("addDriverModal").classList.add("open");
+}
+
+function closeAddDriverModal() {
+  document.getElementById("addDriverModal").classList.remove("open");
+  ["newDriverName","newDriverLineId","newDriverRoute","newDriverPhone"].forEach(id => document.getElementById(id).value = "");
+  document.getElementById("addDriverErr").textContent = "";
+}
+
+async function submitAddDriver() {
+  const name      = document.getElementById("newDriverName").value.trim();
+  const lineId    = document.getElementById("newDriverLineId").value.trim();
+  const dType     = document.getElementById("newDriverType").value;
+  const truckId   = document.getElementById("newDriverTruck").value || null;
+  const route     = document.getElementById("newDriverRoute").value.trim() || null;
+  const phone     = document.getElementById("newDriverPhone").value.trim() || null;
+  const errEl     = document.getElementById("addDriverErr");
+
+  if (!name || !lineId) { errEl.textContent = "กรุณากรอกชื่อและ LINE User ID"; return; }
+  if (!lineId.startsWith("U") || lineId.length !== 33) {
+    errEl.textContent = "LINE User ID ต้องขึ้นต้นด้วย U และยาว 33 ตัวอักษร"; return;
+  }
+
+  errEl.textContent = "⏳ กำลังบันทึก...";
+  const res = await api("drivers", {
+    method: "POST",
+    body: JSON.stringify({ name, line_user_id: lineId, driver_type: dType, truck_id: truckId ? parseInt(truckId) : null, route_code: route, phone })
+  });
+
+  if (!res) { errEl.textContent = "❌ เกิดข้อผิดพลาด"; return; }
+  if (res.error) { errEl.textContent = `❌ ${res.error}`; return; }
+
+  closeAddDriverModal();
+  loadDrivers();
 }
 
 // ════════════════════════════════════════════════════════════
