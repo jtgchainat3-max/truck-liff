@@ -155,6 +155,7 @@ tr:hover td{background:#fafafa}
   <div class="tab" onclick="switchTab('documents')">📋 ภาษี/ประกัน</div>
   <div class="tab" onclick="switchTab('trucks')">🚛 รถ</div>
   <div class="tab" onclick="switchTab('drivers')">👤 คนขับ</div>
+  <div class="tab" onclick="switchTab('companies')">🏢 บริษัท</div>
   <div class="tab" onclick="switchTab('settings')">⚙️ ตั้งค่า</div>
 </div>
 
@@ -202,6 +203,12 @@ tr:hover td{background:#fafafa}
 <!-- ═══════════════════════════════════ MAINTENANCE ═══════════════════════════════════ -->
 <div id="sec-maintenance" class="section">
   <div class="filter-row">
+    <div class="form-group">
+      <label>🚛 ทะเบียนรถ</label>
+      <select id="maintTruckFilter" onchange="loadMaintenance()">
+        <option value="">ทุกคัน</option>
+      </select>
+    </div>
     <div class="form-group">
       <label>ประเภท</label>
       <select id="maintFilter" onchange="loadMaintenance()">
@@ -319,6 +326,30 @@ tr:hover td{background:#fafafa}
   </div>
 </div>
 
+<!-- ═══════════════════════════════════ COMPANIES ═══════════════════════════════════ -->
+<div id="sec-companies" class="section">
+  <div style="margin-bottom:14px;display:flex;gap:10px">
+    <button class="btn btn-primary" style="width:auto;padding:10px 20px" onclick="openAddCompanyModal()">+ เพิ่มบริษัท</button>
+    <button class="btn btn-gray" style="width:auto;padding:10px 20px" onclick="loadCompanies()">🔄 รีเฟรช</button>
+  </div>
+  <div id="companiesContent"><div class="loader"><div class="spinner"></div>กำลังโหลด...</div></div>
+</div>
+
+<!-- ═══ MODAL: Add Company ═══ -->
+<div class="modal-overlay" id="addCompanyModal">
+  <div class="modal-box">
+    <h3>🏢 เพิ่มบริษัท/นิติบุคคล</h3>
+    <div class="field"><label>ชื่อเต็ม *</label><input type="text" id="nc_name" placeholder="เช่น บริษัท เจทีจี จำกัด"></div>
+    <div class="field"><label>ชื่อย่อ</label><input type="text" id="nc_short" placeholder="เช่น JTG"></div>
+    <div class="field"><label>หมายเหตุ</label><input type="text" id="nc_notes" placeholder="ข้อมูลเพิ่มเติม"></div>
+    <div id="addCompanyErr" style="color:#e53935;font-size:13px;min-height:18px"></div>
+    <div class="modal-actions">
+      <button style="background:#e0e0e0;color:#555" onclick="closeAddCompanyModal()">ยกเลิก</button>
+      <button style="background:#1a73e8;color:#fff" onclick="submitAddCompany()">บันทึก</button>
+    </div>
+  </div>
+</div>
+
 <!-- ═══════════════════════════════════ SETTINGS ═══════════════════════════════════ -->
 <div id="sec-settings" class="section">
   <div class="card">
@@ -350,17 +381,26 @@ tr:hover td{background:#fafafa}
 <!-- Add Truck Modal -->
 <div class="modal-bg" id="addTruckModal">
   <div class="modal">
-    <h3>+ เพิ่มรถ</h3>
+    <h3>+ เพิ่มรถ/มอไซค์</h3>
     <div class="form-row">
-      <div class="form-group"><label>ทะเบียนรถ *</label><input id="at_plate" placeholder="เช่น กก 1234 ลพ"></div>
+      <div class="form-group"><label>ทะเบียนรถ *</label><input id="at_plate" placeholder="เช่น กก 1234"></div>
+      <div class="form-group"><label>จังหวัดทะเบียน</label><input id="at_province" placeholder="เช่น ลพบุรี"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group" style="flex:2"><label>ชื่อทะเบียน (ชื่อในทะเบียนรถ)</label><input id="at_regname" placeholder="เช่น บริษัท เจทีจี จำกัด"></div>
+    </div>
+    <div class="form-row">
       <div class="form-group"><label>โกดัง *</label>
         <select id="at_warehouse"><option value="ชัยนาท">ชัยนาท</option><option value="ลพบุรี">ลพบุรี</option></select>
       </div>
+      <div class="form-group"><label>บริษัทเจ้าของ</label>
+        <select id="at_company"><option value="">— ไม่ระบุ —</option></select>
+      </div>
     </div>
     <div class="form-row">
-      <div class="form-group"><label>ยี่ห้อ</label><input id="at_brand" placeholder="เช่น Isuzu"></div>
-      <div class="form-group"><label>รุ่น</label><input id="at_model" placeholder="เช่น NLR"></div>
-      <div class="form-group"><label>ปีรถ</label><input id="at_year" type="number" placeholder="2567"></div>
+      <div class="form-group"><label>ยี่ห้อ</label><input id="at_brand" placeholder="เช่น Isuzu, Honda"></div>
+      <div class="form-group"><label>รุ่น</label><input id="at_model" placeholder="เช่น NLR, Wave"></div>
+      <div class="form-group"><label>ปีรถ (พ.ศ.)</label><input id="at_year" type="number" placeholder="2567"></div>
     </div>
     <div class="form-row">
       <div class="form-group"><label>ประเภทรถ</label>
@@ -368,7 +408,25 @@ tr:hover td{background:#fafafa}
           <option value="4wheel">4 ล้อ</option>
           <option value="6wheel">6 ล้อ</option>
           <option value="10wheel">10 ล้อ</option>
+          <option value="motorcycle">มอไซค์</option>
         </select>
+      </div>
+      <div class="form-group"><label>สีรถ</label>
+        <select id="at_color">
+          <option value="">— ไม่ระบุ —</option>
+          <option value="ขาว">⬜ ขาว</option>
+          <option value="ดำ">⬛ ดำ</option>
+          <option value="เทา">🔘 เทา</option>
+          <option value="น้ำเงิน">🔵 น้ำเงิน</option>
+          <option value="ส้ม">🟠 ส้ม</option>
+          <option value="แดง">🔴 แดง</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group" style="align-items:center;display:flex;gap:8px;padding-top:22px">
+        <input type="checkbox" id="at_driveravail" checked style="width:18px;height:18px;cursor:pointer">
+        <label for="at_driveravail" style="cursor:pointer;margin:0">คนขับเลือกรถนี้ได้ (ติ๊กออก = รถของเจ้าของ)</label>
       </div>
     </div>
     <div class="form-row">
@@ -392,8 +450,17 @@ tr:hover td{background:#fafafa}
     <input type="hidden" id="et_id">
     <div class="form-row">
       <div class="form-group"><label>ทะเบียนรถ</label><input id="et_plate"></div>
+      <div class="form-group"><label>จังหวัดทะเบียน</label><input id="et_province" placeholder="เช่น ลพบุรี"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group" style="flex:2"><label>ชื่อทะเบียน</label><input id="et_regname"></div>
+    </div>
+    <div class="form-row">
       <div class="form-group"><label>โกดัง</label>
         <select id="et_warehouse"><option value="ชัยนาท">ชัยนาท</option><option value="ลพบุรี">ลพบุรี</option></select>
+      </div>
+      <div class="form-group"><label>บริษัทเจ้าของ</label>
+        <select id="et_company"><option value="">— ไม่ระบุ —</option></select>
       </div>
     </div>
     <div class="form-row">
@@ -406,7 +473,25 @@ tr:hover td{background:#fafafa}
           <option value="4wheel">4 ล้อ</option>
           <option value="6wheel">6 ล้อ</option>
           <option value="10wheel">10 ล้อ</option>
+          <option value="motorcycle">มอไซค์</option>
         </select>
+      </div>
+      <div class="form-group"><label>สีรถ</label>
+        <select id="et_color">
+          <option value="">— ไม่ระบุ —</option>
+          <option value="ขาว">⬜ ขาว</option>
+          <option value="ดำ">⬛ ดำ</option>
+          <option value="เทา">🔘 เทา</option>
+          <option value="น้ำเงิน">🔵 น้ำเงิน</option>
+          <option value="ส้ม">🟠 ส้ม</option>
+          <option value="แดง">🔴 แดง</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group" style="align-items:center;display:flex;gap:8px;padding-top:22px">
+        <input type="checkbox" id="et_driveravail" style="width:18px;height:18px;cursor:pointer">
+        <label for="et_driveravail" style="cursor:pointer;margin:0">คนขับเลือกรถนี้ได้</label>
       </div>
     </div>
     <div class="form-row">
@@ -578,11 +663,12 @@ const TAB_LOADERS = {
   summary:     loadSummary,
   daily:       () => { document.getElementById("dailyDate").value = todayISO(); loadDaily(); },
   fuel:        () => { document.getElementById("fuelFrom").value = todayISO(); document.getElementById("fuelTo").value = todayISO(); loadFuel(); },
-  maintenance: loadMaintenance,
+  maintenance: () => { populateMaintTruckFilter(); loadMaintenance(); },
   anomalies:   loadAnomalies,
   documents:   loadDocuments,
   trucks:      loadTrucks,
   drivers:     loadDrivers,
+  companies:   loadCompanies,
   settings:    loadSettings,
 };
 
@@ -755,13 +841,24 @@ async function loadFuel() {
 // ════════════════════════════════════════════════════════════
 const MAINT_LABELS = { oil_change:"เปลี่ยนน้ำมัน", tire:"ยาง", brake:"เบรก", battery:"แบตเตอรี่", other:"อื่นๆ" };
 
+function populateMaintTruckFilter() {
+  const sel = document.getElementById("maintTruckFilter");
+  const cur = sel.value;
+  sel.innerHTML = `<option value="">ทุกคัน</option>` +
+    allTrucks.map(t => `<option value="${t.id}">${t.plate_number} (${t.warehouse})</option>`).join("");
+  if (cur) sel.value = cur;
+}
+
 async function loadMaintenance() {
-  const filter = document.getElementById("maintFilter").value;
-  const el     = document.getElementById("maintContent");
+  const typeFilter  = document.getElementById("maintFilter").value;
+  const truckFilter = document.getElementById("maintTruckFilter").value;
+  const el          = document.getElementById("maintContent");
   el.innerHTML = `<div class="loader"><div class="spinner"></div>กำลังโหลด...</div>`;
 
-  let q = "maintenance";
-  if (filter) q += `?type=${filter}`;
+  const params = [];
+  if (typeFilter)  params.push(`type=${typeFilter}`);
+  if (truckFilter) params.push(`truck_id=${truckFilter}`);
+  const q = "maintenance" + (params.length ? "?" + params.join("&") : "");
   const data = await api(q);
   if (!data) return;
 
@@ -1142,51 +1239,90 @@ document.querySelectorAll(".modal-bg").forEach(bg => {
   bg.addEventListener("click", (e) => { if (e.target === bg) bg.classList.remove("open"); });
 });
 
-function openAddTruckModal() { openModal("addTruckModal"); }
+// โหลด companies เข้า dropdown
+let allCompanies = [];
+async function loadCompanyOptions(addSelId, editSelId) {
+  if (allCompanies.length === 0) {
+    const data = await api("companies");
+    if (data) allCompanies = data;
+  }
+  [addSelId, editSelId].filter(Boolean).forEach(id => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const cur = sel.value;
+    sel.innerHTML = `<option value="">— ไม่ระบุ —</option>` +
+      allCompanies.map(c => `<option value="${c.id}">${c.name}${c.short_name ? ` (${c.short_name})` : ""}</option>`).join("");
+    sel.value = cur;
+  });
+}
+
+async function openAddTruckModal() {
+  await loadCompanyOptions("at_company", null);
+  document.getElementById("at_driveravail").checked = true;
+  openModal("addTruckModal");
+}
 
 async function doAddTruck() {
+  const compVal = document.getElementById("at_company").value;
   const body = {
     plate_number:                  document.getElementById("at_plate").value.trim(),
+    province:                      document.getElementById("at_province").value.trim() || null,
+    registration_name:             document.getElementById("at_regname").value.trim() || null,
     warehouse:                     document.getElementById("at_warehouse").value,
-    brand:                         document.getElementById("at_brand").value.trim(),
-    model:                         document.getElementById("at_model").value.trim(),
+    brand:                         document.getElementById("at_brand").value.trim() || null,
+    model:                         document.getElementById("at_model").value.trim() || null,
     year:                          parseInt(document.getElementById("at_year").value) || null,
     truck_type:                    document.getElementById("at_type").value,
+    color:                         document.getElementById("at_color").value || null,
+    is_driver_available:           document.getElementById("at_driveravail").checked,
+    company_id:                    compVal ? parseInt(compVal) : null,
     tax_due_date:                  document.getElementById("at_tax").value || null,
     insurance_due_date:            document.getElementById("at_ins").value || null,
     compulsory_insurance_due_date: document.getElementById("at_comp").value || null,
     notes:                         document.getElementById("at_notes").value || null,
   };
-  if (!body.plate_number) { alert("กรุณากรอกทะเบียนรถ"); return; }
+  if (!body.plate_number) { document.getElementById("addTruckMsg").textContent = "กรุณากรอกทะเบียนรถ"; return; }
   const res = await api("add-truck", { method: "POST", body: JSON.stringify(body) });
   if (res?.success) { closeModal("addTruckModal"); loadTrucks(); }
   else { document.getElementById("addTruckMsg").textContent = res?.error || "เกิดข้อผิดพลาด"; }
 }
 
-function openEditTruck(id) {
+async function openEditTruck(id) {
   const truck = allTrucks.find(t => t.id === id);
-  if (!truck) { alert("ไม่พบข้อมูลรถ"); return; }
-  document.getElementById("et_id").value        = truck.id;
-  document.getElementById("et_plate").value     = truck.plate_number || "";
-  document.getElementById("et_warehouse").value = truck.warehouse || "ชัยนาท";
-  document.getElementById("et_brand").value     = truck.brand || "";
-  document.getElementById("et_model").value     = truck.model || "";
-  document.getElementById("et_type").value      = truck.truck_type || "4wheel";
-  document.getElementById("et_tax").value       = truck.tax_due_date || "";
-  document.getElementById("et_ins").value       = truck.insurance_due_date || "";
-  document.getElementById("et_comp").value      = truck.compulsory_insurance_due_date || "";
+  if (!truck) return;
+  await loadCompanyOptions("et_company", null);
+  document.getElementById("et_id").value            = truck.id;
+  document.getElementById("et_plate").value         = truck.plate_number || "";
+  document.getElementById("et_province").value      = truck.province || "";
+  document.getElementById("et_regname").value       = truck.registration_name || "";
+  document.getElementById("et_warehouse").value     = truck.warehouse || "ชัยนาท";
+  document.getElementById("et_company").value       = truck.company_id || "";
+  document.getElementById("et_brand").value         = truck.brand || "";
+  document.getElementById("et_model").value         = truck.model || "";
+  document.getElementById("et_type").value          = truck.truck_type || "4wheel";
+  document.getElementById("et_color").value         = truck.color || "";
+  document.getElementById("et_driveravail").checked = truck.is_driver_available !== false;
+  document.getElementById("et_tax").value           = truck.tax_due_date || "";
+  document.getElementById("et_ins").value           = truck.insurance_due_date || "";
+  document.getElementById("et_comp").value          = truck.compulsory_insurance_due_date || "";
   openModal("editTruckModal");
 }
 
 async function doEditTruck() {
-  const id = parseInt(document.getElementById("et_id").value);
+  const id     = parseInt(document.getElementById("et_id").value);
+  const compVal = document.getElementById("et_company").value;
   const body = {
     id,
     plate_number:                  document.getElementById("et_plate").value.trim(),
+    province:                      document.getElementById("et_province").value.trim() || null,
+    registration_name:             document.getElementById("et_regname").value.trim() || null,
     warehouse:                     document.getElementById("et_warehouse").value,
+    company_id:                    compVal ? parseInt(compVal) : null,
     brand:                         document.getElementById("et_brand").value || null,
     model:                         document.getElementById("et_model").value || null,
     truck_type:                    document.getElementById("et_type").value,
+    color:                         document.getElementById("et_color").value || null,
+    is_driver_available:           document.getElementById("et_driveravail").checked,
     tax_due_date:                  document.getElementById("et_tax").value || null,
     insurance_due_date:            document.getElementById("et_ins").value || null,
     compulsory_insurance_due_date: document.getElementById("et_comp").value || null,
@@ -1194,6 +1330,60 @@ async function doEditTruck() {
   const res = await api("update-truck", { method: "PUT", body: JSON.stringify(body) });
   if (res?.success) { closeModal("editTruckModal"); loadTrucks(); loadDocuments(); }
   else { document.getElementById("editTruckMsg").textContent = res?.error || "เกิดข้อผิดพลาด"; }
+}
+
+// ════════════════════════════════════════════════════════════
+// COMPANIES
+// ════════════════════════════════════════════════════════════
+async function loadCompanies() {
+  const el = document.getElementById("companiesContent");
+  el.innerHTML = `<div class="loader"><div class="spinner"></div>กำลังโหลด...</div>`;
+  const data = await api("companies");
+  if (!data) return;
+  allCompanies = data;
+  if (data.length === 0) {
+    el.innerHTML = `<div class="card"><p style="color:#aaa;text-align:center;padding:20px">ยังไม่มีข้อมูลบริษัท กด + เพิ่มบริษัทได้เลย</p></div>`;
+    return;
+  }
+  let html = `<div class="card"><h3>บริษัท/นิติบุคคล (${data.length})</h3><div class="tbl-wrap"><table>
+    <tr><th>ชื่อบริษัท</th><th>ชื่อย่อ</th><th>หมายเหตุ</th><th>จำนวนรถ</th><th></th></tr>`;
+  for (const c of data) {
+    const truckCount = allTrucks.filter(t => t.company_id === c.id).length;
+    html += `<tr>
+      <td><b>${c.name}</b></td>
+      <td>${c.short_name || "-"}</td>
+      <td>${c.notes || "-"}</td>
+      <td>${truckCount} คัน</td>
+      <td><button class="btn btn-red" style="padding:4px 10px;font-size:12px;width:auto" onclick="deleteCompany(${c.id},'${c.name}')">ลบ</button></td>
+    </tr>`;
+  }
+  html += `</table></div></div>`;
+  el.innerHTML = html;
+}
+
+function openAddCompanyModal() { document.getElementById("addCompanyModal").classList.add("open"); }
+function closeAddCompanyModal() {
+  document.getElementById("addCompanyModal").classList.remove("open");
+  ["nc_name","nc_short","nc_notes"].forEach(id => document.getElementById(id).value = "");
+  document.getElementById("addCompanyErr").textContent = "";
+}
+async function submitAddCompany() {
+  const name  = document.getElementById("nc_name").value.trim();
+  const errEl = document.getElementById("addCompanyErr");
+  if (!name) { errEl.textContent = "กรุณากรอกชื่อบริษัท"; return; }
+  errEl.textContent = "⏳ กำลังบันทึก...";
+  const res = await api("companies", { method: "POST", body: JSON.stringify({
+    name,
+    short_name: document.getElementById("nc_short").value.trim() || null,
+    notes:      document.getElementById("nc_notes").value.trim() || null,
+  })});
+  if (res?.success) { closeAddCompanyModal(); allCompanies = []; loadCompanies(); }
+  else { errEl.textContent = `❌ ${res?.error || "เกิดข้อผิดพลาด"}`; }
+}
+async function deleteCompany(id, name) {
+  if (!confirm(`ลบบริษัท "${name}"?\nรถที่ผูกไว้จะถูกเคลียร์ชื่อบริษัท`)) return;
+  const res = await api(`companies/${id}`, { method: "DELETE" });
+  if (res?.success) { allCompanies = []; loadCompanies(); loadTrucks(); }
 }
 
 function openAddMaintModal() {
@@ -1261,9 +1451,13 @@ document.getElementById("topDate").textContent = new Date().toLocaleDateString("
   timeZone: TZ, year: "numeric", month: "long", day: "numeric", weekday: "long"
 });
 
-// โหลด Summary ก่อน + โหลด trucks เพื่อใช้ใน modals
+// โหลด Summary ก่อน + โหลด trucks + companies เพื่อใช้ใน modals
 function startApp() {
-  Promise.all([loadSummary(), api("trucks").then(d => { if (d) allTrucks = d; })]);
+  Promise.all([
+    loadSummary(),
+    api("trucks").then(d => { if (d) { allTrucks = d; populateMaintTruckFilter(); } }),
+    api("companies").then(d => { if (d) allCompanies = d; }),
+  ]);
 }
 
 // ── Login / Logout ────────────────────────────────────────────────────────────
