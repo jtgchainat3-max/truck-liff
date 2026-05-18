@@ -236,6 +236,7 @@ body{font-family:'Sarabun',sans-serif;background:#f5f5f5;color:#333;min-height:1
         <p style="font-size:14px;color:#666;margin-bottom:14px">ถ่ายให้เห็นตัวเลขชัดเจน ระบบจะอ่านไมล์ให้อัตโนมัติ</p>
         <img id="mileagePreview" class="photo-preview" alt="preview">
         <canvas id="mileageCanvas" style="display:none"></canvas>
+        <canvas id="fuelOcrCanvas" style="display:none"></canvas>
         <input type="file" id="mileageInput" accept="image/*" capture="environment" style="display:none" onchange="onMileagePhoto(event)">
         <button class="btn btn-primary" onclick="document.getElementById('mileageInput').click()">
           📷 ถ่ายรูปเลขไมล์
@@ -297,50 +298,63 @@ body{font-family:'Sarabun',sans-serif;background:#f5f5f5;color:#333;min-height:1
     <div class="sub" id="fuelTruckSub">-</div>
   </div>
   <div class="body">
-    <div class="card">
-      <div class="card-title">📷 รูปมิเตอร์ปั๊ม (จำเป็น)</div>
-      <img id="fuelPreview" class="photo-preview" alt="preview">
-      <input type="file" id="fuelInput" accept="image/*" capture="environment" style="display:none" onchange="onFuelPhoto(event)">
-      <button class="btn btn-primary" onclick="document.getElementById('fuelInput').click()">📷 ถ่ายรูปมิเตอร์ปั๊ม</button>
+    <!-- Step 1: ถ่ายรูปเลขไมล์ -->
+    <div id="fuelStep1">
+      <div class="card" style="text-align:center">
+        <div class="card-title">📷 ถ่ายรูปเลขไมล์ตอนเติม (จำเป็น)</div>
+        <p style="font-size:13px;color:#888;margin:4px 0 12px">ถ่ายให้เห็นตัวเลขชัดเจน ระบบจะอ่านเลขให้อัตโนมัติ</p>
+        <input type="file" id="fuelOcrInput" accept="image/*" capture="environment" style="display:none" onchange="onFuelOcrPhoto(event)">
+        <button class="btn btn-primary" onclick="document.getElementById('fuelOcrInput').click()">📷 ถ่ายรูปเลขไมล์</button>
+      </div>
     </div>
 
-    <div class="card">
-      <div class="field">
-        <label>เลขไมล์ตอนเติม (กม.)</label>
-        <input type="number" id="fuelMileage" placeholder="เช่น 125000" inputmode="numeric">
-      </div>
-      <div class="field">
-        <label>จำนวนลิตร</label>
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:8px">
-          <button class="btn btn-gray" style="padding:10px;font-size:14px" onclick="setLiters(20)">20 ล.</button>
-          <button class="btn btn-gray" style="padding:10px;font-size:14px" onclick="setLiters(30)">30 ล.</button>
-          <button class="btn btn-gray" style="padding:10px;font-size:14px" onclick="setLiters(40)">40 ล.</button>
-          <button class="btn btn-gray" style="padding:10px;font-size:14px" onclick="setLiters(50)">50 ล.</button>
+    <!-- Step 2: ผล OCR + ข้อมูลเติมน้ำมัน -->
+    <div id="fuelStep2" style="display:none">
+      <div class="card">
+        <div class="card-title">🔢 เลขไมล์ที่อ่านได้</div>
+        <img id="fuelOcrPreview" class="photo-preview" alt="preview" style="display:none">
+        <div id="fuelOcrLoading" style="display:none;text-align:center;padding:16px">
+          <div class="spinner"></div><div style="margin-top:8px;font-size:13px;color:#888">⏳ กำลังอ่านเลขไมล์...</div>
         </div>
-        <input type="number" id="fuelLiters" placeholder="หรือพิมพ์เอง" inputmode="decimal" step="0.01" oninput="calcTotal()">
+        <div id="fuelOcrResult" style="display:none;text-align:center;padding:12px 0">
+          <div style="font-size:13px;color:#888;margin-bottom:4px">เลขไมล์</div>
+          <div id="fuelOcrNumber" style="font-size:32px;font-weight:700;color:#1a73e8"></div>
+          <div style="font-size:12px;color:#aaa;margin-top:2px">กม.</div>
+        </div>
+        <div id="fuelOcrFailed" style="display:none">
+          <div class="alert alert-err" style="margin:8px 0">❌ อ่านเลขไม่ออก กรุณาถ่ายใหม่ให้ชัดขึ้น</div>
+          <button class="btn btn-gray" style="width:100%" onclick="retakeFuelOcrPhoto()">🔄 ถ่ายใหม่</button>
+        </div>
       </div>
-      <div class="field">
-        <label>ราคาต่อลิตร (บาท)</label>
-        <input type="number" id="fuelPrice" placeholder="เช่น 33.50" inputmode="decimal" step="0.01" oninput="calcTotal()">
-      </div>
-      <div class="field" id="fuelTotalField" style="display:none">
-        <label>รวมทั้งหมด</label>
-        <div style="font-size:24px;font-weight:700;color:#1a73e8" id="fuelTotal">-</div>
-      </div>
-      <div class="field">
-        <label>ชื่อปั๊ม (ถ้ามี)</label>
-        <input type="text" id="fuelStation" placeholder="เช่น ปตท. ถนนพหล">
+
+      <div class="card" id="fuelDataCard" style="display:none">
+        <div class="field">
+          <label>จำนวนลิตร</label>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:8px">
+            <button class="btn btn-gray" style="padding:10px;font-size:14px" onclick="setLiters(20)">20 ล.</button>
+            <button class="btn btn-gray" style="padding:10px;font-size:14px" onclick="setLiters(30)">30 ล.</button>
+            <button class="btn btn-gray" style="padding:10px;font-size:14px" onclick="setLiters(40)">40 ล.</button>
+            <button class="btn btn-gray" style="padding:10px;font-size:14px" onclick="setLiters(50)">50 ล.</button>
+          </div>
+          <input type="number" id="fuelLiters" placeholder="หรือพิมพ์เอง" inputmode="decimal" step="0.01" oninput="calcTotal()">
+        </div>
+        <div class="field">
+          <label>ราคาต่อลิตร (บาท)</label>
+          <input type="number" id="fuelPrice" placeholder="เช่น 33.50" inputmode="decimal" step="0.01" oninput="calcTotal()">
+        </div>
+        <div class="field" id="fuelTotalField" style="display:none">
+          <label>รวมทั้งหมด</label>
+          <div style="font-size:24px;font-weight:700;color:#1a73e8" id="fuelTotal">-</div>
+        </div>
+        <div class="field">
+          <label>ชื่อปั๊ม (ถ้ามี)</label>
+          <input type="text" id="fuelStation" placeholder="เช่น ปตท. ถนนพหล">
+        </div>
+        <button class="btn btn-success" onclick="submitFuel()">✅ บันทึกการเติมน้ำมัน</button>
+        <button class="btn btn-gray" style="margin-top:8px" onclick="retakeFuelOcrPhoto()">🔄 ถ่ายเลขไมล์ใหม่</button>
       </div>
     </div>
 
-    <div class="card">
-      <div class="card-title">📷 รูปใบเสร็จ (ถ้ามี)</div>
-      <img id="fuelBillPreview" class="photo-preview" alt="preview">
-      <input type="file" id="fuelBillInput" accept="image/*" capture="environment" style="display:none" onchange="onFuelBillPhoto(event)">
-      <button class="btn btn-gray" onclick="document.getElementById('fuelBillInput').click()">📷 ถ่ายใบเสร็จ (ไม่บังคับ)</button>
-    </div>
-
-    <button class="btn btn-success" onclick="submitFuel()">✅ บันทึกการเติมน้ำมัน</button>
     <button class="btn btn-gray" style="margin-top:8px" onclick="showScreen('screenMenu')">← กลับ</button>
     <div id="fuelMsg" style="margin-top:12px;font-size:14px;text-align:center;white-space:pre-line"></div>
   </div>
@@ -377,7 +391,7 @@ body{font-family:'Sarabun',sans-serif;background:#f5f5f5;color:#333;min-height:1
         <input type="number" id="maintCost" placeholder="0" inputmode="numeric">
       </div>
       <div class="field" id="maintNextMileField">
-        <label>ครั้งถัดไปที่ไมล์ (กม.) <span style="color:#aaa;font-weight:400">ไม่บังคับ</span></label>
+        <label id="maintNextMileLabel">ครั้งถัดไปที่ไมล์ (กม.) <span id="maintNextMileOptional" style="color:#aaa;font-weight:400">ไม่บังคับ</span><span id="maintNextMileRequired" style="color:#e53935;font-weight:400;display:none"> *จำเป็น</span></label>
         <input type="number" id="maintNextMile" placeholder="เช่น 130000" inputmode="numeric">
       </div>
       <!-- ตำแหน่งยาง -->
@@ -419,14 +433,14 @@ const API_BASE = "https://joevecrppgctnemaqgan.supabase.co/functions/v1/liff-api
 // ════════════════════════════════════════════════════════════
 // STATE
 // ════════════════════════════════════════════════════════════
-let lineUserId    = null;
-let driverInfo    = null;
-let currentType   = null;   // 'morning' | 'evening'
-let croppedBlob   = null;
-let fuelBlob      = null;
-let fuelBillBlob  = null;
-let maintBillBlob = null;
-let photoTs       = null;
+let lineUserId      = null;
+let driverInfo      = null;
+let currentType     = null;   // 'morning' | 'evening'
+let croppedBlob     = null;
+let fuelOcrBlob     = null;   // fuel mileage photo blob
+let fuelOcrMileage  = null;   // OCR result for fuel screen
+let maintBillBlob   = null;
+let photoTs         = null;
 let ocrMileage    = null;
 let selectedTruckId = null;
 let selectedTirePositions = new Set();
@@ -835,35 +849,98 @@ function goBack(from) {
 // FUEL FLOW
 // ════════════════════════════════════════════════════════════
 function goFuel() {
-  fuelBlob = null; fuelBillBlob = null;
+  fuelOcrBlob    = null;
+  fuelOcrMileage = null;
   document.getElementById("fuelTruckSub").textContent =
     (driverInfo?.truck_plate || "-") + (driverInfo?.route_code ? ` · ${driverInfo.route_code}` : "");
-  document.getElementById("fuelPreview").style.display = "none";
-  document.getElementById("fuelBillPreview").style.display = "none";
-  document.getElementById("fuelInput").value = "";
-  document.getElementById("fuelBillInput").value = "";
+  // Reset steps
+  document.getElementById("fuelStep1").style.display = "";
+  document.getElementById("fuelStep2").style.display = "none";
+  document.getElementById("fuelOcrInput").value = "";
+  document.getElementById("fuelOcrPreview").style.display = "none";
+  document.getElementById("fuelOcrLoading").style.display = "none";
+  document.getElementById("fuelOcrResult").style.display  = "none";
+  document.getElementById("fuelOcrFailed").style.display  = "none";
+  document.getElementById("fuelDataCard").style.display   = "none";
   document.getElementById("fuelMsg").textContent = "";
   document.getElementById("fuelTotalField").style.display = "none";
   showScreen("screenFuel");
 }
 
-function onFuelPhoto(event) {
+async function onFuelOcrPhoto(event) {
   const file = event.target.files[0];
   if (!file) return;
-  photoTs  = nowBKK();
-  fuelBlob = file;
-  const el = document.getElementById("fuelPreview");
-  el.src   = URL.createObjectURL(file);
-  el.style.display = "block";
+  photoTs = nowBKK();
+
+  // Show step 2, show preview + loading
+  document.getElementById("fuelStep1").style.display  = "none";
+  document.getElementById("fuelStep2").style.display  = "";
+  document.getElementById("fuelOcrResult").style.display  = "none";
+  document.getElementById("fuelOcrFailed").style.display  = "none";
+  document.getElementById("fuelDataCard").style.display   = "none";
+  document.getElementById("fuelOcrLoading").style.display = "";
+
+  const prev = document.getElementById("fuelOcrPreview");
+  prev.src   = URL.createObjectURL(file);
+  prev.style.display = "block";
+
+  // Run OCR (reuse same crop logic as mileage)
+  fuelOcrBlob    = await cropAndOCRFuel(file);
+  fuelOcrMileage = _lastFuelOcr;
+
+  document.getElementById("fuelOcrLoading").style.display = "none";
+
+  if (fuelOcrMileage) {
+    document.getElementById("fuelOcrNumber").textContent = fuelOcrMileage.toLocaleString("th-TH");
+    document.getElementById("fuelOcrResult").style.display = "";
+    document.getElementById("fuelDataCard").style.display  = "";
+  } else {
+    document.getElementById("fuelOcrFailed").style.display = "";
+  }
 }
 
-function onFuelBillPhoto(event) {
-  const file = event.target.files[0];
-  if (!file) return;
-  fuelBillBlob = file;
-  const el = document.getElementById("fuelBillPreview");
-  el.src   = URL.createObjectURL(file);
-  el.style.display = "block";
+let _lastFuelOcr = null;
+
+async function cropAndOCRFuel(file) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = async () => {
+      const w = img.naturalWidth, h = img.naturalHeight;
+      const cx = Math.round(w * 0.05), cy = Math.round(h * 0.38);
+      const cw = Math.round(w * 0.90), ch = Math.round(h * 0.38);
+
+      const canvas = document.getElementById("fuelOcrCanvas");
+      canvas.width = cw; canvas.height = ch;
+      canvas.getContext("2d").drawImage(img, cx, cy, cw, ch, 0, 0, cw, ch);
+
+      canvas.toBlob(async (blob) => {
+        try {
+          const result  = await Tesseract.recognize(blob, "eng", { tessedit_char_whitelist: "0123456789" });
+          const text    = result.data.text.replace(/[^0-9]/g, " ").trim();
+          const numbers = text.split(/\s+/).filter(n => n.length >= 5 && n.length <= 7);
+          _lastFuelOcr  = numbers.length > 0 ? parseInt(numbers[0]) : null;
+        } catch {
+          _lastFuelOcr = null;
+        }
+        resolve(blob);
+      }, "image/jpeg", 0.82);
+    };
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+function retakeFuelOcrPhoto() {
+  fuelOcrBlob    = null;
+  fuelOcrMileage = null;
+  _lastFuelOcr   = null;
+  document.getElementById("fuelStep1").style.display  = "";
+  document.getElementById("fuelStep2").style.display  = "none";
+  document.getElementById("fuelOcrInput").value       = "";
+  document.getElementById("fuelOcrPreview").style.display = "none";
+  document.getElementById("fuelOcrLoading").style.display = "none";
+  document.getElementById("fuelOcrResult").style.display  = "none";
+  document.getElementById("fuelOcrFailed").style.display  = "none";
+  document.getElementById("fuelDataCard").style.display   = "none";
 }
 
 function setLiters(n) {
@@ -884,14 +961,13 @@ function calcTotal() {
 }
 
 async function submitFuel() {
-  if (!fuelBlob) { alert("กรุณาถ่ายรูปมิเตอร์ปั๊ม"); return; }
+  if (!fuelOcrBlob || !fuelOcrMileage) { alert("กรุณาถ่ายรูปเลขไมล์ก่อน"); return; }
   const liters = parseFloat(document.getElementById("fuelLiters").value) || null;
   if (!liters)  { alert("กรุณาระบุจำนวนลิตร"); return; }
 
   const truckId = driverInfo?.truck_id || selectedTruckId;
   if (!truckId) { alert("ไม่พบรถ"); return; }
 
-  const mileage = parseInt(document.getElementById("fuelMileage").value) || null;
   const price   = parseFloat(document.getElementById("fuelPrice").value) || null;
   const station = document.getElementById("fuelStation").value.trim() || null;
   const pos     = await getGPS().catch(() => null);
@@ -900,12 +976,11 @@ async function submitFuel() {
   fd.append("line_user_id",    lineUserId);
   fd.append("truck_id",        truckId);
   fd.append("photo_timestamp", photoTs || nowBKK());
-  fd.append("image",           fuelBlob, "fuel.jpg");
+  fd.append("image",           fuelOcrBlob, "fuel_mileage.jpg");
   fd.append("liters",          liters);
-  if (mileage)      fd.append("mileage", mileage);
-  if (price)        fd.append("price_per_liter", price);
-  if (station)      fd.append("station_name", station);
-  if (fuelBillBlob) fd.append("bill_image", fuelBillBlob, "bill.jpg");
+  fd.append("mileage",         fuelOcrMileage);
+  if (price)   fd.append("price_per_liter", price);
+  if (station) fd.append("station_name", station);
   if (pos) {
     fd.append("latitude",  pos.coords.latitude);
     fd.append("longitude", pos.coords.longitude);
@@ -968,6 +1043,10 @@ function onMaintTypeChange() {
   document.getElementById("tireSection").style.display = (type === "tire") ? "" : "none";
   document.getElementById("maintNextMileField").style.display =
     ["oil_change","tire","brake"].includes(type) ? "" : "none";
+  // oil_change: required; tire/brake: optional
+  const isOilChange = (type === "oil_change");
+  document.getElementById("maintNextMileOptional").style.display = isOilChange ? "none" : "";
+  document.getElementById("maintNextMileRequired").style.display = isOilChange ? "" : "none";
   if (type === "tire") renderTireGrid();
 }
 
@@ -1013,6 +1092,13 @@ async function submitMaintenance() {
   const shop     = document.getElementById("maintShop").value.trim() || null;
   const cost     = parseFloat(document.getElementById("maintCost").value) || null;
   const nextMile = parseInt(document.getElementById("maintNextMile").value) || null;
+
+  // oil_change: next mileage is required
+  if (type === "oil_change" && !nextMile) {
+    alert("กรุณาระบุเลขไมล์ครั้งถัดไป (จำเป็นสำหรับการเปลี่ยนน้ำมันเครื่อง)");
+    document.getElementById("maintNextMile").focus();
+    return;
+  }
   const notes    = document.getElementById("maintNotes").value.trim() || null;
   const pos      = await getGPS().catch(() => null);
 
