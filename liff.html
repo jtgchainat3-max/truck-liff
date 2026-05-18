@@ -118,23 +118,57 @@ body{font-family:'Sarabun',sans-serif;background:#f5f5f5;color:#333;min-height:1
 <div class="screen" id="screenRegister">
   <div class="header">
     <h2>🚚 ลงทะเบียนคนขับ</h2>
-    <div class="sub">ครั้งแรกเท่านั้น</div>
+    <div class="sub">กรอกข้อมูลครั้งแรก</div>
   </div>
   <div class="body">
+    <!-- ── Section 1: ข้อมูลส่วนตัว ── -->
     <div class="card">
+      <div class="card-title">👤 ข้อมูลส่วนตัว</div>
       <div class="field">
-        <label>ชื่อ-นามสกุล</label>
-        <input type="text" id="regName" placeholder="กรอกชื่อ" autocomplete="off">
+        <label>ชื่อ-นามสกุล <span style="color:#e53935">*</span></label>
+        <input type="text" id="regName" placeholder="เช่น สมชาย ใจดี" autocomplete="off">
       </div>
       <div class="field">
-        <label>เบอร์โทร</label>
-        <input type="tel" id="regPhone" placeholder="08x-xxx-xxxx">
+        <label>เบอร์โทร <span style="color:#e53935">*</span></label>
+        <input type="tel" id="regPhone" placeholder="08x-xxx-xxxx" inputmode="tel">
       </div>
       <div class="field">
-        <label>ประเภทคนขับ</label>
+        <label>เลขบัตรประชาชน (13 หลัก)</label>
+        <input type="tel" id="regIdCard" placeholder="1-2345-67890-12-3" inputmode="numeric" maxlength="17" oninput="formatIdCard(this)">
+      </div>
+      <div class="field">
+        <label>ที่อยู่ตามทะเบียนบ้าน</label>
+        <textarea id="regAddress" rows="3" placeholder="บ้านเลขที่ หมู่ ตำบล อำเภอ จังหวัด รหัสไปรษณีย์" style="width:100%;padding:12px 14px;border:2px solid #e0e0e0;border-radius:8px;font-size:16px;outline:none;font-family:inherit;resize:vertical"></textarea>
+      </div>
+    </div>
+
+    <!-- ── Section 2: ใบขับขี่ ── -->
+    <div class="card">
+      <div class="card-title">🪪 ใบขับขี่</div>
+      <div class="field">
+        <label>เลขที่ใบขับขี่</label>
+        <input type="text" id="regLicenseNo" placeholder="เช่น 12345678" autocomplete="off">
+      </div>
+      <div class="field">
+        <label>วันหมดอายุใบขับขี่</label>
+        <input type="date" id="regLicenseExpiry">
+      </div>
+      <div class="field">
+        <label>รูปใบขับขี่ (หน้าบัตร)</label>
+        <img id="regLicensePreview" style="display:none;width:100%;border-radius:8px;max-height:200px;object-fit:contain;background:#000;margin-bottom:8px">
+        <input type="file" id="regLicenseInput" accept="image/*" capture="environment" style="display:none" onchange="onLicensePhoto(event)">
+        <button class="btn btn-gray" onclick="document.getElementById('regLicenseInput').click()">📷 ถ่ายรูปใบขับขี่</button>
+      </div>
+    </div>
+
+    <!-- ── Section 3: ประเภท + รถ ── -->
+    <div class="card">
+      <div class="card-title">🚛 ประเภทการขับ</div>
+      <div class="field">
+        <label>ประเภทคนขับ <span style="color:#e53935">*</span></label>
         <select id="regType" onchange="onRegTypeChange()">
-          <option value="van">VAN — วิ่งสาย JTG</option>
-          <option value="transport">ขนส่ง — ไม่มีรถประจำ</option>
+          <option value="van">VAN — มีรถประจำ (วิ่งสาย JTG)</option>
+          <option value="transport">ขนส่ง — เลือกรถได้ทุกวัน</option>
         </select>
       </div>
       <div class="field" id="routeField">
@@ -155,11 +189,12 @@ body{font-family:'Sarabun',sans-serif;background:#f5f5f5;color:#333;min-height:1
           <option value="V12">JTG V12</option>
         </select>
       </div>
-      <div class="field">
-        <label>เลือกรถที่ขับ</label>
+      <div class="field" id="regTruckField">
+        <label>เลือกรถที่ขับ (VAN เท่านั้น)</label>
         <div id="regTruckList" class="truck-list"></div>
       </div>
     </div>
+
     <button class="btn btn-primary" onclick="doRegister()">✅ ลงทะเบียน</button>
     <div id="regMsg" style="margin-top:12px;text-align:center;font-size:14px;white-space:pre-line"></div>
     <div id="regDebug" style="margin-top:16px;font-size:11px;color:#bbb;text-align:center"></div>
@@ -220,7 +255,7 @@ body{font-family:'Sarabun',sans-serif;background:#f5f5f5;color:#333;min-height:1
   </div>
 </div>
 
-<!-- ═══ SCREEN: Mileage Photo ═══ -->
+<!-- ═══ SCREEN: Mileage Photo + Manual ═══ -->
 <div class="screen" id="screenMileage">
   <div class="header">
     <h2 id="mileageTitle">📷 ไมล์เช้า</h2>
@@ -230,72 +265,52 @@ body{font-family:'Sarabun',sans-serif;background:#f5f5f5;color:#333;min-height:1
     <div class="steps">
       <div class="step active" id="mStep1">1</div>
       <div class="step" id="mStep2">2</div>
-      <div class="step" id="mStep3">3</div>
     </div>
 
-    <!-- Step 1: ถ่ายรูป -->
+    <!-- Step 1: ถ่ายรูป + กรอกเลข -->
     <div id="mileageStep1">
+      <!-- Truck picker สำหรับ transport -->
+      <div id="mileageTruckPicker" style="display:none">
+        <div class="card">
+          <div class="card-title">🚚 เลือกรถที่ขับวันนี้</div>
+          <div id="mileageTruckList" class="truck-list"></div>
+        </div>
+      </div>
+
       <div class="card">
-        <div class="card-title">📷 ถ่ายรูปเลขไมล์</div>
+        <div class="card-title">📷 ถ่ายรูปเลขไมล์ (จำเป็น)</div>
         <div style="font-size:12px;color:#555;background:#f5f5f5;border-radius:8px;padding:8px 10px;margin:6px 0 12px;text-align:left;line-height:1.7">
-          📌 เคล็ดลับถ่ายให้อ่านง่าย:<br>
-          • ถ่ายให้ <b>เลขไมล์เต็มภาพ</b> ไม่ต้องเห็นทั้ง dashboard<br>
-          • ถ่าย <b>ตรงๆ ไม่เอียง</b><br>
-          • ให้ <b>แสงสว่าง</b> พอ หรือเปิดไฟในรถ
+          📌 ถ่ายให้เห็น <b>เลขไมล์ชัดเจน</b><br>
+          ระบบจะเก็บรูปไว้สำหรับตรวจสอบทีหลัง
         </div>
         <img id="mileagePreview" class="photo-preview" alt="preview">
-        <canvas id="mileageCanvas" style="display:none"></canvas>
-        <canvas id="fuelOcrCanvas" style="display:none"></canvas>
         <input type="file" id="mileageInput" accept="image/*" capture="environment" style="display:none" onchange="onMileagePhoto(event)">
-        <button class="btn btn-primary" onclick="document.getElementById('mileageInput').click()">
+        <button class="btn btn-primary" id="mileagePhotoBtn" onclick="document.getElementById('mileageInput').click()">
           📷 ถ่ายรูปเลขไมล์
         </button>
       </div>
-      <button class="btn btn-gray" onclick="showScreen('screenMenu')">← กลับ</button>
-    </div>
 
-    <!-- Step 2: ยืนยัน OCR -->
-    <div id="mileageStep2" style="display:none">
-      <div class="card">
-        <img id="mileagePreview2" class="photo-preview" alt="preview" style="display:block">
-        <div id="ocrLoading" class="loader" style="padding:20px">
-          <div class="spinner"></div>
-          <div>กำลังอ่านเลขไมล์...</div>
+      <div class="card" id="mileageEntryCard" style="display:none">
+        <div class="card-title">⌨️ กรอกเลขไมล์ที่เห็นในรูป</div>
+        <div class="field">
+          <label>เลขไมล์ (กม.) <span style="color:#e53935">*</span></label>
+          <input type="number" id="mileageInputNum" placeholder="เช่น 125000" inputmode="numeric" style="font-size:24px;text-align:center;font-weight:700">
         </div>
-        <div id="ocrResult" style="display:none">
-          <div class="ocr-box">
-            <div class="ocr-number" id="ocrNumber">-</div>
-            <div class="ocr-label">ไมล์ที่อ่านได้ (กม.)</div>
-          </div>
-        </div>
-        <div id="ocrFailed" style="display:none">
-          <div class="alert alert-warn" style="text-align:center">
-            ⚠️ อ่านตัวเลขไม่ได้<br>กรุณาถ่ายใหม่ให้เห็นชัดขึ้น
-          </div>
-          <button class="btn btn-primary" onclick="retakeMileagePhoto()">🔄 ถ่ายใหม่</button>
-        </div>
+        <div id="mileageLastInfo" style="font-size:13px;color:#666;padding:8px 10px;background:#f5f5f5;border-radius:6px;margin-top:8px"></div>
+        <button class="btn btn-success" onclick="confirmMileage()" style="margin-top:12px">✅ บันทึก</button>
+        <button class="btn btn-gray" onclick="retakeMileagePhoto()" style="margin-top:8px">🔄 ถ่ายรูปใหม่</button>
       </div>
 
-      <!-- Smart match truck (transport only) -->
-      <div id="truckMatchSection" style="display:none">
-        <div class="card">
-          <div class="card-title">🚚 เลือกรถที่ขับวันนี้</div>
-          <div id="matchedTruckAlert" style="margin-bottom:10px"></div>
-          <div id="matchTruckList" class="truck-list"></div>
-        </div>
-      </div>
-
-      <button class="btn btn-success" onclick="confirmMileage()">✅ ยืนยันและส่ง</button>
-      <button class="btn btn-gray" style="margin-top:8px" onclick="goBack('mileage')">🔄 ถ่ายใหม่</button>
+      <button class="btn btn-gray" onclick="showScreen('screenMenu')" style="margin-top:8px">← กลับ</button>
     </div>
 
-    <!-- Step 3: สำเร็จ -->
-    <div id="mileageStep3" style="display:none">
+    <!-- Step 2: สำเร็จ -->
+    <div id="mileageStep2_done" style="display:none">
       <div class="card" style="text-align:center;padding:30px">
         <div style="font-size:60px;margin-bottom:12px">✅</div>
         <div id="mileageSuccessMsg" style="font-size:18px;font-weight:700;color:#2e7d32;white-space:pre-line"></div>
       </div>
-      <button class="btn btn-primary" onclick="showScreen('screenMenu');loadMenu()">🏠 กลับหน้าหลัก</button>
+      <button class="btn btn-primary" onclick="closeLiff()">✅ เสร็จสิ้น</button>
     </div>
   </div>
 </div>
@@ -307,69 +322,59 @@ body{font-family:'Sarabun',sans-serif;background:#f5f5f5;color:#333;min-height:1
     <div class="sub" id="fuelTruckSub">-</div>
   </div>
   <div class="body">
-    <!-- Step 1: ถ่ายรูปเลขไมล์ -->
-    <div id="fuelStep1">
-      <div class="card" style="text-align:center">
-        <div class="card-title">📷 ถ่ายรูปเลขไมล์ตอนเติม (จำเป็น)</div>
-        <div style="font-size:12px;color:#555;background:#f5f5f5;border-radius:8px;padding:8px 10px;margin:6px 0 12px;text-align:left;line-height:1.7">
-          📌 เคล็ดลับถ่ายให้อ่านง่าย:<br>
-          • ถ่ายให้ <b>เลขไมล์เต็มภาพ</b> ไม่ต้องเห็นทั้ง dashboard<br>
-          • ถ่าย <b>ตรงๆ ไม่เอียง</b><br>
-          • ให้ <b>แสงสว่าง</b> พอ หรือเปิดไฟในรถ
-        </div>
-        <input type="file" id="fuelOcrInput" accept="image/*" capture="environment" style="display:none" onchange="onFuelOcrPhoto(event)">
-        <button class="btn btn-primary" onclick="document.getElementById('fuelOcrInput').click()">📷 ถ่ายรูปเลขไมล์</button>
-      </div>
-    </div>
-
-    <!-- Step 2: ผล OCR + ข้อมูลเติมน้ำมัน -->
-    <div id="fuelStep2" style="display:none">
+    <!-- Truck picker สำหรับ transport -->
+    <div id="fuelTruckPicker" style="display:none">
       <div class="card">
-        <div class="card-title">🔢 เลขไมล์ที่อ่านได้</div>
-        <img id="fuelOcrPreview" class="photo-preview" alt="preview" style="display:none">
-        <div id="fuelOcrLoading" style="display:none;text-align:center;padding:16px">
-          <div class="spinner"></div><div style="margin-top:8px;font-size:13px;color:#888">⏳ กำลังอ่านเลขไมล์...</div>
-        </div>
-        <div id="fuelOcrResult" style="display:none;text-align:center;padding:12px 0">
-          <div style="font-size:13px;color:#888;margin-bottom:4px">เลขไมล์</div>
-          <div id="fuelOcrNumber" style="font-size:32px;font-weight:700;color:#1a73e8"></div>
-          <div style="font-size:12px;color:#aaa;margin-top:2px">กม.</div>
-        </div>
-        <div id="fuelOcrFailed" style="display:none">
-          <div class="alert alert-err" style="margin:8px 0">❌ อ่านเลขไม่ออก กรุณาถ่ายใหม่ให้ชัดขึ้น</div>
-          <button class="btn btn-gray" style="width:100%" onclick="retakeFuelOcrPhoto()">🔄 ถ่ายใหม่</button>
-        </div>
-      </div>
-
-      <div class="card" id="fuelDataCard" style="display:none">
-        <div class="field">
-          <label>จำนวนลิตร</label>
-          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:8px">
-            <button class="btn btn-gray" style="padding:10px;font-size:14px" onclick="setLiters(20)">20 ล.</button>
-            <button class="btn btn-gray" style="padding:10px;font-size:14px" onclick="setLiters(30)">30 ล.</button>
-            <button class="btn btn-gray" style="padding:10px;font-size:14px" onclick="setLiters(40)">40 ล.</button>
-            <button class="btn btn-gray" style="padding:10px;font-size:14px" onclick="setLiters(50)">50 ล.</button>
-          </div>
-          <input type="number" id="fuelLiters" placeholder="หรือพิมพ์เอง" inputmode="decimal" step="0.01" oninput="calcTotal()">
-        </div>
-        <div class="field">
-          <label>ราคาต่อลิตร (บาท)</label>
-          <input type="number" id="fuelPrice" placeholder="เช่น 33.50" inputmode="decimal" step="0.01" oninput="calcTotal()">
-        </div>
-        <div class="field" id="fuelTotalField" style="display:none">
-          <label>รวมทั้งหมด</label>
-          <div style="font-size:24px;font-weight:700;color:#1a73e8" id="fuelTotal">-</div>
-        </div>
-        <div class="field">
-          <label>ชื่อปั๊ม (ถ้ามี)</label>
-          <input type="text" id="fuelStation" placeholder="เช่น ปตท. ถนนพหล">
-        </div>
-        <button class="btn btn-success" onclick="submitFuel()">✅ บันทึกการเติมน้ำมัน</button>
-        <button class="btn btn-gray" style="margin-top:8px" onclick="retakeFuelOcrPhoto()">🔄 ถ่ายเลขไมล์ใหม่</button>
+        <div class="card-title">🚚 เลือกรถที่ขับวันนี้</div>
+        <div id="fuelTruckList" class="truck-list"></div>
       </div>
     </div>
 
-    <button class="btn btn-gray" style="margin-top:8px" onclick="showScreen('screenMenu')">← กลับ</button>
+    <!-- ถ่ายรูปเลขไมล์ -->
+    <div class="card">
+      <div class="card-title">📷 ถ่ายรูปเลขไมล์ตอนเติม (จำเป็น)</div>
+      <div style="font-size:12px;color:#555;background:#f5f5f5;border-radius:8px;padding:8px 10px;margin:6px 0 12px;text-align:left;line-height:1.7">
+        📌 ถ่ายให้เห็น <b>เลขไมล์ชัดเจน</b> ระบบเก็บรูปไว้ตรวจสอบ
+      </div>
+      <img id="fuelPhotoPreview" class="photo-preview" alt="preview" style="display:none;margin-bottom:8px">
+      <input type="file" id="fuelPhotoInput" accept="image/*" capture="environment" style="display:none" onchange="onFuelPhoto(event)">
+      <button class="btn btn-primary" id="fuelPhotoBtn" onclick="document.getElementById('fuelPhotoInput').click()">📷 ถ่ายรูปเลขไมล์</button>
+    </div>
+
+    <!-- กรอกข้อมูล (แสดงหลังถ่ายรูป) -->
+    <div class="card" id="fuelDataCard" style="display:none">
+      <div class="card-title">⌨️ กรอกข้อมูลการเติม</div>
+      <div class="field">
+        <label>เลขไมล์ (กม.) <span style="color:#e53935">*</span></label>
+        <input type="number" id="fuelMileage" placeholder="กรอกตามเลขที่เห็นในรูป" inputmode="numeric" style="font-size:20px;text-align:center;font-weight:700">
+      </div>
+      <div class="field">
+        <label>จำนวนลิตร <span style="color:#e53935">*</span></label>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:8px">
+          <button class="btn btn-gray" style="padding:10px;font-size:14px" onclick="setLiters(20)">20 ล.</button>
+          <button class="btn btn-gray" style="padding:10px;font-size:14px" onclick="setLiters(30)">30 ล.</button>
+          <button class="btn btn-gray" style="padding:10px;font-size:14px" onclick="setLiters(40)">40 ล.</button>
+          <button class="btn btn-gray" style="padding:10px;font-size:14px" onclick="setLiters(50)">50 ล.</button>
+        </div>
+        <input type="number" id="fuelLiters" placeholder="หรือพิมพ์เอง" inputmode="decimal" step="0.01" oninput="calcTotal()">
+      </div>
+      <div class="field">
+        <label>ราคาต่อลิตร (บาท)</label>
+        <input type="number" id="fuelPrice" placeholder="เช่น 33.50" inputmode="decimal" step="0.01" oninput="calcTotal()">
+      </div>
+      <div class="field" id="fuelTotalField" style="display:none">
+        <label>รวมทั้งหมด</label>
+        <div style="font-size:24px;font-weight:700;color:#1a73e8" id="fuelTotal">-</div>
+      </div>
+      <div class="field">
+        <label>ชื่อปั๊ม (ถ้ามี)</label>
+        <input type="text" id="fuelStation" placeholder="เช่น ปตท. ถนนพหล">
+      </div>
+      <button class="btn btn-success" onclick="submitFuel()">✅ บันทึกการเติมน้ำมัน</button>
+      <button class="btn btn-gray" style="margin-top:8px" onclick="retakeFuelPhoto()">🔄 ถ่ายรูปใหม่</button>
+    </div>
+
+    <button class="btn btn-gray" style="margin-top:8px" onclick="closeLiff()">✕ ปิด</button>
     <div id="fuelMsg" style="margin-top:12px;font-size:14px;text-align:center;white-space:pre-line"></div>
   </div>
 </div>
@@ -381,9 +386,17 @@ body{font-family:'Sarabun',sans-serif;background:#f5f5f5;color:#333;min-height:1
     <div class="sub" id="maintTruckSub">-</div>
   </div>
   <div class="body">
+    <!-- Truck picker สำหรับ transport -->
+    <div id="maintTruckPicker" style="display:none">
+      <div class="card">
+        <div class="card-title">🚚 เลือกรถที่ซ่อม</div>
+        <div id="maintTruckList" class="truck-list"></div>
+      </div>
+    </div>
+
     <div class="card">
       <div class="field">
-        <label>ประเภทงาน</label>
+        <label>ประเภทงาน <span style="color:#e53935">*</span></label>
         <select id="maintType" onchange="onMaintTypeChange()">
           <option value="oil_change">🛢 เปลี่ยนน้ำมันเครื่อง</option>
           <option value="tire_rotate">🔄 สลับยาง</option>
@@ -394,8 +407,8 @@ body{font-family:'Sarabun',sans-serif;background:#f5f5f5;color:#333;min-height:1
         </select>
       </div>
       <div class="field">
-        <label>เลขไมล์ตอนซ่อม (กม.)</label>
-        <input type="number" id="maintMileage" placeholder="เช่น 125000" inputmode="numeric">
+        <label>เลขไมล์ตอนซ่อม (กม.) <span style="color:#e53935">*</span></label>
+        <input type="number" id="maintMileage" placeholder="เช่น 125000" inputmode="numeric" style="font-size:20px;text-align:center;font-weight:700">
       </div>
       <div class="field">
         <label>ร้านที่ซ่อม</label>
@@ -425,22 +438,31 @@ body{font-family:'Sarabun',sans-serif;background:#f5f5f5;color:#333;min-height:1
       </div>
     </div>
 
+    <!-- รูปเลขไมล์ (จำเป็น) -->
     <div class="card">
-      <div class="card-title">📷 รูปใบเสร็จ (จำเป็น)</div>
+      <div class="card-title">📷 รูปเลขไมล์ (จำเป็น)</div>
+      <div style="font-size:12px;color:#666;margin-bottom:8px">ถ่ายให้เห็นเลขไมล์ตอนซ่อมเพื่อตรวจสอบ</div>
+      <img id="maintMileagePreview" class="photo-preview" alt="preview">
+      <input type="file" id="maintMileageInput" accept="image/*" capture="environment" style="display:none" onchange="onMaintMileagePhoto(event)">
+      <button class="btn btn-primary" onclick="document.getElementById('maintMileageInput').click()">📷 ถ่ายรูปเลขไมล์</button>
+    </div>
+
+    <!-- รูปใบเสร็จ (ไม่บังคับ) -->
+    <div class="card">
+      <div class="card-title">📷 รูปใบเสร็จ <span style="color:#aaa;font-size:12px;font-weight:400">ถ้ามี</span></div>
       <img id="maintBillPreview" class="photo-preview" alt="preview">
       <input type="file" id="maintBillInput" accept="image/*" capture="environment" style="display:none" onchange="onMaintBillPhoto(event)">
       <button class="btn btn-orange" onclick="document.getElementById('maintBillInput').click()">📷 ถ่ายรูปใบเสร็จ</button>
     </div>
 
     <button class="btn btn-success" onclick="submitMaintenance()">✅ ส่งข้อมูลซ่อมบำรุง</button>
-    <button class="btn btn-gray" style="margin-top:8px" onclick="showScreen('screenMenu')">← กลับ</button>
+    <button class="btn btn-gray" style="margin-top:8px" onclick="closeLiff()">✕ ปิด</button>
     <div id="maintMsg" style="margin-top:12px;font-size:14px;text-align:center;white-space:pre-line"></div>
   </div>
 </div>
 
-<!-- LIFF SDK (เล็ก ~50KB โหลด sync) -->
+<!-- LIFF SDK (เล็ก ~50KB โหลด sync) — ไม่มี OCR แล้ว เลยไม่ต้องโหลด Tesseract -->
 <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-<!-- Tesseract.js (~3MB) โหลดแบบ lazy ตอนผู้ใช้ถ่ายรูปครั้งแรก ไม่ block initial load -->
 
 
 <script>
@@ -456,31 +478,15 @@ const API_BASE = "https://joevecrppgctnemaqgan.supabase.co/functions/v1/liff-api
 let lineUserId      = null;
 let driverInfo      = null;
 let currentType     = null;   // 'morning' | 'evening'
-let croppedBlob     = null;
-let fuelOcrBlob     = null;   // fuel mileage photo blob
-let fuelOcrMileage  = null;   // OCR result for fuel screen
-let maintBillBlob   = null;
+let mileageBlob     = null;   // รูปไมล์ (มอนิ่ง/อิฟนิ่ง)
+let fuelBlob        = null;   // รูปไมล์ตอนเติมน้ำมัน
+let maintMileageBlob = null;  // รูปไมล์ตอนซ่อม (บังคับ)
+let maintBillBlob   = null;   // รูปใบเสร็จ (ไม่บังคับ)
+let licenseBlob     = null;   // รูปใบขับขี่ (ตอนสมัคร)
 let photoTs         = null;
-let ocrMileage    = null;
 let selectedTruckId = null;
 let selectedTirePositions = new Set();
-
-// ════════════════════════════════════════════════════════════
-// TESSERACT LAZY LOADER — โหลด ~3MB ตอนผู้ใช้ถ่ายรูปครั้งแรก
-// ════════════════════════════════════════════════════════════
-let tesseractPromise = null;
-function loadTesseract() {
-  if (tesseractPromise) return tesseractPromise;
-  tesseractPromise = new Promise((resolve, reject) => {
-    if (typeof Tesseract !== "undefined") { resolve(); return; }
-    const s = document.createElement("script");
-    s.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
-    s.onload  = () => resolve();
-    s.onerror = () => reject(new Error("โหลด OCR library ไม่สำเร็จ"));
-    document.head.appendChild(s);
-  });
-  return tesseractPromise;
-}
+let allTrucksCache  = null;   // cache รถทั้งหมดสำหรับ transport picker
 
 // ════════════════════════════════════════════════════════════
 // INIT
@@ -608,6 +614,24 @@ function showScreen(id) {
   if (target) target.classList.add("active");
 }
 
+// ปิด LIFF หลังบันทึกสำเร็จ — ถ้าปิดไม่ได้ (browser) แสดงข้อความแทน
+function closeLiff(successMsg) {
+  try {
+    if (typeof liff !== "undefined" && liff.closeWindow) {
+      liff.closeWindow();
+      return;
+    }
+  } catch (e) { /* fallthrough */ }
+  // Fallback: แสดงหน้าจอเสร็จง่ายๆ ใน browser
+  document.body.innerHTML = `
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:30px;text-align:center;font-family:'Sarabun',sans-serif">
+      <div style="font-size:80px;margin-bottom:20px">✅</div>
+      <div style="font-size:22px;font-weight:700;color:#2e7d32;margin-bottom:8px">เสร็จเรียบร้อย</div>
+      <div style="font-size:15px;color:#666;white-space:pre-line">${successMsg || ""}</div>
+      <div style="font-size:13px;color:#999;margin-top:30px">สามารถปิดหน้านี้ได้</div>
+    </div>`;
+}
+
 function setLoadingMsg(msg, step = "") {
   const m = document.getElementById("loadingMsg");
   const s = document.getElementById("loadingStep");
@@ -731,25 +755,8 @@ async function loadMenu(deepType = null) {
     driverInfo      = data;
     selectedTruckId = data.truck_id;
 
-    document.getElementById("menuDriverName").textContent = data.driver_name || "-";
-    document.getElementById("menuTruckInfo").textContent  =
-      (data.truck_plate || "-") + (data.route_code ? ` (${data.route_code})` : "");
-    document.getElementById("menuLastMileage").textContent =
-      data.last_evening_mileage
-        ? `${fmtNum(data.last_evening_mileage)} กม. (${data.last_evening_date || ""})`
-        : "-";
-    document.getElementById("menuSub").textContent = data.warehouse || "-";
-
-    const sent    = data.today_sent || [];
-    const sentEl  = document.getElementById("menuTodaySent");
-    sentEl.innerHTML = [
-      `<span class="badge ${sent.includes('morning') ? 'badge-sent' : 'badge-warn'}">${sent.includes('morning') ? '✅' : '⏳'} ไมล์เช้า</span>`,
-      `<span class="badge ${sent.includes('evening') ? 'badge-sent' : 'badge-warn'}">${sent.includes('evening') ? '✅' : '⏳'} ไมล์เย็น</span>`,
-    ].join(" ");
-
-    showScreen("screenMenu");
-
     // ── Deep-link routing ──────────────────────────────────────────────────
+    // ไม่แสดงเมนู — คนขับใช้ Rich Menu ในแชทบอทเลือกเมนูแทน
     if (deepType === "morning") {
       goMileage("morning");
     } else if (deepType === "evening") {
@@ -761,12 +768,17 @@ async function loadMenu(deepType = null) {
         goMileage("morning");
       } else if (!sent.includes("evening")) {
         goMileage("evening");
+      } else {
+        // ส่งครบแล้ว — ปิด LIFF
+        closeLiff("✅ วันนี้ส่งไมล์ครบทั้งเช้า-เย็นแล้ว");
       }
-      // ถ้าส่งครบแล้ว — อยู่หน้าหลัก (แสดงว่าส่งครบ)
     } else if (deepType === "fuel") {
       goFuel();
     } else if (deepType === "maintenance") {
       goMaintenance();
+    } else {
+      // ไม่มี deep-link — ปิด LIFF + แจ้งให้ใช้เมนูบอท
+      closeLiff(`สวัสดี ${data.driver_name || ""}\n\nกรุณาเลือกเมนูในแชทบอท\n(ไมล์เช้า/เย็น/น้ำมัน/ซ่อม)`);
     }
   } catch (e) {
     showBlock("⚠️", "โหลดไม่สำเร็จ",
@@ -814,15 +826,41 @@ function renderRegisterScreen(trucks) {
 
 function onRegTypeChange() {
   const t = document.getElementById("regType").value;
-  document.getElementById("routeField").style.display = t === "van" ? "" : "none";
+  document.getElementById("routeField").style.display     = t === "van" ? "" : "none";
+  document.getElementById("regTruckField").style.display  = t === "van" ? "" : "none";
+}
+
+// Format เลขบัตรประชาชนเป็น X-XXXX-XXXXX-XX-X
+function formatIdCard(input) {
+  let v = input.value.replace(/\D/g, "").slice(0, 13);
+  let formatted = "";
+  if (v.length > 0)  formatted += v.slice(0, 1);
+  if (v.length > 1)  formatted += "-" + v.slice(1, 5);
+  if (v.length > 5)  formatted += "-" + v.slice(5, 10);
+  if (v.length > 10) formatted += "-" + v.slice(10, 12);
+  if (v.length > 12) formatted += "-" + v.slice(12, 13);
+  input.value = formatted;
+}
+
+function onLicensePhoto(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  licenseBlob = file;
+  const preview = document.getElementById("regLicensePreview");
+  preview.src = URL.createObjectURL(file);
+  preview.style.display = "block";
 }
 
 async function doRegister() {
-  const name  = document.getElementById("regName").value.trim();
-  const phone = document.getElementById("regPhone").value.trim();
-  const type  = document.getElementById("regType").value;
-  const route = document.getElementById("regRoute").value;
-  const msgEl = document.getElementById("regMsg");
+  const name           = document.getElementById("regName").value.trim();
+  const phone          = document.getElementById("regPhone").value.trim();
+  const idCard         = document.getElementById("regIdCard").value.replace(/\D/g, "");
+  const address        = document.getElementById("regAddress").value.trim();
+  const licenseNo      = document.getElementById("regLicenseNo").value.trim();
+  const licenseExpiry  = document.getElementById("regLicenseExpiry").value;
+  const type           = document.getElementById("regType").value;
+  const route          = document.getElementById("regRoute").value;
+  const msgEl          = document.getElementById("regMsg");
 
   msgEl.style.color = "#e53935";
 
@@ -831,7 +869,12 @@ async function doRegister() {
     msgEl.textContent = "❌ ไม่พบข้อมูล LINE กรุณาปิดแล้วเปิดใหม่";
     return;
   }
-  if (!name) { msgEl.textContent = "❌ กรุณากรอกชื่อ-นามสกุล"; return; }
+  if (!name)  { msgEl.textContent = "❌ กรุณากรอกชื่อ-นามสกุล"; return; }
+  if (!phone) { msgEl.textContent = "❌ กรุณากรอกเบอร์โทร"; return; }
+  if (idCard && idCard.length !== 13) {
+    msgEl.textContent = "❌ เลขบัตรประชาชนต้องเป็น 13 หลัก";
+    return;
+  }
   if (type === "van" && !selectedTruckId) {
     msgEl.textContent = "❌ กรุณาเลือกรถที่ขับก่อน";
     return;
@@ -840,22 +883,36 @@ async function doRegister() {
   msgEl.style.color = "#888";
   msgEl.textContent = "⏳ กำลังลงทะเบียน...";
 
-  const res = await apiFetch("register", {
-    method: "POST",
-    body: JSON.stringify({
-      line_user_id: lineUserId,
-      driver_name:  name,
-      phone:        phone || null,
-      driver_type:  type,
-      route_code:   type === "van" ? (route || null) : null,
-      truck_id:     type === "van" ? selectedTruckId : null,
-    })
-  });
+  // ใช้ multipart เพราะอาจมีรูปใบขับขี่
+  const fd = new FormData();
+  fd.append("line_user_id", lineUserId);
+  fd.append("driver_name",  name);
+  fd.append("phone",        phone);
+  fd.append("driver_type",  type);
+  if (type === "van") {
+    if (route)            fd.append("route_code", route);
+    if (selectedTruckId)  fd.append("truck_id", selectedTruckId);
+  }
+  if (idCard)            fd.append("id_card_number", idCard);
+  if (address)           fd.append("address", address);
+  if (licenseNo)         fd.append("license_number", licenseNo);
+  if (licenseExpiry)     fd.append("license_expiry_date", licenseExpiry);
+  if (licenseBlob)       fd.append("license_image", licenseBlob, "license.jpg");
+
+  let res;
+  try {
+    const r = await fetch(`${API_BASE}/register`, { method: "POST", body: fd });
+    res = await r.json();
+  } catch (e) {
+    msgEl.style.color = "#e53935";
+    msgEl.textContent = "❌ เชื่อมต่อ server ไม่ได้: " + e.message;
+    return;
+  }
 
   if (res?.success) {
     msgEl.style.color = "#2e7d32";
-    msgEl.textContent = "✅ " + (res.message || "ลงทะเบียนสำเร็จ!");
-    setTimeout(() => loadMenu(), 1800);
+    msgEl.textContent = "✅ " + (res.message || "ลงทะเบียนสำเร็จ!") + "\n\nกำลังปิดหน้า...";
+    setTimeout(() => closeLiff(res.message || "ลงทะเบียนสำเร็จ!"), 1500);
   } else {
     msgEl.style.color = "#e53935";
     msgEl.textContent = "❌ " + (res?.error || "เกิดข้อผิดพลาด ลองใหม่อีกครั้ง");
@@ -863,195 +920,36 @@ async function doRegister() {
 }
 
 // ════════════════════════════════════════════════════════════
-// MILEAGE FLOW
+// TRUCK PICKER (สำหรับ transport drivers)
 // ════════════════════════════════════════════════════════════
-function goMileage(type) {
-  currentType     = type;
-  croppedBlob     = null;
-  ocrMileage      = null;
-  selectedTruckId = driverInfo?.truck_id || null;
+async function showTruckPickerForScreen(screen) {
+  // screen: "mileage" | "fuel" | "maintenance"
+  const containerId = screen === "mileage" ? "mileageTruckPicker"
+                    : screen === "fuel"    ? "fuelTruckPicker"
+                    : "maintTruckPicker";
+  const listId      = screen === "mileage" ? "mileageTruckList"
+                    : screen === "fuel"    ? "fuelTruckList"
+                    : "maintTruckList";
 
-  document.getElementById("mileageTitle").textContent    = type === "morning" ? "🌅 ไมล์เช้า" : "🌙 ไมล์เย็น";
-  document.getElementById("mileageTruckSub").textContent =
-    (driverInfo?.truck_plate || "-") + (driverInfo?.route_code ? ` · ${driverInfo.route_code}` : "");
+  document.getElementById(containerId).style.display = "";
+  const listEl = document.getElementById(listId);
+  listEl.innerHTML = `<div class="loader" style="padding:12px"><div class="spinner"></div><div>กำลังโหลดรายการรถ...</div></div>`;
 
-  ["mStep1","mStep2","mStep3"].forEach((id, i) => {
-    document.getElementById(id).className = "step" + (i === 0 ? " active" : "");
-  });
-  ["mileageStep1","mileagePreview"].forEach(id => document.getElementById(id).style.display = "");
-  ["mileageStep2","mileageStep3"].forEach(id => document.getElementById(id).style.display = "none");
-  document.getElementById("mileagePreview").style.display = "none";
-  document.getElementById("mileageInput").value = "";
-  showScreen("screenMileage");
-}
-
-async function onMileagePhoto(event) {
-  const file = event.target.files[0];
-  if (!file) return;
-
-  photoTs = nowBKK();
-
-  const preview = document.getElementById("mileagePreview");
-  preview.src   = URL.createObjectURL(file);
-  preview.style.display = "block";
-
-  document.getElementById("mileageStep1").style.display = "none";
-  document.getElementById("mileageStep2").style.display = "";
-  document.getElementById("ocrLoading").style.display   = "";
-  document.getElementById("ocrResult").style.display    = "none";
-  document.getElementById("ocrFailed").style.display    = "none";
-  document.getElementById("truckMatchSection").style.display = "none";
-  document.getElementById("mStep1").className = "step done";
-  document.getElementById("mStep2").className = "step active";
-
-  // preview 2 (top of step2)
-  document.getElementById("mileagePreview2").src = URL.createObjectURL(file);
-
-  croppedBlob = await cropAndOCR(file);
-}
-
-// ════════════════════════════════════════════════════════════
-// OCR ENGINE — ใช้ร่วมกันทั้ง mileage screen และ fuel screen
-// ════════════════════════════════════════════════════════════
-
-// Preprocess canvas: Grayscale + Contrast boost
-function applyContrastGray(ctx, w, h) {
-  const imageData = ctx.getImageData(0, 0, w, h);
-  const d = imageData.data;
-  for (let i = 0; i < d.length; i += 4) {
-    // Luminance grayscale
-    const gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
-    // Strong contrast stretch (factor 2.8)
-    const val = Math.min(255, Math.max(0, (gray - 128) * 2.8 + 128));
-    d[i] = d[i + 1] = d[i + 2] = val;
-    d[i + 3] = 255;
-  }
-  ctx.putImageData(imageData, 0, 0);
-}
-
-// ลอง OCR บน canvas ที่ crop แล้ว — คืน number หรือ null
-async function ocrCanvas(canvas) {
-  await loadTesseract();
-  const blob = await new Promise(r => canvas.toBlob(r, "image/png")); // PNG ดีกว่า JPEG สำหรับ OCR
-  const result = await Tesseract.recognize(blob, "eng", {
-    tessedit_char_whitelist: "0123456789 ",
-    tessedit_pageseg_mode: "7",        // single text line
-    tessedit_ocr_engine_mode: "1",     // LSTM only (แม่นกว่า)
-    preserve_interword_spaces: "0",
-  });
-  const text    = result.data.text.replace(/[^0-9]/g, " ").trim();
-  const numbers = text.split(/\s+/).filter(n => n.length >= 5 && n.length <= 7);
-  return numbers.length > 0 ? parseInt(numbers[0]) : null;
-}
-
-// Multi-crop + preprocess + OCR — ลอง 3 ตำแหน่ง อัตโนมัติ
-// คืน { blob: Blob (cropped ตำแหน่งแรก), mileage: number|null }
-async function runOCR(file, canvasId) {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.onload = async () => {
-      const w = img.naturalWidth, h = img.naturalHeight;
-      const canvas = document.getElementById(canvasId);
-      const SCALE  = 3;  // ขยาย 3x ก่อน OCR — ตัวเลขใหญ่ขึ้น แม่นขึ้น
-
-      // ตำแหน่ง crop ที่จะลอง (yRatio, hRatio)
-      const crops = [
-        { y: 0.35, h: 0.36 },   // กลาง — ตำแหน่งที่พบบ่อยที่สุด
-        { y: 0.18, h: 0.38 },   // บน — ถ้าถ่ายเห็นมิเตอร์ด้านบน
-        { y: 0.52, h: 0.36 },   // ล่าง — ถ้าถ่ายมุมต่ำ
-        { y: 0.05, h: 0.90 },   // เต็มภาพ — fallback สุดท้าย
-      ];
-
-      let foundMileage = null;
-      let displayBlob  = null;
-
-      for (let ci = 0; ci < crops.length; ci++) {
-        const crop = crops[ci];
-        const cx   = Math.round(w * 0.03);
-        const cy   = Math.round(h * crop.y);
-        const cw   = Math.round(w * 0.94);
-        const ch   = Math.round(h * crop.h);
-
-        canvas.width  = cw * SCALE;
-        canvas.height = ch * SCALE;
-        const ctx = canvas.getContext("2d");
-        ctx.drawImage(img, cx, cy, cw, ch, 0, 0, cw * SCALE, ch * SCALE);
-
-        // Preprocess: grayscale + contrast
-        applyContrastGray(ctx, canvas.width, canvas.height);
-
-        // เก็บ blob ของ crop แรก ไว้แสดง preview
-        if (ci === 0) {
-          displayBlob = await new Promise(r => canvas.toBlob(r, "image/jpeg", 0.85));
-        }
-
-        try {
-          const num = await ocrCanvas(canvas);
-          if (num) { foundMileage = num; break; }
-        } catch { /* ลอง crop ถัดไป */ }
-      }
-
-      resolve({ blob: displayBlob, mileage: foundMileage });
-    };
-    img.src = URL.createObjectURL(file);
-  });
-}
-
-// ── Mileage screen OCR ──────────────────────────────────────
-async function cropAndOCR(file) {
-  const { blob, mileage } = await runOCR(file, "mileageCanvas");
-  ocrMileage = mileage;
-
-  document.getElementById("ocrLoading").style.display = "none";
-
-  if (ocrMileage) {
-    document.getElementById("ocrNumber").textContent   = ocrMileage.toLocaleString("th-TH");
-    document.getElementById("ocrResult").style.display = "";
-    document.getElementById("ocrFailed").style.display = "none";
-    if (!driverInfo?.truck_id) await loadSmartMatch();
-  } else {
-    document.getElementById("ocrFailed").style.display = "";
+  if (!allTrucksCache) {
+    const data = await apiFetch(`smart-match?line_user_id=${lineUserId}&mileage=0`).catch(() => null);
+    if (!data || data.error) {
+      listEl.innerHTML = `<div class="alert alert-err">โหลดรายการรถไม่สำเร็จ</div>`;
+      return;
+    }
+    allTrucksCache = data.trucks || [];
   }
 
-  return blob;
-}
-
-function retakeMileagePhoto() {
-  ocrMileage  = null;
-  croppedBlob = null;
-  document.getElementById("mileageStep2").style.display  = "none";
-  document.getElementById("mileageStep1").style.display  = "";
-  document.getElementById("ocrFailed").style.display     = "none";
-  document.getElementById("ocrResult").style.display     = "none";
-  document.getElementById("mileagePreview").style.display = "none";
-  document.getElementById("mStep1").className = "step active";
-  document.getElementById("mStep2").className = "step";
-}
-
-async function loadSmartMatch() {
-  document.getElementById("truckMatchSection").style.display = "";
-  const matchAlert = document.getElementById("matchedTruckAlert");
-  const listEl     = document.getElementById("matchTruckList");
-  matchAlert.innerHTML = `<div class="loader" style="padding:12px"><div class="spinner"></div><div>กำลังหารถ...</div></div>`;
   listEl.innerHTML = "";
-
-  const data = await apiFetch(`smart-match?line_user_id=${lineUserId}&mileage=${ocrMileage || 0}`).catch(() => null);
-  if (!data) { matchAlert.innerHTML = `<div class="alert alert-err">ไม่สามารถโหลดรายการรถได้</div>`; return; }
-
-  if (data.matched) {
-    selectedTruckId = data.matched.id;
-    matchAlert.innerHTML = `<div class="alert alert-ok">🎯 จับคู่อัตโนมัติ: <b>${data.matched.plate_number}</b><br><small>ต่างจากไมล์ล่าสุด ${fmtNum(data.matched.distance)} กม. ถ้าไม่ใช่ เลือกจากรายการด้านล่าง</small></div>`;
-  } else {
-    matchAlert.innerHTML = `<div class="alert alert-warn">⚠️ ไม่พบรถที่ตรงกันอัตโนมัติ กรุณาเลือกเอง</div>`;
-  }
-
-  (data.trucks || []).forEach(t => {
+  selectedTruckId = null;
+  allTrucksCache.forEach(t => {
     const el = document.createElement("div");
-    el.className = "truck-chip" + (t.id === selectedTruckId ? " selected" : "");
-    el.innerHTML = `
-      <span class="plate">${t.plate_number}</span>
-      ${data.matched?.id === t.id ? '<span class="match-badge">🎯 แนะนำ</span>' : ""}
-      <div class="detail">${t.warehouse} · ไมล์ล่าสุด: ${fmtNum(t.last_mileage)} กม. · ต่างกัน ${fmtNum(t.distance)} กม.</div>`;
+    el.className = "truck-chip";
+    el.innerHTML = `<span class="plate">${t.plate_number}</span><div class="detail">${t.warehouse || ""} · ${t.truck_type || "4wheel"}${t.last_mileage ? ` · ไมล์ล่าสุด ${fmtNum(t.last_mileage)} กม.` : ""}</div>`;
     el.onclick = () => {
       listEl.querySelectorAll(".truck-chip").forEach(c => c.classList.remove("selected"));
       el.classList.add("selected");
@@ -1061,125 +959,186 @@ async function loadSmartMatch() {
   });
 }
 
-async function confirmMileage() {
-  const mileage = ocrMileage;
+// ════════════════════════════════════════════════════════════
+// MILEAGE FLOW (ลบ OCR — ถ่ายรูป + กรอกเลขเอง)
+// ════════════════════════════════════════════════════════════
+function goMileage(type) {
+  currentType     = type;
+  mileageBlob     = null;
+  selectedTruckId = driverInfo?.truck_id || null;
 
-  if (!mileage)        { alert("ระบบยังอ่านเลขไม่ได้ กรุณาถ่ายใหม่"); return; }
-  if (!selectedTruckId){ alert("กรุณาเลือกรถก่อน"); return; }
-  if (!croppedBlob)    { alert("กรุณาถ่ายรูปก่อน"); return; }
+  document.getElementById("mileageTitle").textContent    = type === "morning" ? "🌅 ไมล์เช้า" : "🌙 ไมล์เย็น";
+  document.getElementById("mileageTruckSub").textContent =
+    (driverInfo?.truck_plate || "-") + (driverInfo?.route_code ? ` · ${driverInfo.route_code}` : "");
+
+  // Reset steps
+  document.getElementById("mStep1").className = "step active";
+  document.getElementById("mStep2").className = "step";
+  document.getElementById("mileageStep1").style.display = "";
+  document.getElementById("mileageStep2_done").style.display = "none";
+
+  // Reset photo + entry
+  document.getElementById("mileageInput").value = "";
+  document.getElementById("mileagePreview").style.display = "none";
+  document.getElementById("mileageEntryCard").style.display = "none";
+  document.getElementById("mileagePhotoBtn").textContent = "📷 ถ่ายรูปเลขไมล์";
+  document.getElementById("mileageInputNum").value = "";
+
+  // Transport: แสดง truck picker
+  if (driverInfo?.driver_type === "transport") {
+    showTruckPickerForScreen("mileage");
+  } else {
+    document.getElementById("mileageTruckPicker").style.display = "none";
+  }
+  showScreen("screenMileage");
+}
+
+async function onMileagePhoto(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  photoTs = nowBKK();
+  mileageBlob = file;
+
+  const preview = document.getElementById("mileagePreview");
+  preview.src   = URL.createObjectURL(file);
+  preview.style.display = "block";
+
+  // เปลี่ยน label ปุ่ม + เผยกล่องกรอกเลข
+  document.getElementById("mileagePhotoBtn").textContent = "🔄 ถ่ายใหม่";
+  document.getElementById("mileageEntryCard").style.display = "";
+
+  // แสดงไมล์ล่าสุดเพื่อ reference
+  const info = document.getElementById("mileageLastInfo");
+  if (driverInfo?.last_evening_mileage) {
+    info.innerHTML = `ℹ️ ไมล์ล่าสุด: <b>${fmtNum(driverInfo.last_evening_mileage)}</b> กม. (${driverInfo.last_evening_date || ""})`;
+  } else {
+    info.textContent = "";
+  }
+
+  // Focus input ให้กรอกเลย
+  setTimeout(() => document.getElementById("mileageInputNum").focus(), 100);
+}
+
+function retakeMileagePhoto() {
+  mileageBlob = null;
+  document.getElementById("mileageInput").value = "";
+  document.getElementById("mileagePreview").style.display = "none";
+  document.getElementById("mileageEntryCard").style.display = "none";
+  document.getElementById("mileagePhotoBtn").textContent = "📷 ถ่ายรูปเลขไมล์";
+  document.getElementById("mileageInputNum").value = "";
+}
+
+async function confirmMileage() {
+  const mileageVal = parseInt(document.getElementById("mileageInputNum").value);
+
+  if (!mileageVal || mileageVal < 1) {
+    alert("กรุณากรอกเลขไมล์");
+    document.getElementById("mileageInputNum").focus();
+    return;
+  }
+  if (!selectedTruckId) {
+    alert("กรุณาเลือกรถก่อน");
+    return;
+  }
+  if (!mileageBlob) {
+    alert("กรุณาถ่ายรูปเลขไมล์ก่อน");
+    return;
+  }
+
+  // เตือนถ้าไมล์ลดลงจากเดิม (น่าจะกรอกผิด)
+  if (driverInfo?.last_evening_mileage && mileageVal < driverInfo.last_evening_mileage) {
+    if (!confirm(`⚠️ เลขไมล์ที่กรอก (${fmtNum(mileageVal)}) น้อยกว่าไมล์ล่าสุด (${fmtNum(driverInfo.last_evening_mileage)})\n\nกรอกถูกต้องไหม?`)) {
+      return;
+    }
+  }
 
   const pos = await getGPS().catch(() => null);
   const fd  = new FormData();
   fd.append("line_user_id",    lineUserId);
   fd.append("log_type",        currentType);
-  fd.append("mileage",         mileage);
+  fd.append("mileage",         mileageVal);
   fd.append("photo_timestamp", photoTs);
   fd.append("truck_id",        selectedTruckId);
-  fd.append("image",           croppedBlob, "mileage.jpg");
+  fd.append("image",           mileageBlob, "mileage.jpg");
   if (pos) {
     fd.append("latitude",  pos.coords.latitude);
     fd.append("longitude", pos.coords.longitude);
     fd.append("accuracy",  pos.coords.accuracy);
   }
 
+  const btnEntry = document.querySelector("#mileageEntryCard .btn-success");
+  if (btnEntry) { btnEntry.disabled = true; btnEntry.textContent = "⏳ กำลังส่ง..."; }
+
   const res = await fetch(`${API_BASE}/submit-mileage`, { method: "POST", body: fd })
     .then(r => r.json()).catch(e => ({ error: e.message }));
 
+  if (btnEntry) { btnEntry.disabled = false; btnEntry.textContent = "✅ บันทึก"; }
+
   if (res.success) {
     document.getElementById("mileageSuccessMsg").textContent = res.message;
-    document.getElementById("mileageStep2").style.display = "none";
-    document.getElementById("mileageStep3").style.display = "";
+    document.getElementById("mileageStep1").style.display = "none";
+    document.getElementById("mileageStep2_done").style.display = "";
+    document.getElementById("mStep1").className = "step done";
     document.getElementById("mStep2").className = "step done";
-    document.getElementById("mStep3").className = "step done";
+    // ปิด LIFF อัตโนมัติหลัง 1.5 วินาที
+    setTimeout(() => closeLiff(res.message), 1500);
   } else {
     alert(res.error || "เกิดข้อผิดพลาด กรุณาลองใหม่");
   }
 }
 
-function goBack(from) {
-  if (from === "mileage") {
-    document.getElementById("mileageStep2").style.display = "none";
-    document.getElementById("mileageStep1").style.display = "";
-    document.getElementById("mStep1").className = "step active";
-    document.getElementById("mStep2").className = "step";
-    document.getElementById("mileageInput").value = "";
-    document.getElementById("mileagePreview").style.display = "none";
-    croppedBlob = null; ocrMileage = null;
-  }
-}
-
 // ════════════════════════════════════════════════════════════
-// FUEL FLOW
+// FUEL FLOW (ลบ OCR — ถ่ายรูป + กรอกเลขเอง)
 // ════════════════════════════════════════════════════════════
 function goFuel() {
-  fuelOcrBlob    = null;
-  fuelOcrMileage = null;
+  fuelBlob = null;
+  selectedTruckId = driverInfo?.truck_id || null;
   document.getElementById("fuelTruckSub").textContent =
     (driverInfo?.truck_plate || "-") + (driverInfo?.route_code ? ` · ${driverInfo.route_code}` : "");
-  // Reset steps
-  document.getElementById("fuelStep1").style.display = "";
-  document.getElementById("fuelStep2").style.display = "none";
-  document.getElementById("fuelOcrInput").value = "";
-  document.getElementById("fuelOcrPreview").style.display = "none";
-  document.getElementById("fuelOcrLoading").style.display = "none";
-  document.getElementById("fuelOcrResult").style.display  = "none";
-  document.getElementById("fuelOcrFailed").style.display  = "none";
-  document.getElementById("fuelDataCard").style.display   = "none";
-  document.getElementById("fuelMsg").textContent = "";
+
+  // Reset UI
+  document.getElementById("fuelPhotoInput").value = "";
+  document.getElementById("fuelPhotoPreview").style.display = "none";
+  document.getElementById("fuelDataCard").style.display = "none";
+  document.getElementById("fuelPhotoBtn").textContent = "📷 ถ่ายรูปเลขไมล์";
+  document.getElementById("fuelMileage").value = "";
+  document.getElementById("fuelLiters").value = "";
+  document.getElementById("fuelPrice").value = "";
+  document.getElementById("fuelStation").value = "";
   document.getElementById("fuelTotalField").style.display = "none";
+  document.getElementById("fuelMsg").textContent = "";
+
+  // Transport: แสดง truck picker
+  if (driverInfo?.driver_type === "transport") {
+    showTruckPickerForScreen("fuel");
+  } else {
+    document.getElementById("fuelTruckPicker").style.display = "none";
+  }
   showScreen("screenFuel");
 }
 
-async function onFuelOcrPhoto(event) {
+function onFuelPhoto(event) {
   const file = event.target.files[0];
   if (!file) return;
   photoTs = nowBKK();
+  fuelBlob = file;
 
-  // Show step 2, show preview + loading
-  document.getElementById("fuelStep1").style.display  = "none";
-  document.getElementById("fuelStep2").style.display  = "";
-  document.getElementById("fuelOcrResult").style.display  = "none";
-  document.getElementById("fuelOcrFailed").style.display  = "none";
-  document.getElementById("fuelDataCard").style.display   = "none";
-  document.getElementById("fuelOcrLoading").style.display = "";
-
-  const prev = document.getElementById("fuelOcrPreview");
+  const prev = document.getElementById("fuelPhotoPreview");
   prev.src   = URL.createObjectURL(file);
   prev.style.display = "block";
 
-  // Run OCR (reuse same crop logic as mileage)
-  fuelOcrBlob    = await cropAndOCRFuel(file);
-  // fuelOcrMileage ถูก set ใน cropAndOCRFuel แล้ว
-
-  document.getElementById("fuelOcrLoading").style.display = "none";
-
-  if (fuelOcrMileage) {
-    document.getElementById("fuelOcrNumber").textContent = fuelOcrMileage.toLocaleString("th-TH");
-    document.getElementById("fuelOcrResult").style.display = "";
-    document.getElementById("fuelDataCard").style.display  = "";
-  } else {
-    document.getElementById("fuelOcrFailed").style.display = "";
-  }
+  document.getElementById("fuelPhotoBtn").textContent = "🔄 ถ่ายใหม่";
+  document.getElementById("fuelDataCard").style.display = "";
+  setTimeout(() => document.getElementById("fuelMileage").focus(), 100);
 }
 
-// ── Fuel screen OCR — ใช้ engine เดียวกับ mileage ──────────
-async function cropAndOCRFuel(file) {
-  const { blob, mileage } = await runOCR(file, "fuelOcrCanvas");
-  fuelOcrMileage = mileage;
-  return blob;
-}
-
-function retakeFuelOcrPhoto() {
-  fuelOcrBlob    = null;
-  fuelOcrMileage = null;
-  document.getElementById("fuelStep1").style.display  = "";
-  document.getElementById("fuelStep2").style.display  = "none";
-  document.getElementById("fuelOcrInput").value       = "";
-  document.getElementById("fuelOcrPreview").style.display = "none";
-  document.getElementById("fuelOcrLoading").style.display = "none";
-  document.getElementById("fuelOcrResult").style.display  = "none";
-  document.getElementById("fuelOcrFailed").style.display  = "none";
-  document.getElementById("fuelDataCard").style.display   = "none";
+function retakeFuelPhoto() {
+  fuelBlob = null;
+  document.getElementById("fuelPhotoInput").value = "";
+  document.getElementById("fuelPhotoPreview").style.display = "none";
+  document.getElementById("fuelDataCard").style.display = "none";
+  document.getElementById("fuelPhotoBtn").textContent = "📷 ถ่ายรูปเลขไมล์";
 }
 
 function setLiters(n) {
@@ -1200,12 +1159,16 @@ function calcTotal() {
 }
 
 async function submitFuel() {
-  if (!fuelOcrBlob || !fuelOcrMileage) { alert("กรุณาถ่ายรูปเลขไมล์ก่อน"); return; }
-  const liters = parseFloat(document.getElementById("fuelLiters").value) || null;
-  if (!liters)  { alert("กรุณาระบุจำนวนลิตร"); return; }
+  if (!fuelBlob) { alert("กรุณาถ่ายรูปเลขไมล์ก่อน"); return; }
 
-  const truckId = driverInfo?.truck_id || selectedTruckId;
-  if (!truckId) { alert("ไม่พบรถ"); return; }
+  const mileage = parseInt(document.getElementById("fuelMileage").value);
+  if (!mileage) { alert("กรุณากรอกเลขไมล์"); document.getElementById("fuelMileage").focus(); return; }
+
+  const liters = parseFloat(document.getElementById("fuelLiters").value) || null;
+  if (!liters) { alert("กรุณาระบุจำนวนลิตร"); return; }
+
+  const truckId = selectedTruckId || driverInfo?.truck_id;
+  if (!truckId) { alert("กรุณาเลือกรถก่อน"); return; }
 
   const price   = parseFloat(document.getElementById("fuelPrice").value) || null;
   const station = document.getElementById("fuelStation").value.trim() || null;
@@ -1214,13 +1177,10 @@ async function submitFuel() {
   const fd = new FormData();
   fd.append("line_user_id",    lineUserId);
   fd.append("truck_id",        truckId);
-  // ใช้ photoTs เดิม (เวลาที่ถ่ายรูปจริงๆ) ไม่ใช่เวลาตอนกดส่ง
-  // เพราะ backend ตรวจว่ารูปสดไม่เกิน 10 นาที — ส่งเวลาถ่ายจริง
-  if (!photoTs) photoTs = nowBKK();
-  fd.append("photo_timestamp", photoTs);
-  fd.append("image",           fuelOcrBlob, "fuel_mileage.jpg");
+  fd.append("photo_timestamp", photoTs || nowBKK());
+  fd.append("image",           fuelBlob, "fuel_mileage.jpg");
   fd.append("liters",          liters);
-  fd.append("mileage",         fuelOcrMileage);
+  fd.append("mileage",         mileage);
   if (price)   fd.append("price_per_liter", price);
   if (station) fd.append("station_name", station);
   if (pos) {
@@ -1239,7 +1199,7 @@ async function submitFuel() {
   if (res.success) {
     msgEl.style.color = "#2e7d32";
     msgEl.textContent = res.message;
-    setTimeout(() => { showScreen("screenMenu"); loadMenu(); }, 2500);
+    setTimeout(() => closeLiff(res.message), 1500);
   } else {
     msgEl.style.color = "#e53935";
     msgEl.textContent = res.error || "เกิดข้อผิดพลาด";
@@ -1269,15 +1229,41 @@ const TIRE_POSITIONS = {
 };
 
 function goMaintenance() {
-  maintBillBlob = null;
+  maintBillBlob       = null;
+  maintMileageBlob    = null;
   selectedTirePositions = new Set();
+  selectedTruckId     = driverInfo?.truck_id || null;
   document.getElementById("maintTruckSub").textContent =
     (driverInfo?.truck_plate || "-") + (driverInfo?.route_code ? ` · ${driverInfo.route_code}` : "");
   document.getElementById("maintBillPreview").style.display = "none";
   document.getElementById("maintBillInput").value = "";
+  document.getElementById("maintMileagePreview").style.display = "none";
+  document.getElementById("maintMileageInput").value = "";
+  document.getElementById("maintMileage").value = "";
+  document.getElementById("maintShop").value = "";
+  document.getElementById("maintCost").value = "";
+  document.getElementById("maintNextMile").value = "";
+  document.getElementById("maintNotes").value = "";
   document.getElementById("maintMsg").textContent = "";
+
+  // Transport: แสดง truck picker
+  if (driverInfo?.driver_type === "transport") {
+    showTruckPickerForScreen("maintenance");
+  } else {
+    document.getElementById("maintTruckPicker").style.display = "none";
+  }
+
   onMaintTypeChange();
   showScreen("screenMaintenance");
+}
+
+function onMaintMileagePhoto(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  maintMileageBlob = file;
+  const el = document.getElementById("maintMileagePreview");
+  el.src = URL.createObjectURL(file);
+  el.style.display = "block";
 }
 
 const TIRE_ROTATE_INTERVAL = 10000; // กม. ระยะสลับยาง
@@ -1376,13 +1362,23 @@ function onMaintBillPhoto(event) {
 }
 
 async function submitMaintenance() {
-  if (!maintBillBlob) { alert("กรุณาถ่ายรูปใบเสร็จก่อน"); return; }
+  // ── Validate ────────────────────────────────
+  if (!maintMileageBlob) {
+    alert("กรุณาถ่ายรูปเลขไมล์ก่อน");
+    return;
+  }
 
-  const truckId = driverInfo?.truck_id || selectedTruckId;
-  if (!truckId) { alert("ไม่พบรถ"); return; }
+  const mile = parseInt(document.getElementById("maintMileage").value);
+  if (!mile) {
+    alert("กรุณากรอกเลขไมล์ตอนซ่อม");
+    document.getElementById("maintMileage").focus();
+    return;
+  }
+
+  const truckId = selectedTruckId || driverInfo?.truck_id;
+  if (!truckId) { alert("กรุณาเลือกรถก่อน"); return; }
 
   const type     = document.getElementById("maintType").value;
-  const mile     = parseInt(document.getElementById("maintMileage").value) || null;
   const shop     = document.getElementById("maintShop").value.trim() || null;
   const cost     = parseFloat(document.getElementById("maintCost").value) || null;
   const nextMile = parseInt(document.getElementById("maintNextMile").value) || null;
@@ -1398,11 +1394,12 @@ async function submitMaintenance() {
   const pos      = await getGPS().catch(() => null);
 
   const fd = new FormData();
-  fd.append("line_user_id",     lineUserId);
-  fd.append("truck_id",         truckId);
-  fd.append("maintenance_type", type);
-  fd.append("bill_image",       maintBillBlob, "bill.jpg");
-  if (mile)     fd.append("mileage_at_service", mile);
+  fd.append("line_user_id",       lineUserId);
+  fd.append("truck_id",           truckId);
+  fd.append("maintenance_type",   type);
+  fd.append("mileage_at_service", mile);
+  fd.append("mileage_image",      maintMileageBlob, "mileage.jpg");
+  if (maintBillBlob) fd.append("bill_image", maintBillBlob, "bill.jpg");
   if (shop)     fd.append("shop_name", shop);
   if (cost)     fd.append("cost", cost);
   if (nextMile) fd.append("next_service_mileage", nextMile);
@@ -1425,7 +1422,7 @@ async function submitMaintenance() {
   if (res.success) {
     msgEl.style.color = "#2e7d32";
     msgEl.textContent = res.message;
-    setTimeout(() => { showScreen("screenMenu"); loadMenu(); }, 2500);
+    setTimeout(() => closeLiff(res.message), 1500);
   } else {
     msgEl.style.color = "#e53935";
     msgEl.textContent = res.error || "เกิดข้อผิดพลาด";
