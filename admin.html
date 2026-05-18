@@ -256,8 +256,28 @@ tr:hover td{background:#fafafa}
 
 <!-- ═══════════════════════════════════ TRUCKS ═══════════════════════════════════ -->
 <div id="sec-trucks" class="section">
-  <div style="margin-bottom:14px;text-align:right">
-    <button class="btn btn-primary" onclick="openAddTruckModal()">+ เพิ่มรถ</button>
+  <div style="margin-bottom:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <div class="form-group" style="flex:0 0 200px;margin:0">
+      <label style="font-size:13px;color:#666">โกดัง</label>
+      <select id="truckWarehouseFilter" onchange="loadTrucks()">
+        <option value="">ทั้งหมด</option>
+        <option value="ชัยนาท">ชัยนาท</option>
+        <option value="ลพบุรี">ลพบุรี</option>
+      </select>
+    </div>
+    <div class="form-group" style="flex:0 0 180px;margin:0">
+      <label style="font-size:13px;color:#666">ประเภทรถ</label>
+      <select id="truckTypeFilter" onchange="loadTrucks()">
+        <option value="">ทั้งหมด</option>
+        <option value="4wheel">4 ล้อ</option>
+        <option value="6wheel">6 ล้อ</option>
+        <option value="10wheel">10 ล้อ</option>
+        <option value="motorcycle">มอเตอร์ไซค์</option>
+      </select>
+    </div>
+    <div style="flex:1;text-align:right">
+      <button class="btn btn-primary" style="width:auto;padding:10px 20px" onclick="openAddTruckModal()">+ เพิ่มรถ</button>
+    </div>
   </div>
   <div id="trucksContent"><div class="loader"><div class="spinner"></div>กำลังโหลด...</div></div>
 </div>
@@ -1111,25 +1131,58 @@ async function loadTrucks() {
   el.innerHTML = `<div class="loader"><div class="spinner"></div>กำลังโหลด...</div>`;
 
   const data = await api("trucks");
-  if (!data) return;
+  if (!data || data.error) {
+    el.innerHTML = `<div class="alert alert-err">${data?.error || "โหลดไม่สำเร็จ"}</div>`;
+    return;
+  }
   allTrucks = data;
 
-  let html = `<div class="card"><h3>รายการรถ (${data.length} คัน)</h3><div class="tbl-wrap"><table>
+  // ── Apply filters ────────────────────────────────────────────
+  const whFilter   = document.getElementById("truckWarehouseFilter")?.value || "";
+  const typeFilter = document.getElementById("truckTypeFilter")?.value || "";
+
+  const filtered = data.filter(t => {
+    if (whFilter   && t.warehouse !== whFilter) return false;
+    if (typeFilter && (t.truck_type || "4wheel") !== typeFilter) return false;
+    return true;
+  });
+
+  // ── Summary by warehouse ────────────────────────────────────
+  const byWh = {};
+  for (const t of data) {
+    byWh[t.warehouse] = (byWh[t.warehouse] || 0) + 1;
+  }
+  const summary = Object.entries(byWh)
+    .map(([w, n]) => `${w}: <b>${n}</b>`)
+    .join(" · ") || "-";
+
+  const filterLabel = (whFilter || typeFilter)
+    ? ` <span style="color:#888;font-weight:400;font-size:14px">(แสดง ${filtered.length} / ${data.length} คัน)</span>`
+    : ` <span style="color:#888;font-weight:400;font-size:14px">(${data.length} คัน)</span>`;
+
+  let html = `<div class="card">
+    <h3>รายการรถ${filterLabel}</h3>
+    <div style="font-size:13px;color:#666;margin-bottom:10px">📊 ${summary}</div>
+    <div class="tbl-wrap"><table>
     <tr><th>ทะเบียน</th><th>โกดัง</th><th>ประเภท</th><th>ยี่ห้อ/รุ่น</th><th>คนขับ</th><th>ภาษี</th><th>ประกัน</th><th>พรบ.</th><th>จัดการ</th></tr>`;
 
-  for (const t of data) {
-    const driver = (t.drivers || []).find(d => d.is_active);
-    html += `<tr>
-      <td><b>${t.plate_number}</b></td>
-      <td>${t.warehouse}</td>
-      <td>${t.truck_type || "4wheel"}</td>
-      <td>${t.brand || ""} ${t.model || ""}</td>
-      <td>${driver?.name || "<span style='color:#aaa'>-</span>"}</td>
-      <td>${daysLeftLabel(t.tax_due_date)}</td>
-      <td>${daysLeftLabel(t.insurance_due_date)}</td>
-      <td>${daysLeftLabel(t.compulsory_insurance_due_date)}</td>
-      <td><button class="btn btn-sm btn-gray" onclick="openEditTruck(${t.id})">✏️ แก้ไข</button></td>
-    </tr>`;
+  if (filtered.length === 0) {
+    html += `<tr><td colspan="9" style="text-align:center;color:#888;padding:20px">ไม่มีรถที่ตรงเงื่อนไข</td></tr>`;
+  } else {
+    for (const t of filtered) {
+      const driver = (t.drivers || []).find(d => d.is_active);
+      html += `<tr>
+        <td><b>${t.plate_number}</b></td>
+        <td>${t.warehouse}</td>
+        <td>${t.truck_type || "4wheel"}</td>
+        <td>${t.brand || ""} ${t.model || ""}</td>
+        <td>${driver?.name || "<span style='color:#aaa'>-</span>"}</td>
+        <td>${daysLeftLabel(t.tax_due_date)}</td>
+        <td>${daysLeftLabel(t.insurance_due_date)}</td>
+        <td>${daysLeftLabel(t.compulsory_insurance_due_date)}</td>
+        <td><button class="btn btn-sm btn-gray" onclick="openEditTruck(${t.id})">✏️ แก้ไข</button></td>
+      </tr>`;
+    }
   }
   html += `</table></div></div>`;
   el.innerHTML = html;
@@ -1164,32 +1217,59 @@ async function loadDrivers() {
   el.innerHTML = `<div class="loader"><div class="spinner"></div>กำลังโหลด...</div>`;
 
   const data = await api("drivers");
-  if (!data) return;
+  if (!data || data.error) {
+    el.innerHTML = `<div class="alert alert-err">${data?.error || "โหลดไม่สำเร็จ"}</div>`;
+    return;
+  }
 
   if (data.length === 0) {
     el.innerHTML = `<div class="card"><p style="color:#aaa;text-align:center;padding:20px">ยังไม่มีคนขับลงทะเบียน — ให้คนขับสแกน QR ด้านบนเพื่อลงทะเบียน</p></div>`;
     return;
   }
 
+  // ── Format helpers ──
+  const fmtIdCard = (s) => {
+    if (!s) return null;
+    const v = String(s).replace(/\D/g, "");
+    if (v.length !== 13) return s;
+    return `${v[0]}-${v.slice(1,5)}-${v.slice(5,10)}-${v.slice(10,12)}-${v[12]}`;
+  };
+  const licenseStatus = (expDate) => {
+    if (!expDate) return `<span style="color:#aaa;font-size:12px">ไม่ระบุ</span>`;
+    const days = daysUntil(expDate);
+    if (days === null) return `<span style="color:#aaa;font-size:12px">-</span>`;
+    if (days < 0)   return `<span class="badge b-exp">หมดแล้ว ${Math.abs(days)} วัน</span>`;
+    if (days <= 30) return `<span class="badge b-warn">⚠️ เหลือ ${days} วัน</span>`;
+    if (days <= 90) return `<span class="badge b-sent">เหลือ ${days} วัน</span>`;
+    return `<span class="badge b-ok">${thaiDateShort(expDate)}</span>`;
+  };
+
   let html = `<div class="card"><h3>คนขับที่ลงทะเบียน (${data.length} คน)</h3><div class="tbl-wrap"><table>
-    <tr><th>ชื่อ</th><th>ประเภท</th><th>สาย</th><th>รถประจำ</th><th>โกดัง</th><th>เบอร์โทร</th><th>LINE User ID</th><th>สถานะ</th><th></th></tr>`;
+    <tr><th>ชื่อ</th><th>ประเภท</th><th>สาย</th><th>รถประจำ</th><th>โกดัง</th><th>เบอร์โทร</th><th>เลขบัตร ปชช.</th><th>ใบขับขี่</th><th>วันหมดอายุ</th><th>สถานะ</th><th></th></tr>`;
 
   for (const d of data) {
     const lineId = d.line_user_id || "-";
+    const idCardFmt = fmtIdCard(d.id_card_number);
     html += `<tr>
-      <td><b>${d.name}</b></td>
+      <td>
+        <b>${d.name}</b>
+        <br><small style="font-family:monospace;font-size:10px;color:#888">${lineId.slice(0, 10)}${lineId.length > 10 ? "..." : ""}${lineId !== "-" ? ` <button onclick="navigator.clipboard.writeText('${lineId}');this.textContent='✅';setTimeout(()=>this.textContent='📋',1500)" style="border:none;background:none;cursor:pointer;font-size:11px">📋</button>` : ""}</small>
+      </td>
       <td><span class="badge ${d.driver_type === 'van' ? 'b-sent' : 'b-warn'}">${d.driver_type === 'van' ? 'VAN' : 'ขนส่ง'}</span></td>
       <td>${d.route_code || "-"}</td>
       <td>${d.trucks?.plate_number || "<span style='color:#aaa'>-</span>"}</td>
       <td>${d.warehouse || d.trucks?.warehouse || "-"}</td>
       <td>${d.phone || "-"}</td>
-      <td>
-        <small style="font-family:monospace;font-size:11px;color:#555">${lineId}</small>
-        ${lineId !== "-" ? `<button onclick="navigator.clipboard.writeText('${lineId}');this.textContent='✅';setTimeout(()=>this.textContent='📋',1500)" style="border:none;background:none;cursor:pointer;font-size:12px;margin-left:4px">📋</button>` : ""}
-      </td>
+      <td><small style="font-family:monospace;font-size:11px">${idCardFmt || `<span style='color:#aaa'>-</span>`}</small></td>
+      <td>${d.license_number ? `<small>${d.license_number}</small>${d.license_image_path ? ` <a href="${d.license_image_path}" target="_blank" style="font-size:11px">📷</a>` : ""}` : `<span style='color:#aaa'>-</span>`}</td>
+      <td>${licenseStatus(d.license_expiry_date)}</td>
       <td><span class="badge ${d.is_active ? 'b-ok' : 'b-exp'}">${d.is_active ? 'ใช้งาน' : 'ปิด'}</span></td>
       <td><button class="btn btn-gray" style="padding:4px 10px;font-size:12px;width:auto" onclick="toggleDriver(${d.id},${d.is_active})">${d.is_active ? 'ปิด' : 'เปิด'}</button></td>
     </tr>`;
+    // แถวขยายแสดงที่อยู่ ถ้ามี
+    if (d.address) {
+      html += `<tr><td colspan="11" style="background:#fafafa;padding:6px 14px;font-size:12px;color:#666"><b>ที่อยู่:</b> ${d.address}</td></tr>`;
+    }
   }
   html += `</table></div></div>`;
   el.innerHTML = html;
