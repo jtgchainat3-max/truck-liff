@@ -427,15 +427,14 @@ body{font-family:'Sarabun',sans-serif;background:#f5f5f5;color:#333;min-height:1
     <div class="sub" id="maintTruckSub">-</div>
   </div>
   <div class="body">
-    <!-- Current truck display + เปลี่ยนรถ button -->
-    <div id="maintCurrentTruck" class="card" style="display:none;padding:12px 14px">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
-        <div>
-          <div style="font-size:12px;color:#888">🚛 รถที่จะซ่อม</div>
-          <div id="maintCurrentTruckText" style="font-size:18px;font-weight:700;color:#1a73e8">-</div>
-        </div>
-        <button class="btn btn-gray" style="width:auto;padding:8px 14px;font-size:13px;margin:0" onclick="openTruckPicker('maintenance')">🔄 เปลี่ยนรถ</button>
+    <!-- Current truck display — BIG plate -->
+    <div id="maintCurrentTruck" class="card" style="display:none;padding:16px;background:linear-gradient(135deg,#fce4ec,#f8bbd0);border:2px solid #c2185b">
+      <div style="text-align:center;margin-bottom:8px">
+        <div style="font-size:13px;color:#c2185b;font-weight:600;letter-spacing:1px">🔧 ซ่อมบำรุงรถคันนี้</div>
+        <div id="maintCurrentTruckText" style="font-size:32px;font-weight:900;color:#880e4f;line-height:1.2;margin-top:4px;letter-spacing:1px">-</div>
+        <div id="maintCurrentTruckSub" style="font-size:13px;color:#666;margin-top:4px"></div>
       </div>
+      <button class="btn btn-gray" style="padding:8px 14px;font-size:13px;margin:0;width:100%" onclick="openTruckPicker('maintenance')">🔄 เปลี่ยนรถ / ซ่อมรถอื่น</button>
     </div>
 
     <!-- Truck picker -->
@@ -1044,6 +1043,9 @@ function renderCurrentTruck(screen) {
   const textId    = screen === "mileage" ? "mileageCurrentTruckText"
                   : screen === "fuel"    ? "fuelCurrentTruckText"
                   : "maintCurrentTruckText";
+  const subId     = screen === "mileage" ? "mileageCurrentTruckSub"
+                  : screen === "fuel"    ? "fuelCurrentTruckSub"
+                  : "maintCurrentTruckSub";
 
   if (!selectedTruckId) {
     document.getElementById(displayId).style.display = "none";
@@ -1063,10 +1065,16 @@ function renderCurrentTruck(screen) {
     };
   }
 
-  const plate = truck?.plate_number || `#${selectedTruckId}`;
-  const wh    = truck?.warehouse ? ` · ${truck.warehouse}` : "";
-  const type  = truck?.truck_type ? ` · ${truck.truck_type}` : "";
-  document.getElementById(textId).textContent = `${plate}${wh}${type}`;
+  const plate    = truck?.plate_number || `#${selectedTruckId}`;
+  const wh       = truck?.warehouse || "";
+  const type     = truck?.truck_type || "";
+  const lastMile = truck?.last_mileage ? ` · ไมล์ล่าสุด ${fmtNum(truck.last_mileage)} กม.` : "";
+
+  // ทะเบียน — ใหญ่ ตัวหนา
+  document.getElementById(textId).textContent = plate;
+  // sub line: โกดัง · ประเภท · ไมล์
+  const subParts = [wh, type].filter(Boolean);
+  document.getElementById(subId).textContent = subParts.join(" · ") + lastMile;
   document.getElementById(displayId).style.display = "";
 }
 
@@ -1078,32 +1086,8 @@ async function openTruckPicker(screen) {
                   : "maintCurrentTruck";
   document.getElementById(displayId).style.display = "none";
 
-  // แสดง picker
+  // แสดง picker (chip onclick จะจัดการ re-render เอง)
   await showTruckPickerForScreen(screen);
-
-  // ผูก callback ให้เมื่อเลือกรถแล้ว → render current truck + ซ่อน picker
-  const listId = screen === "mileage" ? "mileageTruckList"
-                : screen === "fuel"   ? "fuelTruckList"
-                : "maintTruckList";
-  const pickerId = screen === "mileage" ? "mileageTruckPicker"
-                  : screen === "fuel"   ? "fuelTruckPicker"
-                  : "maintTruckPicker";
-
-  // wrap onclick ทุก chip เพื่อ trigger callback หลังเลือก
-  const chips = document.querySelectorAll(`#${listId} .truck-chip`);
-  chips.forEach(chip => {
-    const originalClick = chip.onclick;
-    chip.onclick = function() {
-      if (originalClick) originalClick.call(this);
-      // หลังเลือก → ซ่อน picker + แสดง current truck
-      setTimeout(() => {
-        if (selectedTruckId) {
-          document.getElementById(pickerId).style.display = "none";
-          renderCurrentTruck(screen);
-        }
-      }, 200);
-    };
-  });
 }
 
 let pickerShowAllWarehouses = false;  // toggle state per session
@@ -1170,14 +1154,14 @@ function renderTruckList(screen, listEl) {
       whHeader.style.cssText = "font-size:12px;color:#888;margin:10px 0 4px;font-weight:600";
       whHeader.textContent = `📍 ${wh}`;
       listEl.appendChild(whHeader);
-      byWh[wh].forEach(t => listEl.appendChild(makeTruckChip(t, listEl)));
+      byWh[wh].forEach(t => listEl.appendChild(makeTruckChip(t, listEl, screen)));
     });
   } else {
-    trucksToShow.forEach(t => listEl.appendChild(makeTruckChip(t, listEl)));
+    trucksToShow.forEach(t => listEl.appendChild(makeTruckChip(t, listEl, screen)));
   }
 }
 
-function makeTruckChip(t, listEl) {
+function makeTruckChip(t, listEl, screen) {
   const el = document.createElement("div");
   el.className = "truck-chip" + (t.id === selectedTruckId ? " selected" : "");
   el.innerHTML = `<span class="plate">${t.plate_number}</span><div class="detail">${t.truck_type || "4wheel"}${t.last_mileage ? ` · ไมล์ล่าสุด ${fmtNum(t.last_mileage)} กม.` : ""}</div>`;
@@ -1185,6 +1169,18 @@ function makeTruckChip(t, listEl) {
     listEl.querySelectorAll(".truck-chip").forEach(c => c.classList.remove("selected"));
     el.classList.add("selected");
     selectedTruckId = t.id;
+
+    // หลังเลือก: ซ่อน picker + แสดงทะเบียนใหญ่ที่ด้านบน
+    if (screen) {
+      const pickerId = screen === "mileage" ? "mileageTruckPicker"
+                      : screen === "fuel"   ? "fuelTruckPicker"
+                      : "maintTruckPicker";
+      setTimeout(() => {
+        const picker = document.getElementById(pickerId);
+        if (picker) picker.style.display = "none";
+        renderCurrentTruck(screen);
+      }, 150);
+    }
   };
   return el;
 }
