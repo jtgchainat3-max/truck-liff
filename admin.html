@@ -520,7 +520,15 @@ async function api(path, opts = {}) {
     headers: { "Authorization": AUTH_HEADER, "Content-Type": "application/json", ...opts.headers },
     ...opts
   });
-  if (!res.ok && res.status === 401) { alert("Unauthorized — ตรวจสอบ username/password"); return null; }
+  if (!res.ok && res.status === 401) {
+    sessionStorage.removeItem("adminUser");
+    sessionStorage.removeItem("adminPass");
+    AUTH_HEADER = "";
+    document.getElementById("mainContent").style.display = "none";
+    document.getElementById("loginScreen").style.display = "flex";
+    document.getElementById("loginErr").textContent = "❌ Username หรือ Password ไม่ถูกต้อง";
+    return null;
+  }
   return res.json();
 }
 
@@ -973,9 +981,10 @@ async function loadDrivers() {
   }
 
   let html = `<div class="card"><h3>คนขับที่ลงทะเบียน (${data.length} คน)</h3><div class="tbl-wrap"><table>
-    <tr><th>ชื่อ</th><th>ประเภท</th><th>สาย</th><th>รถประจำ</th><th>โกดัง</th><th>เบอร์โทร</th><th>สถานะ</th><th></th></tr>`;
+    <tr><th>ชื่อ</th><th>ประเภท</th><th>สาย</th><th>รถประจำ</th><th>โกดัง</th><th>เบอร์โทร</th><th>LINE User ID</th><th>สถานะ</th><th></th></tr>`;
 
   for (const d of data) {
+    const lineId = d.line_user_id || "-";
     html += `<tr>
       <td><b>${d.name}</b></td>
       <td><span class="badge ${d.driver_type === 'van' ? 'b-sent' : 'b-warn'}">${d.driver_type === 'van' ? 'VAN' : 'ขนส่ง'}</span></td>
@@ -983,6 +992,10 @@ async function loadDrivers() {
       <td>${d.trucks?.plate_number || "<span style='color:#aaa'>-</span>"}</td>
       <td>${d.warehouse || d.trucks?.warehouse || "-"}</td>
       <td>${d.phone || "-"}</td>
+      <td>
+        <small style="font-family:monospace;font-size:11px;color:#555">${lineId}</small>
+        ${lineId !== "-" ? `<button onclick="navigator.clipboard.writeText('${lineId}');this.textContent='✅';setTimeout(()=>this.textContent='📋',1500)" style="border:none;background:none;cursor:pointer;font-size:12px;margin-left:4px">📋</button>` : ""}
+      </td>
       <td><span class="badge ${d.is_active ? 'b-ok' : 'b-exp'}">${d.is_active ? 'ใช้งาน' : 'ปิด'}</span></td>
       <td><button class="btn btn-gray" style="padding:4px 10px;font-size:12px;width:auto" onclick="toggleDriver(${d.id},${d.is_active})">${d.is_active ? 'ปิด' : 'เปิด'}</button></td>
     </tr>`;
@@ -1260,9 +1273,29 @@ async function doLogin() {
   const errEl = document.getElementById("loginErr");
   if (!user || !pass) { errEl.textContent = "กรุณากรอก Username และ Password"; return; }
 
-  AUTH_HEADER = "Basic " + btoa(user + ":" + pass);
+  errEl.textContent = "⏳ กำลังตรวจสอบ...";
+  errEl.style.color = "#888";
+
+  const testHeader = "Basic " + btoa(user + ":" + pass);
+  try {
+    const res = await fetch(`${API_BASE}/trucks`, {
+      headers: { "Authorization": testHeader, "Content-Type": "application/json" }
+    });
+    if (res.status === 401) {
+      errEl.textContent = "❌ Username หรือ Password ไม่ถูกต้อง";
+      errEl.style.color = "#e53935";
+      return;
+    }
+  } catch (e) {
+    errEl.textContent = "❌ เชื่อมต่อ server ไม่ได้ ลองใหม่อีกครั้ง";
+    errEl.style.color = "#e53935";
+    return;
+  }
+
+  AUTH_HEADER = testHeader;
   sessionStorage.setItem("adminUser", user);
   sessionStorage.setItem("adminPass", pass);
+  errEl.textContent = "";
 
   document.getElementById("loginScreen").style.display = "none";
   document.getElementById("mainContent").style.display = "block";
