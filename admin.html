@@ -40,6 +40,8 @@ table{width:100%;border-collapse:collapse;font-size:13px}
 th{background:#f8f9fa;padding:10px 12px;text-align:left;font-weight:700;color:#555;border-bottom:2px solid #e0e0e0;white-space:nowrap}
 td{padding:9px 12px;border-bottom:1px solid #f0f0f0;vertical-align:middle}
 tr:hover td{background:#fafafa}
+/* Hide super-only elements for non-superadmin users (via body class) */
+body.role-non-super .super-only { display: none !important; }
 /* Status badges */
 .badge{display:inline-block;padding:3px 9px;border-radius:12px;font-size:12px;font-weight:600;white-space:nowrap}
 .b-ok{background:#e8f5e9;color:#2e7d32}
@@ -142,7 +144,8 @@ tr:hover td{background:#fafafa}
 <div class="topbar">
   <h1>🚚 Truck Tracker Admin</h1>
   <span class="sub" id="topDate">-</span>
-  <button class="btn btn-gray btn-sm" onclick="doLogout()" style="margin-left:auto">ออกจากระบบ</button>
+  <span id="userRoleBadge" style="margin-left:auto;background:#1a73e8;color:#fff;padding:4px 10px;border-radius:6px;font-size:12px;font-weight:600">🔵 Admin</span>
+  <button class="btn btn-gray btn-sm" onclick="doLogout()" style="margin-left:10px">ออกจากระบบ</button>
 </div>
 
 <!-- TABS -->
@@ -311,6 +314,42 @@ tr:hover td{background:#fafafa}
   <div style="background:#e3f2fd;border:1px solid #90caf9;border-radius:8px;padding:12px;margin-bottom:14px;font-size:13px;line-height:1.6">
     💡 <b>วิธีใช้:</b> รวมบิลที่คนขับส่งเข้ามา → ติ๊กรายการที่ <b>ได้รับบิลกระดาษแล้ว</b> เพื่อนำส่งบัญชี
   </div>
+
+  <!-- 📥 Export บิล (ย้ายมาจากแท็บตั้งค่า) -->
+  <div class="card" style="background:#fff8e1;border:2px solid #ffb300">
+    <h3 style="color:#e65100">📥 Export บิล/รายงานสรุปประจำเดือน</h3>
+    <div class="filter-row" style="align-items:flex-end">
+      <div class="form-group" style="flex:0 0 120px">
+        <label>ปี</label>
+        <select id="exportYear"></select>
+      </div>
+      <div class="form-group" style="flex:0 0 120px">
+        <label>เดือน</label>
+        <select id="exportMonth">
+          <option value="01">ม.ค.</option><option value="02">ก.พ.</option>
+          <option value="03">มี.ค.</option><option value="04">เม.ย.</option>
+          <option value="05">พ.ค.</option><option value="06">มิ.ย.</option>
+          <option value="07">ก.ค.</option><option value="08">ส.ค.</option>
+          <option value="09">ก.ย.</option><option value="10">ต.ค.</option>
+          <option value="11">พ.ย.</option><option value="12">ธ.ค.</option>
+        </select>
+      </div>
+      <div class="form-group" style="flex:0 0 150px">
+        <label>ประเภท</label>
+        <select id="exportType">
+          <option value="all">ทั้งหมด</option>
+          <option value="fuel">น้ำมัน</option>
+          <option value="maintenance">ซ่อมบำรุง</option>
+        </select>
+      </div>
+      <div style="flex:1;display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-primary" style="width:auto;padding:10px 16px" onclick="exportBillsZip()">📦 Download ZIP (รูป+CSV)</button>
+        <button class="btn btn-success" style="width:auto;padding:10px 16px" onclick="exportBillsPDF()">📄 Export PDF สรุป</button>
+      </div>
+    </div>
+    <div id="exportMsg" style="margin-top:10px;font-size:13px"></div>
+  </div>
+
   <div id="accountingContent"><div class="loader"><div class="spinner"></div>กำลังโหลด...</div></div>
 </div>
 
@@ -370,6 +409,36 @@ tr:hover td{background:#fafafa}
 
 <!-- ═══════════════════════════════════ DRIVERS ═══════════════════════════════════ -->
 <div id="sec-drivers" class="section">
+
+  <!-- 🔐 รหัสลงทะเบียน (superadmin only) -->
+  <div class="card super-only" style="background:linear-gradient(135deg,#e3f2fd,#bbdefb);border:2px solid #1a73e8">
+    <h3 style="color:#0d47a1">🔐 รหัสลงทะเบียนคนขับ</h3>
+    <div style="font-size:13px;color:#555;margin-bottom:12px;line-height:1.6">
+      รหัสที่คนขับใหม่ต้องใส่ตอนสมัคร ใน LIFF — กันคนนอกแอบสมัคร<br>
+      <b>แจ้งคนขับใหม่ผ่าน LINE/ปากเปล่า เปลี่ยนได้ทุกเมื่อ</b>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <div style="flex:0 0 130px;font-size:14px;color:#666">รหัสปัจจุบัน:</div>
+      <div id="regCodeCurrent" style="font-size:24px;font-weight:900;color:#0d47a1;font-family:monospace;letter-spacing:2px;padding:8px 16px;background:#fff;border-radius:8px;border:2px dashed #1a73e8;min-width:160px;text-align:center">-</div>
+      <button class="btn btn-primary" style="width:auto;padding:10px 18px" onclick="changeRegCode()">✏️ เปลี่ยนรหัส</button>
+    </div>
+    <div id="regCodeMsg" style="margin-top:10px;font-size:13px"></div>
+  </div>
+
+  <!-- 🛰 GPS Test Link — สำหรับส่งให้คนขับ -->
+  <div class="card" style="background:linear-gradient(135deg,#e8f5e9,#c8e6c9);border:2px solid #2e7d32">
+    <h3 style="color:#1b5e20">🛰 ลิงก์ทดสอบ GPS (สำหรับคนขับที่ติดปัญหา)</h3>
+    <div style="font-size:13px;color:#555;margin-bottom:10px;line-height:1.5">
+      ส่งลิงก์นี้ให้คนขับที่ <b>ขอ GPS ไม่ได้</b> → คนขับเปิดในแชท LINE → กดปุ่ม "ทดสอบ" → จะเห็น<b>สาเหตุ</b>ของปัญหา
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <input id="gpsTestUrl" type="text" readonly
+        style="flex:1;min-width:240px;padding:10px 12px;border:1px solid #aed581;border-radius:6px;font-family:monospace;font-size:13px;background:#fff">
+      <button class="btn btn-primary" style="width:auto;padding:10px 18px" onclick="copyGpsTestUrl()">📋 Copy ลิงก์</button>
+      <a id="gpsTestOpen" href="#" target="_blank" class="btn btn-success" style="width:auto;padding:10px 18px;text-decoration:none">🔗 เปิดทดสอบ</a>
+    </div>
+    <div id="gpsTestMsg" style="margin-top:8px;font-size:13px;color:#2e7d32"></div>
+  </div>
 
   <!-- QR Onboarding -->
   <div class="qr-grid">
@@ -591,6 +660,30 @@ tr:hover td{background:#fafafa}
   </div>
 </div>
 
+<!-- ═══ MODAL: Tab Permissions ═══ -->
+<div class="modal-overlay" id="permissionModal">
+  <div class="modal-box" style="max-width:560px">
+    <h3>🛡 ตั้งสิทธิ์การเข้าถึงแท็บ</h3>
+    <div style="font-size:13px;color:#666;margin-bottom:12px">
+      <b id="permUserLabel">user</b> — เลือกแท็บที่ user คนนี้เห็นได้<br>
+      💡 ถ้าไม่ติ๊กอะไรเลย = ใช้ default ตาม role
+    </div>
+    <div id="permTabList" style="max-height:360px;overflow-y:auto;border:1px solid #e0e0e0;border-radius:8px;padding:10px;background:#fafafa">
+      <!-- generated -->
+    </div>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button class="btn btn-gray" style="width:auto;padding:8px 14px;font-size:13px" onclick="permSelectAll(true)">เลือกทั้งหมด</button>
+      <button class="btn btn-gray" style="width:auto;padding:8px 14px;font-size:13px" onclick="permSelectAll(false)">ล้างทั้งหมด</button>
+      <button class="btn btn-gray" style="width:auto;padding:8px 14px;font-size:13px" onclick="permUseDefault()">ใช้ default</button>
+    </div>
+    <div id="permMsg" style="color:#e53935;font-size:13px;min-height:18px;margin-top:8px"></div>
+    <div class="modal-actions">
+      <button style="background:#e0e0e0;color:#555" onclick="closePermissionModal()">ยกเลิก</button>
+      <button style="background:#1a73e8;color:#fff" onclick="savePermissions()">💾 บันทึก</button>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ MODAL: Change Password ═══ -->
 <div class="modal-overlay" id="changePasswordModal">
   <div class="modal-box">
@@ -608,21 +701,6 @@ tr:hover td{background:#fafafa}
 
 <!-- ═══════════════════════════════════ SETTINGS ═══════════════════════════════════ -->
 <div id="sec-settings" class="section">
-  <!-- 🔐 รหัสลงทะเบียน — เด่นๆ ด้านบน -->
-  <div class="card" style="background:linear-gradient(135deg,#e3f2fd,#bbdefb);border:2px solid #1a73e8">
-    <h3 style="color:#0d47a1">🔐 รหัสลงทะเบียนคนขับ</h3>
-    <div style="font-size:13px;color:#555;margin-bottom:12px;line-height:1.6">
-      รหัสนี้ที่คนขับใหม่ต้องใส่ตอนสมัคร ใน LIFF — กันคนนอกแอบสมัคร<br>
-      <b>แจ้งคนขับใหม่ผ่าน LINE/ปากเปล่า เปลี่ยนได้ทุกเมื่อ</b>
-    </div>
-    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-      <div style="flex:0 0 130px;font-size:14px;color:#666">รหัสปัจจุบัน:</div>
-      <div id="regCodeCurrent" style="font-size:24px;font-weight:900;color:#0d47a1;font-family:monospace;letter-spacing:2px;padding:8px 16px;background:#fff;border-radius:8px;border:2px dashed #1a73e8;min-width:160px;text-align:center">-</div>
-      <button class="btn btn-primary" style="width:auto;padding:10px 18px" onclick="changeRegCode()">✏️ เปลี่ยนรหัส</button>
-    </div>
-    <div id="regCodeMsg" style="margin-top:10px;font-size:13px"></div>
-  </div>
-
   <div class="card">
     <h3>🔔 เป้าหมายแจ้งเตือน (กลุ่มไลน์ / แอดมิน)</h3>
     <div id="notifTargets"><div class="loader"><div class="spinner"></div>กำลังโหลด...</div></div>
@@ -633,20 +711,6 @@ tr:hover td{background:#fafafa}
   <div class="card">
     <h3>⚙️ ตั้งค่าระบบ</h3>
     <div id="settingsContent"><div class="loader"><div class="spinner"></div>กำลังโหลด...</div></div>
-  </div>
-  <!-- 🛰 GPS Test Link -->
-  <div class="card" style="background:linear-gradient(135deg,#e8f5e9,#c8e6c9);border:2px solid #2e7d32">
-    <h3 style="color:#1b5e20">🛰 ลิงก์ทดสอบ GPS (สำหรับคนขับที่ติดปัญหา)</h3>
-    <div style="font-size:13px;color:#555;margin-bottom:10px;line-height:1.5">
-      ส่งลิงก์นี้ให้คนขับที่ <b>ขอ GPS ไม่ได้</b> → คนขับเปิดในแชท LINE → กดปุ่ม "ทดสอบ" → จะเห็น<b>สาเหตุ</b>ของปัญหา (เช่น permission denied)
-    </div>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <input id="gpsTestUrl" type="text" readonly
-        style="flex:1;min-width:240px;padding:10px 12px;border:1px solid #aed581;border-radius:6px;font-family:monospace;font-size:13px;background:#fff">
-      <button class="btn btn-primary" style="width:auto;padding:10px 18px" onclick="copyGpsTestUrl()">📋 Copy ลิงก์</button>
-      <a id="gpsTestOpen" href="#" target="_blank" class="btn btn-success" style="width:auto;padding:10px 18px;text-decoration:none">🔗 เปิดทดสอบ</a>
-    </div>
-    <div id="gpsTestMsg" style="margin-top:8px;font-size:13px;color:#2e7d32"></div>
   </div>
 
   <!-- 🤖 AI + LINE Integration Status -->
@@ -677,8 +741,8 @@ tr:hover td{background:#fafafa}
     <div id="systemTestMsg" style="margin-top:10px;font-size:13px"></div>
   </div>
 
-  <!-- 💾 Storage Management -->
-  <div class="card">
+  <!-- 💾 Storage Management (superadmin only) -->
+  <div class="card super-only">
     <h3>💾 จัดการพื้นที่เก็บไฟล์</h3>
     <div id="storageStatus" style="margin-bottom:14px">
       <div class="loader"><div class="spinner"></div>กำลังโหลด...</div>
@@ -689,40 +753,6 @@ tr:hover td{background:#fafafa}
     </div>
   </div>
 
-  <!-- 📥 Export บิล -->
-  <div class="card">
-    <h3>📥 Export บิล (สำหรับบัญชี)</h3>
-    <div class="filter-row">
-      <div class="form-group" style="flex:0 0 130px">
-        <label>ปี</label>
-        <select id="exportYear"></select>
-      </div>
-      <div class="form-group" style="flex:0 0 130px">
-        <label>เดือน</label>
-        <select id="exportMonth">
-          <option value="01">ม.ค.</option><option value="02">ก.พ.</option>
-          <option value="03">มี.ค.</option><option value="04">เม.ย.</option>
-          <option value="05">พ.ค.</option><option value="06">มิ.ย.</option>
-          <option value="07">ก.ค.</option><option value="08">ส.ค.</option>
-          <option value="09">ก.ย.</option><option value="10">ต.ค.</option>
-          <option value="11">พ.ย.</option><option value="12">ธ.ค.</option>
-        </select>
-      </div>
-      <div class="form-group" style="flex:0 0 150px">
-        <label>ประเภท</label>
-        <select id="exportType">
-          <option value="all">ทั้งหมด</option>
-          <option value="fuel">น้ำมัน</option>
-          <option value="maintenance">ซ่อมบำรุง</option>
-        </select>
-      </div>
-      <div style="flex:1;display:flex;align-items:flex-end;gap:8px">
-        <button class="btn btn-primary" style="width:auto;padding:10px 16px" onclick="exportBillsZip()">📦 Download ZIP</button>
-        <button class="btn btn-success" style="width:auto;padding:10px 16px" onclick="exportBillsPDF()">📄 Export PDF สรุป</button>
-      </div>
-    </div>
-    <div id="exportMsg" style="margin-top:10px;font-size:13px"></div>
-  </div>
 
   <div class="card">
     <h3>📨 ทดสอบส่งแจ้งเตือน</h3>
@@ -1127,11 +1157,11 @@ const TAB_LOADERS = {
   fuel:        () => { document.getElementById("fuelFrom").value = todayISO(); document.getElementById("fuelTo").value = todayISO(); loadFuel(); },
   maintenance: () => { populateMaintTruckFilter(); loadMaintenance(); },
   verify:      () => { populateVerifyTruckFilter(); loadVerifyQueue(); },
-  accounting:  () => { populateAccountingFilters(); loadAccounting(); },
+  accounting:  () => { populateAccountingFilters(); populateExportFilters(); loadAccounting(); },
   anomalies:   loadAnomalies,
   documents:   loadDocuments,
   trucks:      loadTrucks,
-  drivers:     loadDrivers,
+  drivers:     () => { loadRegCode(); setupGpsTestLink(); loadDrivers(); },
   companies:   loadCompanies,
   adminusers:  loadAdminUsers,
   settings:    loadSettings,
@@ -1215,9 +1245,12 @@ async function loadDaily() {
 
     if (trips.length === 0) {
       // รถยังไม่ส่งอะไรเลยวันนี้
+      const assigned = t.assigned_driver_name
+        ? `<small style="color:#aaa">ประจำ: ${t.assigned_driver_name}</small>`
+        : `<small style="color:#aaa">ยังไม่มีคนขับวันนี้</small>`;
       html += `<tr style="${rowBg};opacity:.6">
         <td><b>${t.plate_number}</b><br><small style="color:#888">${t.warehouse}</small></td>
-        <td>${t.driver_name || "<span style='color:#aaa'>-</span>"}<br><small style="color:#888">${t.route_code || ""}</small></td>
+        <td>${assigned}</td>
         <td colspan="4" style="text-align:center;color:#888">— ยังไม่มีการบันทึก —</td>
       </tr>`;
       continue;
@@ -1228,27 +1261,40 @@ async function loadDaily() {
       const e = trip.evening;
       const km = (m?.mileage && e?.mileage) ? e.mileage - m.mileage : null;
 
+      // ⭐ คนขับของ trip นี้ — เอาจาก morning ก่อน (เพราะเป็นจุดเริ่มเที่ยว)
+      // ถ้าไม่มี morning ก็เอาจาก evening
+      const tripDriver = m?.drivers || e?.drivers || null;
+      const tripDriverName = tripDriver?.name || "<span style='color:#aaa'>-</span>";
+      // route: ใช้ override > driver.route_code
+      const tripRoute = m?.route_override || e?.route_override
+                     || tripDriver?.route_code
+                     || "";
+
       const fmtCell = (log) => {
         if (!log) return `<span class="badge b-miss">ยังไม่ส่ง</span>`;
         const route = log.route_override ? ` <span class="badge b-warn">🛣 ${log.route_override}</span>` : "";
         const editBtn = `<button class="btn btn-sm btn-gray" style="padding:2px 8px;font-size:11px;margin-left:4px" onclick="openEditMileage(${log.id}, ${log.mileage})" title="แก้ไขเลขไมล์">✏️</button>`;
+        const delBtn  = `<button class="btn btn-sm btn-red super-only" style="padding:2px 8px;font-size:11px;margin-left:2px" onclick="deleteMileageLog(${log.id})" title="ลบไมล์นี้ (เฉพาะ superadmin)">🗑</button>`;
         return `
           <div style="line-height:1.6">
-            <b style="font-size:15px">${fmtNum(log.mileage)}</b> กม.${editBtn}${log.anomaly_flag ? ` <span class="badge b-crit" title="${log.anomaly_note}">⚠️</span>` : ""}${route}<br>
+            <b style="font-size:15px">${fmtNum(log.mileage)}</b> กม.${editBtn}${delBtn}${log.anomaly_flag ? ` <span class="badge b-crit" title="${log.anomaly_note}">⚠️</span>` : ""}${route}<br>
             <small style="color:#666">🕐 ${fmtTime(log.created_at)}</small>
             ${log.latitude ? ` · <a href="https://maps.google.com/?q=${log.latitude},${log.longitude}" target="_blank" style="font-size:11px">📍 GPS</a>` : ""}
             ${log.image_path ? ` · <a href="${log.image_path}" target="_blank" style="font-size:11px">📷 ดูรูป</a>` : ` · <small style='color:#aaa'>ไม่มีรูป</small>`}
           </div>`;
       };
 
-      // แสดงข้อมูลรถ/คนขับเฉพาะแถวแรกของรถ
+      // truck cell — แสดงเฉพาะแถวแรก (rowspan)
       const truckCell = idx === 0
-        ? `<td rowspan="${trips.length}" style="vertical-align:top"><b>${t.plate_number}</b><br><small style="color:#888">${t.warehouse}</small></td>
-           <td rowspan="${trips.length}" style="vertical-align:top">${t.driver_name || "<span style='color:#aaa'>-</span>"}<br><small style="color:#888">${t.route_code || ""}</small></td>`
+        ? `<td rowspan="${trips.length}" style="vertical-align:top"><b>${t.plate_number}</b><br><small style="color:#888">${t.warehouse}</small></td>`
         : "";
+
+      // ⭐ driver cell — per trip (ไม่ใช่ per truck แล้ว) → transport drivers ที่หลายคนขับรถคันเดียวจะเห็นใครขับเที่ยวไหน
+      const driverCell = `<td style="vertical-align:top">${tripDriverName}<br><small style="color:#888">${tripRoute || ""}</small></td>`;
 
       html += `<tr style="${rowBg}">
         ${truckCell}
+        ${driverCell}
         <td><b style="color:#1a73e8">เที่ยว ${idx + 1}</b></td>
         <td>${fmtCell(m)}</td>
         <td>${fmtCell(e)}</td>
@@ -1384,7 +1430,7 @@ async function loadFuel() {
       <div class="sbox red"><div class="num">฿${fmtNum(Math.round(totalCost))}</div><div class="lbl">ค่าน้ำมันรวม</div></div>
     </div>
     <div class="card"><h3>ประวัติเติมน้ำมัน <small style="color:#888;font-weight:400">(กดที่แถวเพื่อดูรูป + เทียบบิล)</small></h3><div class="tbl-wrap"><table>
-      <tr><th>#ID</th><th>วันที่/เวลา</th><th>ทะเบียน</th><th>โกดัง</th><th>คนขับ</th><th>ไมล์</th><th>วิ่งได้</th><th>ลิตร</th><th>ราคา/ล.</th><th style="background:#e3f2fd">💰 ยอดที่กรอก</th><th>คำนวณ</th><th>กม./ล.</th><th>ปั๊ม</th><th>GPS</th></tr>`;
+      <tr><th>#ID</th><th>วันที่/เวลา</th><th>ทะเบียน</th><th>โกดัง</th><th>คนขับ</th><th>ไมล์</th><th>วิ่งได้</th><th>ลิตร</th><th>ราคา/ล.</th><th style="background:#e3f2fd">💰 ยอดที่กรอก</th><th>คำนวณ</th><th>กม./ล.</th><th>ปั๊ม</th><th>GPS</th><th></th></tr>`;
 
   for (const r of data) {
     const kmSince = r.km_since_last_fuel
@@ -1406,10 +1452,37 @@ async function loadFuel() {
       <td>${r.km_per_liter ? r.km_per_liter + " กม./ล." : "-"}${r.anomaly_flag ? ` <span class="badge b-crit" title="${r.anomaly_note}">⚠️</span>` : ""}</td>
       <td>${r.station_name || "-"}</td>
       <td>${r.latitude && r.longitude ? `<a onclick="event.stopPropagation()" href="https://maps.google.com/?q=${r.latitude},${r.longitude}" target="_blank" style="font-size:13px">📍</a>` : "<small style='color:#aaa'>-</small>"}</td>
+      <td onclick="event.stopPropagation()" style="text-align:center;white-space:nowrap" class="super-only">
+        <button class="btn btn-red" style="padding:4px 8px;font-size:11px;width:auto" onclick="event.stopPropagation();deleteFuelLog(${r.id})" title="ลบบิลน้ำมันนี้ (เฉพาะ superadmin)">🗑</button>
+      </td>
     </tr>`;
   }
   html += `</table></div></div>`;
   el.innerHTML = html;
+}
+
+// ── ลบบิลน้ำมัน (พร้อม cleanup รูป) ──
+async function deleteFuelLog(id) {
+  if (!confirm(`⚠️ ลบบิลน้ำมัน #${id}?\n\n• ลบ row จากฐานข้อมูล\n• ลบรูปไมล์ + รูปบิล จาก storage ด้วย\n• ย้อนกลับไม่ได้\n\nกด OK เพื่อยืนยัน`)) return;
+  const res = await api(`fuel-logs/${id}`, { method: "DELETE" });
+  if (res?.success) {
+    alert(`✅ ${res.message}`);
+    loadFuel();
+  } else {
+    alert(`❌ ${res?.error || "ลบไม่สำเร็จ"}`);
+  }
+}
+
+// ── ลบไมล์เช้า/เย็น (พร้อม cleanup รูป) ──
+async function deleteMileageLog(id) {
+  if (!confirm(`⚠️ ลบไมล์ #${id}?\n\n• ลบ row จากฐานข้อมูล\n• ลบรูปไมล์จาก storage ด้วย\n• ย้อนกลับไม่ได้\n\nกด OK เพื่อยืนยัน`)) return;
+  const res = await api(`mileage-logs/${id}`, { method: "DELETE" });
+  if (res?.success) {
+    alert(`✅ ${res.message}`);
+    if (typeof loadDaily === "function") loadDaily();
+  } else {
+    alert(`❌ ${res?.error || "ลบไม่สำเร็จ"}`);
+  }
 }
 
 // รัน OCR กับ fuel_log id ที่ระบุ — เรียกจากปุ่ม 🔍 AI ในตาราง
@@ -2541,8 +2614,7 @@ async function submitAddDriver() {
 // SETTINGS
 // ════════════════════════════════════════════════════════════
 async function loadSettings() {
-  setupGpsTestLink();
-  await Promise.all([loadNotifTargets(), loadSystemSettings(), loadRegCode(), loadStorageStatus(), loadSystemStatus(), populateExportFilters()]);
+  await Promise.all([loadNotifTargets(), loadSystemSettings(), loadStorageStatus(), loadSystemStatus()]);
 }
 
 // ── ลิงก์ทดสอบ GPS — generate auto จาก URL ปัจจุบัน ──
@@ -3728,13 +3800,20 @@ async function loadAdminUsers() {
     const lastLogin = u.last_login_at
       ? new Date(u.last_login_at).toLocaleString("th-TH", { timeZone: TZ, dateStyle: "short", timeStyle: "short" })
       : "ยังไม่เคยเข้า";
+    // แสดง permission summary
+    const customPerm = Array.isArray(u.tab_permissions) && u.tab_permissions.length > 0;
+    const permLabel = customPerm
+      ? `<span class="badge b-blue" style="font-size:11px">📋 ${u.tab_permissions.length} แท็บ</span>`
+      : `<span style="color:#888;font-size:11px">default</span>`;
+
     html += `<tr style="${u.is_active ? "" : "opacity:0.5"}">
       <td><b>${u.username}</b></td>
       <td>${u.display_name || "-"}</td>
-      <td>${roleLabel[u.role] || u.role}</td>
+      <td>${roleLabel[u.role] || u.role}<br>${permLabel}</td>
       <td>${u.is_active ? "✅ ใช้งาน" : "⛔ ปิดใช้"}</td>
       <td style="font-size:12px;color:#888">${lastLogin}</td>
       <td style="white-space:nowrap">
+        <button class="btn btn-primary" style="padding:4px 8px;font-size:12px;width:auto" onclick='openPermissionModal(${u.id}, ${JSON.stringify(u.username)}, ${JSON.stringify(u.tab_permissions || null)})'>🛡 สิทธิ์</button>
         <button class="btn btn-gray" style="padding:4px 8px;font-size:12px;width:auto" onclick="openChangePasswordModal(${u.id},'${u.display_name || u.username}')">🔒 Password</button>
         <button class="btn btn-gray" style="padding:4px 8px;font-size:12px;width:auto" onclick="toggleAdminUser(${u.id},${u.is_active})">${u.is_active ? "ปิดใช้" : "เปิดใช้"}</button>
         <button class="btn btn-red"  style="padding:4px 8px;font-size:12px;width:auto" onclick="deleteAdminUser(${u.id},'${u.username}')">ลบ</button>
@@ -3776,6 +3855,67 @@ async function toggleAdminUser(id, currentActive) {
   const res = await api(`admin-users/${id}`, { method: "PUT", body: JSON.stringify({ is_active: !currentActive }) });
   if (res?.success) loadAdminUsers();
   else alert(res?.error || "เกิดข้อผิดพลาด");
+}
+
+// ── ตั้งสิทธิ์การเข้าถึงแท็บ ──
+let permEditingUserId = null;
+
+function openPermissionModal(id, username, currentPerms) {
+  permEditingUserId = id;
+  document.getElementById("permUserLabel").textContent = username;
+  document.getElementById("permMsg").textContent = "";
+  // วาด checkbox list ของแท็บทั้งหมด
+  const list = document.getElementById("permTabList");
+  const allowed = Array.isArray(currentPerms) ? new Set(currentPerms) : null;
+  list.innerHTML = ALL_TABS.map(t => {
+    const checked = allowed ? allowed.has(t.key) : false;
+    return `
+      <label style="display:flex;align-items:center;padding:8px 10px;gap:10px;border-bottom:1px solid #eee;cursor:pointer">
+        <input type="checkbox" class="perm-tab-cb" value="${t.key}" ${checked ? "checked" : ""} style="width:18px;height:18px;cursor:pointer">
+        <span style="font-size:14px">${t.label}</span>
+        <code style="margin-left:auto;font-size:11px;color:#888">${t.key}</code>
+      </label>`;
+  }).join("");
+  document.getElementById("permissionModal").classList.add("open");
+}
+
+function closePermissionModal() {
+  document.getElementById("permissionModal").classList.remove("open");
+  permEditingUserId = null;
+}
+
+function permSelectAll(check) {
+  document.querySelectorAll(".perm-tab-cb").forEach(cb => { cb.checked = check; });
+}
+
+function permUseDefault() {
+  if (!confirm("ลบ custom permissions → ใช้ default ตาม role?")) return;
+  saveTabPermissions(null);
+}
+
+async function savePermissions() {
+  const selected = Array.from(document.querySelectorAll(".perm-tab-cb:checked")).map(cb => cb.value);
+  saveTabPermissions(selected.length > 0 ? selected : null);
+}
+
+async function saveTabPermissions(perms) {
+  if (!permEditingUserId) return;
+  const msg = document.getElementById("permMsg");
+  msg.style.color = "#888";
+  msg.textContent = "⏳ กำลังบันทึก...";
+  const res = await api(`admin-users/${permEditingUserId}/permissions`, {
+    method: "PUT",
+    body: JSON.stringify({ tab_permissions: perms })
+  });
+  if (res?.success) {
+    closePermissionModal();
+    loadAdminUsers();
+    // ถ้าเปลี่ยนสิทธิ์ของ user ที่ login อยู่ → reload role
+    loadCurrentUserRole();
+  } else {
+    msg.style.color = "#e53935";
+    msg.textContent = `❌ ${res?.error || "บันทึกไม่สำเร็จ"}`;
+  }
 }
 
 async function deleteAdminUser(id, username) {
@@ -3870,7 +4010,80 @@ document.getElementById("topDate").textContent = new Date().toLocaleDateString("
 });
 
 // โหลด Summary ก่อน + โหลด trucks + companies เพื่อใช้ใน modals
+// ── เก็บ role + permissions ของ user ที่ login ──
+let currentUserRole = "admin";
+let currentUserTabPermissions = null;  // null = ใช้ default ตาม role
+
+// แท็บทั้งหมดในระบบ (ใช้ตอนตั้ง permissions)
+const ALL_TABS = [
+  { key: "summary",     label: "📊 ภาพรวม" },
+  { key: "daily",       label: "📋 ไมล์รายวัน" },
+  { key: "fuel",        label: "⛽ น้ำมัน" },
+  { key: "maintenance", label: "🔧 ซ่อมบำรุง" },
+  { key: "verify",      label: "🔍 ตรวจสอบบิล" },
+  { key: "accounting",  label: "📒 ส่งบัญชี" },
+  { key: "anomalies",   label: "⚠️ ผิดปกติ" },
+  { key: "documents",   label: "📋 ภาษี/ประกัน" },
+  { key: "trucks",      label: "🚛 รถ" },
+  { key: "drivers",     label: "👤 คนขับ" },
+  { key: "companies",   label: "🏢 บริษัท" },
+  { key: "adminusers",  label: "🔑 ผู้ใช้ระบบ" },
+  { key: "settings",    label: "⚙️ ตั้งค่า" },
+];
+
+// Default tabs ของ role (ถ้าไม่ตั้ง custom)
+const DEFAULT_TABS_BY_ROLE = {
+  superadmin: ALL_TABS.map(t => t.key),  // ทุกแท็บ
+  admin:      ["summary","daily","fuel","maintenance","verify","accounting","anomalies","documents","trucks","drivers","companies","settings"],
+};
+
+async function loadCurrentUserRole() {
+  try {
+    const me = await api("me");
+    if (me?.role) {
+      currentUserRole = me.role;
+      currentUserTabPermissions = me.tab_permissions;
+      applyRoleVisibility();
+    }
+  } catch (_) { /* ignore */ }
+}
+
+// ── คำนวณ tabs ที่ user เห็น (custom > role default) ──
+function getVisibleTabs() {
+  if (Array.isArray(currentUserTabPermissions) && currentUserTabPermissions.length > 0) {
+    return currentUserTabPermissions;
+  }
+  return DEFAULT_TABS_BY_ROLE[currentUserRole] || DEFAULT_TABS_BY_ROLE.admin;
+}
+
+// ── ซ่อนแท็บที่ user ไม่มีสิทธิ์เห็น + ปุ่ม super-only ──
+function applyRoleVisibility() {
+  const isSuper = currentUserRole === "superadmin";
+  const visibleTabs = new Set(getVisibleTabs());
+
+  document.querySelectorAll('.tab').forEach(t => {
+    const onclick = t.getAttribute("onclick") || "";
+    // ดึง tab key จาก onclick="switchTab('xxx')"
+    const m = onclick.match(/switchTab\(['"]([^'"]+)['"]\)/);
+    if (m) {
+      const tabKey = m[1];
+      t.style.display = visibleTabs.has(tabKey) ? "" : "none";
+    }
+  });
+  // class super-only ภายในเนื้อหา (ไม่ใช่แท็บ)
+  document.querySelectorAll(".super-only").forEach(el => {
+    el.style.display = isSuper ? "" : "none";
+  });
+  // badge role
+  const badge = document.getElementById("userRoleBadge");
+  if (badge) {
+    badge.textContent = isSuper ? "🔴 Superadmin" : "🔵 Admin";
+    badge.style.background = isSuper ? "#c62828" : "#1a73e8";
+  }
+}
+
 function startApp() {
+  loadCurrentUserRole();
   Promise.all([
     loadSummary(),
     api("trucks").then(d => { if (d) { allTrucks = d; populateMaintTruckFilter(); } }),
