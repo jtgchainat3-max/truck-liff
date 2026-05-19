@@ -381,6 +381,8 @@ body{font-family:'Sarabun',sans-serif;background:#f5f5f5;color:#333;min-height:1
     <div class="sub" id="fuelTruckSub">-</div>
   </div>
   <div class="body">
+    <!-- Banner: ส่งบิลใหม่แทนใบเดิม -->
+    <div id="fuelResubmitBanner" style="display:none;padding:12px;background:#fff3e0;border:2px solid #ff8f00;border-radius:8px;margin-bottom:12px;color:#e65100;font-size:14px;line-height:1.4"></div>
     <!-- Current truck display — BIG plate -->
     <div id="fuelCurrentTruck" class="card" style="display:none;padding:16px;background:linear-gradient(135deg,#fff8e1,#ffe082);border:2px solid #ff8f00">
       <div style="text-align:center;margin-bottom:8px">
@@ -584,6 +586,7 @@ let photoTs         = null;
 let selectedTruckId = null;
 let selectedTirePositions = new Set();
 let allTrucksCache  = null;   // cache รถทั้งหมดสำหรับ transport picker
+let replacesFuelId  = null;   // ถ้ามาจาก deep link ?type=fuel&replaces=N — บิลส่งใหม่แทนใบเดิม
 let isSubmitting    = false;  // ป้องกัน double-submit ทุก form
 
 // ════════════════════════════════════════════════════════════
@@ -679,7 +682,9 @@ async function init() {
   setLoadingMsg("กำลังโหลดข้อมูลระบบ...", "ขั้นตอน 3/3");
   const params   = new URLSearchParams(location.search);
   const deepType = params.get("type");
-  dlog(`deepType = ${deepType || "(none)"}`);
+  const replacesParam = parseInt(params.get("replaces") || "0", 10);
+  if (replacesParam > 0) replacesFuelId = replacesParam;
+  dlog(`deepType = ${deepType || "(none)"}${replacesFuelId ? ` (replaces #${replacesFuelId})` : ""}`);
   dlog("เรียก loadMenu()...");
 
   await loadMenu(deepType);
@@ -1533,6 +1538,17 @@ function goFuel() {
   document.getElementById("fuelTruckSub").textContent =
     (driverInfo?.truck_plate || "-") + (driverInfo?.route_code ? ` · ${driverInfo.route_code}` : "");
 
+  // Banner แจ้งว่าเป็นการส่งบิลใหม่แทนใบเดิม
+  const resubBanner = document.getElementById("fuelResubmitBanner");
+  if (resubBanner) {
+    if (replacesFuelId) {
+      resubBanner.style.display = "block";
+      resubBanner.innerHTML = `📷 <b>บิลส่งใหม่แทนใบเดิม #${replacesFuelId}</b><br><span style="font-size:13px;color:#666">บิลเก่าจะถูก mark ว่าไม่ใช้ ระบบจะเก็บใบใหม่แทน</span>`;
+    } else {
+      resubBanner.style.display = "none";
+    }
+  }
+
   // Reset UI
   document.getElementById("fuelTotalInput").value = "";
   document.getElementById("fuelPrice").value = "";
@@ -1592,7 +1608,8 @@ function calcLitersFromTotal() {
 
   if (total > 0 && price > 0) {
     const liters = total / price;
-    litersEl.textContent = liters.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    // แสดง 4 ตำแหน่งทศนิยม (ตัด trailing zero ออก) — ผู้ใช้เห็นยอดจริง
+    litersEl.textContent = liters.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 4 });
     resultEl.style.display = "";
   } else {
     resultEl.style.display = "none";
@@ -1637,8 +1654,8 @@ async function submitFuel() {
   }
 
   // ⚠️ ไม่ปัด liters — เก็บ precision เต็มที่ ให้ admin/บัญชีเห็นยอดที่ถูกต้องทุกบาท
-  // เก็บทศนิยม 4 ตำแหน่ง (พอที่จะคืน total_cost ได้แม่น)
-  const liters = Math.round((total / price) * 10000) / 10000;
+  // เก็บทศนิยม 6 ตำแหน่ง (precision สูงพอที่จะคืน total_cost ได้แม่นทุกสตางค์)
+  const liters = Math.round((total / price) * 1000000) / 1000000;
   if (!liters || liters <= 0) {
     alert("ระบบคำนวณลิตรไม่ถูกต้อง — กรุณาตรวจสอบยอดเงินและราคา");
     return;
@@ -1679,6 +1696,7 @@ async function submitFuel() {
   fd.append("total_cost",      total);  // ⚠️ ส่งยอดที่ user กรอกตรงๆ ป้องกัน rounding loss
   fd.append("mileage",         mileage);
   if (station) fd.append("station_name", station);
+  if (replacesFuelId) fd.append("replaces_id", replacesFuelId);
   appendGPSToFormData(fd, "fuel");
 
   const msgEl = document.getElementById("fuelMsg");
@@ -1701,6 +1719,7 @@ async function submitFuel() {
   if (res.success) {
     msgEl.style.color = "#2e7d32";
     msgEl.textContent = res.message;
+    replacesFuelId = null;  // clear หลังส่งสำเร็จ — กันส่งซ้ำ
     setTimeout(() => closeLiff(res.message), 1500);
   } else {
     msgEl.style.color = "#e53935";
