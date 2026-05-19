@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>GPS Test</title>
+<style>
+  body { font-family: 'Sarabun', sans-serif; margin: 0; padding: 16px; background: #f5f5f5; color: #222; line-height: 1.5; }
+  h1 { color: #1a73e8; font-size: 20px; margin: 0 0 16px; }
+  .box { background: #fff; padding: 14px; border-radius: 10px; margin-bottom: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+  .row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f0f0; }
+  .row:last-child { border-bottom: none; }
+  .lbl { color: #666; font-size: 14px; }
+  .val { font-weight: 600; font-size: 14px; }
+  .ok { color: #2e7d32; }
+  .bad { color: #c62828; }
+  .warn { color: #ef6c00; }
+  button { width: 100%; padding: 14px; font-size: 16px; font-weight: 700; border: none; border-radius: 8px; cursor: pointer; margin-bottom: 8px; }
+  .btn-primary { background: #1a73e8; color: #fff; }
+  .btn-success { background: #2e7d32; color: #fff; }
+  .btn-warn    { background: #ef6c00; color: #fff; }
+  pre { background: #263238; color: #eceff1; padding: 12px; border-radius: 6px; font-size: 12px; white-space: pre-wrap; word-break: break-all; max-height: 240px; overflow: auto; margin: 0; }
+  .status { padding: 10px 14px; border-radius: 8px; font-weight: 600; margin: 8px 0; }
+  .status.ok   { background: #e8f5e9; color: #2e7d32; }
+  .status.bad  { background: #ffebee; color: #c62828; }
+  .status.work { background: #e3f2fd; color: #1a73e8; }
+  .copy-btn { background: #455a64; color: #fff; padding: 8px 14px; font-size: 13px; margin-top: 8px; }
+</style>
+</head>
+<body>
+
+<h1>🛰️ GPS Test — ทดสอบพิกัด</h1>
+
+<div class="box">
+  <h3 style="margin:0 0 10px;font-size:15px;color:#1a73e8">📋 ข้อมูลเครื่อง</h3>
+  <div class="row"><span class="lbl">URL:</span><span class="val" id="url"></span></div>
+  <div class="row"><span class="lbl">HTTPS:</span><span class="val" id="https"></span></div>
+  <div class="row"><span class="lbl">รองรับ GPS API:</span><span class="val" id="hasGeo"></span></div>
+  <div class="row"><span class="lbl">Permission state:</span><span class="val" id="perm"></span></div>
+  <div class="row"><span class="lbl">Browser:</span><span class="val" id="ua" style="font-size:11px"></span></div>
+</div>
+
+<button id="testBtn" class="btn-primary" onclick="testGPS()">🛰️ ทดสอบขอตำแหน่ง</button>
+<button id="watchBtn" class="btn-warn" onclick="testWatch()">👁️ ทดสอบ Watch (5 วินาที)</button>
+
+<div id="status" class="status work" style="display:none">⏳ กำลังขอตำแหน่ง...</div>
+
+<div class="box" id="resultBox" style="display:none">
+  <h3 style="margin:0 0 8px;font-size:15px;color:#2e7d32">✅ ผลลัพธ์</h3>
+  <pre id="resultPre"></pre>
+  <button class="copy-btn" onclick="copyResult()">📋 Copy ผล (ส่งให้แอดมิน)</button>
+</div>
+
+<div class="box" id="errBox" style="display:none">
+  <h3 style="margin:0 0 8px;font-size:15px;color:#c62828">❌ Error</h3>
+  <pre id="errPre"></pre>
+  <button class="copy-btn" onclick="copyErr()">📋 Copy error (ส่งให้แอดมิน)</button>
+</div>
+
+<div class="box">
+  <h3 style="margin:0 0 8px;font-size:15px">🔧 วิธีแก้ถ้าได้ Error</h3>
+  <div style="font-size:13px;line-height:1.7">
+    <b>iPhone:</b><br>
+    1. Settings → Privacy → <b>Location Services</b> → ON<br>
+    2. Settings → LINE → Location → <b>While Using</b><br>
+    3. ปิด-เปิด LINE app<br><br>
+    <b>Android:</b><br>
+    1. ตั้งค่า → ตำแหน่ง → ON<br>
+    2. แอป → LINE → สิทธิ์ → ตำแหน่ง → <b>อนุญาต</b><br>
+    3. Force stop LINE → เปิดใหม่<br><br>
+    <b>ทั้งคู่:</b> ออกไปนอกฟ้าโล่ง ไม่อยู่ในตึก
+  </div>
+</div>
+
+<script>
+// ── แสดง info เริ่มต้น ──
+document.getElementById("url").textContent = location.hostname;
+document.getElementById("https").innerHTML = location.protocol === "https:"
+  ? '<span class="ok">✅ HTTPS</span>'
+  : '<span class="bad">❌ HTTP (ปัญหา!)</span>';
+document.getElementById("hasGeo").innerHTML = navigator.geolocation
+  ? '<span class="ok">✅ รองรับ</span>'
+  : '<span class="bad">❌ ไม่รองรับ</span>';
+document.getElementById("ua").textContent = navigator.userAgent.slice(0, 80);
+
+// ── ตรวจ Permission state ──
+async function checkPerm() {
+  const el = document.getElementById("perm");
+  if (!navigator.permissions) { el.innerHTML = '<span class="warn">ตรวจไม่ได้</span>'; return; }
+  try {
+    const p = await navigator.permissions.query({ name: "geolocation" });
+    if (p.state === "granted")  el.innerHTML = '<span class="ok">✅ Granted</span>';
+    else if (p.state === "denied")  el.innerHTML = '<span class="bad">❌ Denied (ต้องไปเปิด Settings!)</span>';
+    else el.innerHTML = '<span class="warn">❓ Prompt (ยังไม่ได้ตอบ)</span>';
+  } catch (e) { el.innerHTML = `<span class="warn">${e.message}</span>`; }
+}
+checkPerm();
+
+let lastResult = "";
+let lastErr = "";
+
+async function testGPS() {
+  const btn = document.getElementById("testBtn");
+  const status = document.getElementById("status");
+  btn.disabled = true; btn.textContent = "⏳ กำลังขอตำแหน่ง...";
+  status.style.display = "block";
+  status.className = "status work";
+  status.textContent = "⏳ กำลังขอตำแหน่ง... (max 20 วินาที)";
+  document.getElementById("resultBox").style.display = "none";
+  document.getElementById("errBox").style.display = "none";
+
+  let countdown = 0;
+  const timer = setInterval(() => {
+    countdown++;
+    status.textContent = `⏳ กำลังขอตำแหน่ง... (${countdown}s)`;
+  }, 1000);
+
+  const start = Date.now();
+  try {
+    const pos = await new Promise((res, rej) => {
+      const hard = setTimeout(() => rej(new Error("hard timeout 20s")), 20000);
+      navigator.geolocation.getCurrentPosition(
+        (p) => { clearTimeout(hard); res(p); },
+        (e)  => { clearTimeout(hard); rej(e); },
+        { enableHighAccuracy: true, timeout: 18000, maximumAge: 0 }
+      );
+    });
+    clearInterval(timer);
+    const dur = ((Date.now() - start) / 1000).toFixed(1);
+    lastResult = `✅ ได้พิกัดสำเร็จ (ใช้เวลา ${dur}s)
+Latitude:  ${pos.coords.latitude}
+Longitude: ${pos.coords.longitude}
+Accuracy:  ±${Math.round(pos.coords.accuracy)} m
+Altitude:  ${pos.coords.altitude ?? "N/A"}
+Heading:   ${pos.coords.heading ?? "N/A"}
+Speed:     ${pos.coords.speed ?? "N/A"}
+
+Google Maps: https://maps.google.com/?q=${pos.coords.latitude},${pos.coords.longitude}`;
+    document.getElementById("resultPre").textContent = lastResult;
+    document.getElementById("resultBox").style.display = "block";
+    status.className = "status ok";
+    status.textContent = `✅ ได้พิกัด! (${dur}s)`;
+    checkPerm();
+  } catch (e) {
+    clearInterval(timer);
+    const dur = ((Date.now() - start) / 1000).toFixed(1);
+    const codeMap = { 1: "PERMISSION_DENIED", 2: "POSITION_UNAVAILABLE", 3: "TIMEOUT" };
+    lastErr = `❌ Error (ใช้เวลา ${dur}s)
+Code:    ${e.code ?? "?"} (${codeMap[e.code] || "UNKNOWN"})
+Message: ${e.message || "(no message)"}
+
+Browser: ${navigator.userAgent}
+URL:     ${location.href}
+HTTPS:   ${location.protocol === "https:" ? "YES" : "NO"}
+Geo API: ${navigator.geolocation ? "YES" : "NO"}`;
+    document.getElementById("errPre").textContent = lastErr;
+    document.getElementById("errBox").style.display = "block";
+    status.className = "status bad";
+    status.textContent = `❌ ไม่ได้พิกัด (${dur}s)`;
+    checkPerm();
+  } finally {
+    btn.disabled = false; btn.textContent = "🛰️ ทดสอบใหม่อีกครั้ง";
+  }
+}
+
+async function testWatch() {
+  const btn = document.getElementById("watchBtn");
+  const status = document.getElementById("status");
+  btn.disabled = true; btn.textContent = "👁️ Watching...";
+  status.style.display = "block";
+  status.className = "status work";
+
+  let wid = null;
+  const positions = [];
+  const start = Date.now();
+
+  wid = navigator.geolocation.watchPosition(
+    (pos) => {
+      positions.push({
+        t: ((Date.now() - start) / 1000).toFixed(1),
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude,
+        acc: Math.round(pos.coords.accuracy),
+      });
+      status.textContent = `👁️ ได้ ${positions.length} pos แล้ว (${((Date.now()-start)/1000).toFixed(1)}s)`;
+    },
+    (err) => {
+      const codeMap = { 1: "PERMISSION_DENIED", 2: "POSITION_UNAVAILABLE", 3: "TIMEOUT" };
+      status.className = "status bad";
+      status.textContent = `❌ Watch error: ${codeMap[err.code]} - ${err.message}`;
+    },
+    { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+  );
+
+  setTimeout(() => {
+    if (wid !== null) navigator.geolocation.clearWatch(wid);
+    btn.disabled = false; btn.textContent = "👁️ ทดสอบ Watch (5 วินาที)";
+    if (positions.length > 0) {
+      lastResult = `👁️ Watch results (5s) — ได้ ${positions.length} positions:
+${positions.map((p, i) => `${i+1}. [${p.t}s] ${p.lat}, ${p.lng} ±${p.acc}m`).join("\n")}`;
+      document.getElementById("resultPre").textContent = lastResult;
+      document.getElementById("resultBox").style.display = "block";
+      status.className = "status ok";
+      status.textContent = `✅ Watch สำเร็จ ${positions.length} ครั้ง`;
+    }
+  }, 5000);
+}
+
+function copyResult() {
+  navigator.clipboard.writeText(lastResult).then(
+    () => alert("✅ Copy แล้ว — ส่งให้แอดมินได้เลย"),
+    () => prompt("Copy ข้อความนี้:", lastResult)
+  );
+}
+function copyErr() {
+  navigator.clipboard.writeText(lastErr).then(
+    () => alert("✅ Copy แล้ว — ส่งให้แอดมินได้เลย"),
+    () => prompt("Copy ข้อความนี้:", lastErr)
+  );
+}
+</script>
+
+</body>
+</html>
