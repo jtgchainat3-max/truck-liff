@@ -679,6 +679,11 @@ async function init() {
   }
   lineUserId = profile.userId;
 
+  // ⭐ GPS warmup — เริ่มขอตำแหน่งทันที (ไม่รอจนกว่าจะถ่ายรูป)
+  // ทำให้ permission popup ขึ้นเร็ว + cache position สำหรับใช้ตอนถ่ายรูป
+  startGPSWarmup();
+  dlog("🛰 GPS warmup started");
+
   setLoadingMsg("กำลังโหลดข้อมูลระบบ...", "ขั้นตอน 3/3");
   const params   = new URLSearchParams(location.search);
   const deepType = params.get("type");
@@ -827,35 +832,101 @@ async function apiFetch(path, opts = {}, timeoutMs = 12000) {
   }
 }
 
-// ขอ GPS แบบ 2-tier: high accuracy ก่อน → ถ้าไม่ได้ลอง low accuracy (WiFi/Cell)
-// + manual hard timeout 15 วินาที กันค้าง
+// ──────────────────────────────────────────────────────────
+// GPS Strategy — ลอง 3 วิธีพร้อมกัน + cache ผลที่ดีที่สุด
+// ──────────────────────────────────────────────────────────
+// global cache — เก็บผล GPS ตั้งแต่ LIFF เปิด, ใช้ซ้ำได้
+let lastKnownPosition = null;
+let lastPositionTime  = 0;
+let watchId = null;
+
+// เริ่ม watchPosition ตั้งแต่ LIFF โหลด → mobile cache พิกัดล่วงหน้า
+function startGPSWarmup() {
+  if (!navigator.geolocation || watchId !== null) return;
+  try {
+    watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        lastKnownPosition = pos;
+        lastPositionTime  = Date.now();
+        // ถ้าได้แล้ว → หยุด watch (ประหยัดแบต)
+        if (watchId !== null) {
+          navigator.geolocation.clearWatch(watchId);
+          watchId = null;
+        }
+      },
+      (err) => { console.warn("GPS warmup error:", err.message); },
+      { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 }
+    );
+  } catch (e) { console.warn("GPS warmup failed:", e.message); }
+}
+
+// ขอ GPS แบบ 3-strategy parallel race
 function getGPS() {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) { reject(new Error("เครื่องไม่รองรับ GPS")); return; }
 
+    // ✅ ถ้ามี cached position ที่อายุ < 60 วินาที → ใช้เลย ไม่ต้องรอ
+    if (lastKnownPosition && (Date.now() - lastPositionTime) < 60000) {
+      resolve(lastKnownPosition);
+      return;
+    }
+
     let done = false;
+    const errors = [];
     const finish = (fn, val) => { if (!done) { done = true; fn(val); } };
 
-    // Hard timeout: ถ้า 15 วินาที ยังไม่ได้ผล → ปิดเลย ไม่ค้าง
+    // Hard timeout — 18 วินาที
     const hardTimer = setTimeout(() => {
-      finish(reject, new Error("GPS timeout 15 วินาที — กรุณาเปิดให้สิทธิ์ตำแหน่ง หรือออกไปนอกอาคาร"));
-    }, 15000);
+      // ถ้ามี position เก่า (จาก warmup) → ใช้แทน
+      if (lastKnownPosition) {
+        finish(resolve, lastKnownPosition);
+      } else {
+        finish(reject, new Error(`GPS timeout 18s — ลองทุกวิธีแล้ว: ${errors.join(" | ")}`));
+      }
+    }, 18000);
 
-    // รอบ 1: GPS แม่นยำ (6 วินาที)
-    navigator.geolocation.getCurrentPosition(
-      (pos) => { clearTimeout(hardTimer); finish(resolve, pos); },
-      (err1) => {
-        console.warn("GPS high accuracy failed:", err1.message);
-        if (done) return;
-        // รอบ 2: WiFi/Cell tower (8 วินาที, รับ cache เก่ากว่า)
-        navigator.geolocation.getCurrentPosition(
-          (pos) => { clearTimeout(hardTimer); finish(resolve, pos); },
-          (err2) => { clearTimeout(hardTimer); finish(reject, new Error(`${err1.message} → ${err2.message}`)); },
-          { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
-        );
-      },
-      { enableHighAccuracy: true, timeout: 6000, maximumAge: 5000 }
-    );
+    const onSuccess = (pos) => {
+      lastKnownPosition = pos;
+      lastPositionTime  = Date.now();
+      clearTimeout(hardTimer);
+      finish(resolve, pos);
+    };
+
+    // Strategy 1: High accuracy (GPS chip) — 8 sec
+    try {
+      navigator.geolocation.getCurrentPosition(
+        onSuccess,
+        (err) => { errors.push(`HighAcc:${err.code}`); },
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+      );
+    } catch (e) { errors.push(`HighAcc:exception`); }
+
+    // Strategy 2: Low accuracy (WiFi/Cell) — parallel, 8 sec
+    try {
+      navigator.geolocation.getCurrentPosition(
+        onSuccess,
+        (err) => { errors.push(`LowAcc:${err.code}`); },
+        { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
+      );
+    } catch (e) { errors.push(`LowAcc:exception`); }
+
+    // Strategy 3: watchPosition — บางเครื่อง getCurrentPosition พังแต่ watch ใช้ได้
+    let wId = null;
+    try {
+      wId = navigator.geolocation.watchPosition(
+        (pos) => {
+          if (wId !== null) {
+            navigator.geolocation.clearWatch(wId);
+            wId = null;
+          }
+          onSuccess(pos);
+        },
+        (err) => { errors.push(`Watch:${err.code}`); },
+        { enableHighAccuracy: true, timeout: 16000, maximumAge: 0 }
+      );
+      // clear watch ตอน hard timeout
+      setTimeout(() => { if (wId !== null) { try { navigator.geolocation.clearWatch(wId); } catch (_) {} } }, 18000);
+    } catch (e) { errors.push(`Watch:exception`); }
   });
 }
 
@@ -956,9 +1027,13 @@ async function capturePhotoGPS(key, statusElId) {
       return "❓ Unknown";
     })();
 
+    // นับจำนวนครั้งที่ลอง — ถ้า ≥ 2 ครั้งให้ show ปุ่ม "ส่งโดยไม่มี GPS"
+    gpsRetryCount[key] = (gpsRetryCount[key] || 0) + 1;
+    const tooManyFailed = gpsRetryCount[key] >= 2;
+
     if (ind) {
       ind.innerHTML = `
-        ❌ <b>ไม่ได้ตำแหน่ง GPS</b>
+        ❌ <b>ไม่ได้ตำแหน่ง GPS</b> (ลองแล้ว ${gpsRetryCount[key]} ครั้ง)
         <div style="font-size:12px;color:#666;margin:6px 0;line-height:1.5">
           <b>สาเหตุ:</b> ${errCode}<br>
           <b>Permission:</b> ${permState}<br>
@@ -969,12 +1044,19 @@ async function capturePhotoGPS(key, statusElId) {
           1. เปิด GPS ในมือถือ (ตั้งค่า → ตำแหน่ง)<br>
           2. ตั้งค่า → LINE → ตำแหน่ง → <b>อนุญาต</b><br>
           3. ออกไปที่โล่งสักครู่<br>
-          4. กดปุ่ม "ลองใหม่" ด้านล่าง
         </div>
-        <button onclick="retryPhotoGPS('${key}','${statusElId}')"
-          style="background:#1a73e8;color:#fff;border:none;border-radius:6px;padding:10px 20px;font-size:14px;font-weight:600;cursor:pointer;margin-top:4px">
-          🔄 ลองขอตำแหน่งใหม่
-        </button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">
+          <button onclick="retryPhotoGPS('${key}','${statusElId}')"
+            style="flex:1;min-width:140px;background:#1a73e8;color:#fff;border:none;border-radius:6px;padding:10px 16px;font-size:14px;font-weight:600;cursor:pointer">
+            🔄 ลองอีกครั้ง
+          </button>
+          ${tooManyFailed ? `
+          <button onclick="skipGPS('${key}','${statusElId}')"
+            style="flex:1;min-width:140px;background:#ff9800;color:#fff;border:none;border-radius:6px;padding:10px 16px;font-size:14px;font-weight:600;cursor:pointer">
+            ⚠️ ส่งโดยไม่มี GPS
+          </button>` : ""}
+        </div>
+        ${tooManyFailed ? `<div style="font-size:11px;color:#888;margin-top:6px;line-height:1.4">⚠️ การส่งโดยไม่มี GPS จะถูก mark เพื่อให้แอดมินตรวจสอบ — ใช้เฉพาะตอน GPS เสียจริง ๆ</div>` : ""}
       `;
       ind.style.background = "#ffebee";
       ind.style.color = "#c62828";
@@ -982,6 +1064,22 @@ async function capturePhotoGPS(key, statusElId) {
     return null;
   }
 }
+
+// นับจำนวนครั้งที่กด retry GPS
+const gpsRetryCount = {};
+
+// ข้าม GPS — set placeholder ให้ผ่าน validation แต่ flag เพื่อ admin
+window.skipGPS = function(key, statusElId) {
+  if (!confirm("⚠️ ส่งโดยไม่มี GPS จริงหรือ?\n\nระบบจะ mark ว่าไม่มี GPS เพื่อให้แอดมินตรวจสอบ\nใช้เฉพาะตอน GPS เสียจริง ๆ เท่านั้น")) return;
+  photoGPS[key] = { latitude: 0, longitude: 0, accuracy: -1, skipped: true };
+  const ind = document.getElementById(statusElId);
+  if (ind) {
+    ind.innerHTML = `⚠️ <b>ส่งโดยไม่มี GPS</b> <small>(จะถูกตรวจสอบโดยแอดมิน)</small>`;
+    ind.style.background = "#fff3e0";
+    ind.style.color = "#e65100";
+  }
+  gpsRetryCount[key] = 0;
+};
 
 // เรียกจากปุ่ม "ลองใหม่"
 window.retryPhotoGPS = function(key, statusElId) {
@@ -991,6 +1089,11 @@ window.retryPhotoGPS = function(key, statusElId) {
 function appendGPSToFormData(fd, key) {
   const gps = photoGPS[key];
   if (!gps) return false;
+  if (gps.skipped) {
+    // ส่ง marker ว่า user กด skip GPS — backend จะ flag เป็น anomaly
+    fd.append("gps_skipped", "true");
+    return true;
+  }
   fd.append("latitude",  gps.latitude);
   fd.append("longitude", gps.longitude);
   fd.append("accuracy",  gps.accuracy);
@@ -1539,7 +1642,7 @@ async function confirmMileage() {
   if (!photoGPS.mileage) {
     await capturePhotoGPS("mileage", "mileageGpsStatus");
     if (!photoGPS.mileage) {
-      alert("❌ ดึงพิกัด GPS ไม่ได้\n\n✅ วิธีแก้:\n1. เช็คว่า GPS เปิดอยู่\n2. Settings → LINE → Location → อนุญาต\n3. ออกจากตึกไปที่โล่ง\n4. ปิด Low Power Mode\n5. รอ 10-15 วิแล้วลองใหม่\n\nต้องมี GPS ทุกครั้ง — ห้ามข้าม");
+      alert("⚠️ ยังไม่ได้พิกัด GPS\n\nดูที่กรอบสถานะ GPS ในหน้านี้:\n• กดปุ่ม 🔄 ลองอีกครั้ง\n• หรือถ้าลองหลายรอบไม่ได้จะมีปุ่ม ⚠️ ส่งโดยไม่มี GPS\n\n(ถ้า GPS เสียจริง ๆ ใช้ปุ่ม skip ได้ — แอดมินจะตรวจสอบ)");
       return;
     }
   }
@@ -1741,7 +1844,7 @@ async function submitFuel() {
   if (!photoGPS.fuel) {
     await capturePhotoGPS("fuel", "fuelGpsStatus");
     if (!photoGPS.fuel) {
-      alert("❌ ดึงพิกัด GPS ไม่ได้\n\n✅ วิธีแก้:\n1. เช็คว่า GPS เปิดอยู่\n2. Settings → LINE → Location → อนุญาต\n3. ออกจากตึกไปที่โล่ง\n4. ปิด Low Power Mode\n5. รอ 10-15 วิแล้วลองใหม่\n\nต้องมี GPS ทุกครั้ง — ห้ามข้าม");
+      alert("⚠️ ยังไม่ได้พิกัด GPS\n\nดูที่กรอบสถานะ GPS ในหน้านี้:\n• กดปุ่ม 🔄 ลองอีกครั้ง\n• หรือถ้าลองหลายรอบไม่ได้จะมีปุ่ม ⚠️ ส่งโดยไม่มี GPS\n\n(ถ้า GPS เสียจริง ๆ ใช้ปุ่ม skip ได้ — แอดมินจะตรวจสอบ)");
       return;
     }
   }
@@ -2027,7 +2130,7 @@ async function submitMaintenance() {
   if (!photoGPS.maintMileage) {
     await capturePhotoGPS("maintMileage", "maintMileageGpsStatus");
     if (!photoGPS.maintMileage) {
-      alert("❌ ดึงพิกัด GPS ไม่ได้\n\n✅ วิธีแก้:\n1. เช็คว่า GPS เปิดอยู่\n2. Settings → LINE → Location → อนุญาต\n3. ออกจากตึกไปที่โล่ง\n4. ปิด Low Power Mode\n5. รอ 10-15 วิแล้วลองใหม่\n\nต้องมี GPS ทุกครั้ง — ห้ามข้าม");
+      alert("⚠️ ยังไม่ได้พิกัด GPS\n\nดูที่กรอบสถานะ GPS ในหน้านี้:\n• กดปุ่ม 🔄 ลองอีกครั้ง\n• หรือถ้าลองหลายรอบไม่ได้จะมีปุ่ม ⚠️ ส่งโดยไม่มี GPS\n\n(ถ้า GPS เสียจริง ๆ ใช้ปุ่ม skip ได้ — แอดมินจะตรวจสอบ)");
       return;
     }
   }
