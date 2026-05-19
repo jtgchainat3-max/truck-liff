@@ -1007,56 +1007,27 @@ async function capturePhotoGPS(key, statusElId) {
     return photoGPS[key];
   } catch (e) {
     clearInterval(countdownTimer);
-    // เก็บ diagnostic info สำหรับ debug
-    const isHttps = location.protocol === "https:";
-    const hasGeo = !!navigator.geolocation;
-    let permState = "ตรวจไม่ได้";
-    try {
-      if (navigator.permissions) {
-        const p = await navigator.permissions.query({ name: "geolocation" });
-        permState = p.state === "granted" ? "อนุญาตแล้ว"
-                  : p.state === "denied"  ? "❌ ถูกปฏิเสธ — ต้องเปิดใน Settings"
-                  : "❓ ยังไม่ได้ตอบคำถาม";
-      }
-    } catch (_) { /* ignore */ }
-    const errCode = (() => {
-      const m = (e.message || "").toLowerCase();
-      if (m.includes("denied"))      return "🔒 Permission Denied (คุณกดปฏิเสธ)";
-      if (m.includes("unavailable")) return "📡 Position Unavailable (GPS หาสัญญาณไม่เจอ)";
-      if (m.includes("timeout"))     return "⏱ Timeout (รอเกิน 15 วินาที)";
-      return "❓ Unknown";
-    })();
-
-    // นับจำนวนครั้งที่ลอง — ถ้า ≥ 2 ครั้งให้ show ปุ่ม "ส่งโดยไม่มี GPS"
+    // นับจำนวนครั้งที่ลอง — ครั้งที่ 2 ขึ้นไปให้แสดงปุ่ม "ข้าม GPS"
     gpsRetryCount[key] = (gpsRetryCount[key] || 0) + 1;
-    const tooManyFailed = gpsRetryCount[key] >= 2;
+    const showSkip = gpsRetryCount[key] >= 2;
 
     if (ind) {
       ind.innerHTML = `
-        ❌ <b>ไม่ได้ตำแหน่ง GPS</b> (ลองแล้ว ${gpsRetryCount[key]} ครั้ง)
-        <div style="font-size:12px;color:#666;margin:6px 0;line-height:1.5">
-          <b>สาเหตุ:</b> ${errCode}<br>
-          <b>Permission:</b> ${permState}<br>
-          <b>HTTPS:</b> ${isHttps ? "✅ ใช่" : "❌ ไม่ใช่ (ปัญหา!)"}<br>
-          <b>Browser GPS:</b> ${hasGeo ? "✅ รองรับ" : "❌ ไม่รองรับ"}<br>
-          <br>
-          <b>วิธีแก้:</b><br>
-          1. เปิด GPS ในมือถือ (ตั้งค่า → ตำแหน่ง)<br>
-          2. ตั้งค่า → LINE → ตำแหน่ง → <b>อนุญาต</b><br>
-          3. ออกไปที่โล่งสักครู่<br>
+        ❌ <b>ไม่ได้พิกัด GPS</b> (ลองแล้ว ${gpsRetryCount[key]} ครั้ง)
+        <div style="font-size:12px;color:#666;margin:6px 0;line-height:1.4">
+          ออกไปที่โล่ง / เปิด GPS / อนุญาตให้ LINE
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">
           <button onclick="retryPhotoGPS('${key}','${statusElId}')"
-            style="flex:1;min-width:140px;background:#1a73e8;color:#fff;border:none;border-radius:6px;padding:10px 16px;font-size:14px;font-weight:600;cursor:pointer">
+            style="flex:1;min-width:130px;background:#1a73e8;color:#fff;border:none;border-radius:6px;padding:10px 16px;font-size:14px;font-weight:700;cursor:pointer">
             🔄 ลองอีกครั้ง
           </button>
-          ${tooManyFailed ? `
+          ${showSkip ? `
           <button onclick="skipGPS('${key}','${statusElId}')"
-            style="flex:1;min-width:140px;background:#ff9800;color:#fff;border:none;border-radius:6px;padding:10px 16px;font-size:14px;font-weight:600;cursor:pointer">
-            ⚠️ ส่งโดยไม่มี GPS
+            style="flex:1;min-width:130px;background:#ff9800;color:#fff;border:none;border-radius:6px;padding:10px 16px;font-size:14px;font-weight:700;cursor:pointer">
+            ⏭ ข้าม GPS
           </button>` : ""}
         </div>
-        ${tooManyFailed ? `<div style="font-size:11px;color:#888;margin-top:6px;line-height:1.4">⚠️ การส่งโดยไม่มี GPS จะถูก mark เพื่อให้แอดมินตรวจสอบ — ใช้เฉพาะตอน GPS เสียจริง ๆ</div>` : ""}
       `;
       ind.style.background = "#ffebee";
       ind.style.color = "#c62828";
