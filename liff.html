@@ -491,11 +491,14 @@ body{font-family:'Sarabun',sans-serif;background:#f5f5f5;color:#333;min-height:1
         <label>ประเภทงาน <span style="color:#e53935">*</span></label>
         <select id="maintType" onchange="onMaintTypeChange()">
           <option value="oil_change">🛢 เปลี่ยนน้ำมันเครื่อง</option>
+          <option value="gear_oil">⚙️ ถ่ายน้ำมันเกียร์</option>
+          <option value="differential_oil">🔩 ถ่ายน้ำมันเฟืองท้าย</option>
+          <option value="brake_fluid">💧 เปลี่ยนน้ำมันเบรค</option>
           <option value="tire_rotate">🔄 สลับยาง</option>
-          <option value="tire_replace">🔧 เปลี่ยนยาง</option>
-          <option value="brake">🛑 เบรก</option>
+          <option value="tire_replace">🛞 เปลี่ยนยาง</option>
+          <option value="brake">🛑 เปลี่ยน/ตรวจเบรก</option>
           <option value="battery">🔋 แบตเตอรี่</option>
-          <option value="other">🔩 อื่นๆ</option>
+          <option value="other">🔧 ซ่อมอื่นๆ</option>
         </select>
       </div>
       <div class="field">
@@ -1991,7 +1994,7 @@ function onMaintTypeChange() {
   document.getElementById("maintOtherDescField").style.display = type === "other" ? "" : "none";
 
   // ── เลขไมล์ครั้งถัดไป — แสดงเฉพาะ oil_change + tire_rotate (บังคับ) ────────
-  const showNext = ["oil_change","tire_rotate"].includes(type);
+  const showNext = ["oil_change","gear_oil","differential_oil","brake_fluid","tire_rotate","brake"].includes(type);
   document.getElementById("maintNextMileField").style.display = showNext ? "" : "none";
 
   // ── แจ้งเตือนสลับยาง ──────────────────────────────────────────────────────
