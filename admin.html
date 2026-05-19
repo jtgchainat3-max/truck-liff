@@ -1408,22 +1408,30 @@ async function loadVerifyQueue() {
               ${mileagePhoto
                 ? `<a href="${mileagePhoto}" target="_blank"><img src="${mileagePhoto}" style="width:100%;border-radius:8px;border:1px solid #e0e0e0"></a>`
                 : `<div style="padding:30px;background:#f5f5f5;border-radius:8px;text-align:center;color:#aaa">ไม่มีรูป</div>`}
-              <div style="margin-top:8px;text-align:center"><span style="font-size:13px;color:#666">เลขในระบบ:</span> <b style="font-size:18px">${fmtNum(isFuel ? r.mileage : r.mileage_at_service)}</b></div>
+              <div style="margin-top:8px;background:#e3f2fd;border-radius:6px;padding:8px;text-align:center">
+                <div style="font-size:11px;color:#666">📝 เลขไมล์ที่คนขับกรอก</div>
+                <b style="font-size:22px;color:#0d47a1">${fmtNum(isFuel ? r.mileage : r.mileage_at_service)}</b>
+                <div style="font-size:11px;color:#888;margin-top:2px">⬆ เทียบกับเลขในรูปฝั่งซ้าย</div>
+              </div>
             </div>
             <div>
               <div style="font-size:13px;font-weight:600;color:#555;margin-bottom:6px">🧾 รูปบิล</div>
               ${billPhoto
                 ? `<a href="${billPhoto}" target="_blank"><img src="${billPhoto}" style="width:100%;border-radius:8px;border:1px solid #e0e0e0"></a>`
                 : `<div style="padding:30px;background:#f5f5f5;border-radius:8px;text-align:center;color:#aaa">ไม่มีรูป</div>`}
-              <div style="margin-top:8px;text-align:center"><span style="font-size:13px;color:#666">${isFuel ? "ยอดในระบบ:" : "ราคาในระบบ:"}</span> <b style="font-size:18px">฿${fmtNum(isFuel ? r.total_cost : r.cost)}</b></div>
+              <div style="margin-top:8px;background:#fff3e0;border-radius:6px;padding:8px;text-align:center">
+                <div style="font-size:11px;color:#666">💰 ${isFuel ? "ยอดที่คนขับกรอก" : "ราคาที่คนขับกรอก"}</div>
+                <b style="font-size:22px;color:#e65100">฿${fmtNum(isFuel ? r.total_cost : r.cost)}</b>
+                <div style="font-size:11px;color:#888;margin-top:2px">⬆ เทียบกับยอดในบิล</div>
+              </div>
             </div>
           </div>
 
-          <!-- Info row -->
-          <div style="background:#f5f5f5;border-radius:6px;padding:8px 12px;font-size:13px;color:#555;margin-bottom:10px">
+          <!-- Info row — เพิ่มรายละเอียดสำคัญ -->
+          <div style="background:#f5f5f5;border-radius:6px;padding:10px 12px;font-size:13px;color:#444;margin-bottom:10px;line-height:1.7">
             ${isFuel
-              ? `${fmtNum(r.liters)} ลิตร · ราคา/ลิตร ฿${fmtNum(r.price_per_liter)} · ${r.km_per_liter ? r.km_per_liter + " กม./ล." : ""} · ${r.station_name || "-"}`
-              : `${MAINT_LABELS[r.maintenance_type] || r.maintenance_type} · ร้าน: ${r.shop_name || "-"} ${r.notes ? `· ${r.notes}` : ""}`
+              ? `🛢 <b>${fmtNum(r.liters)}</b> ลิตร × ฿${fmtNum(r.price_per_liter)} = <b>฿${fmtNum(Math.round(r.liters * r.price_per_liter * 100) / 100)}</b> (คำนวณ) ${r.km_per_liter ? `· ${r.km_per_liter} กม./ล.` : ""} · ⛽ ปั๊ม: <b>${r.station_name || "-"}</b>`
+              : `🔧 <b>${MAINT_LABELS[r.maintenance_type] || r.maintenance_type}</b> · ร้าน: <b>${r.shop_name || "-"}</b> ${r.notes ? `<br>📝 ${r.notes}` : ""}`
             }
           </div>
 
