@@ -1326,14 +1326,25 @@ async function loadFuel() {
       <div class="sbox orange"><div class="num">${fmtNum(Math.round(totalLiters))}</div><div class="lbl">ลิตรรวม</div></div>
       <div class="sbox red"><div class="num">฿${fmtNum(Math.round(totalCost))}</div><div class="lbl">ค่าน้ำมันรวม</div></div>
     </div>
-    <div class="card"><h3>ประวัติเติมน้ำมัน <small style="color:#888;font-weight:400">(กดที่แถวเพื่อดูรูป + เทียบบิล)</small></h3><div class="tbl-wrap"><table>
-      <tr><th>วันที่/เวลา</th><th>ทะเบียน</th><th>โกดัง</th><th>คนขับ</th><th>ไมล์</th><th>วิ่งได้</th><th>ลิตร</th><th>ราคา/ล.</th><th style="background:#e3f2fd">💰 ยอดที่กรอก</th><th>คำนวณ</th><th>กม./ล.</th><th>ปั๊ม</th><th>GPS</th></tr>`;
+    <div class="card"><h3>ประวัติเติมน้ำมัน <small style="color:#888;font-weight:400">(กดที่แถวเพื่อดูรูป + เทียบบิล · กด 🔍 AI เพื่อให้ Claude ตรวจบิลใบนั้น)</small></h3><div class="tbl-wrap"><table>
+      <tr><th>#ID</th><th>วันที่/เวลา</th><th>ทะเบียน</th><th>โกดัง</th><th>คนขับ</th><th>ไมล์</th><th>วิ่งได้</th><th>ลิตร</th><th>ราคา/ล.</th><th style="background:#e3f2fd">💰 ยอดที่กรอก</th><th>คำนวณ</th><th>กม./ล.</th><th>ปั๊ม</th><th>AI</th><th>GPS</th></tr>`;
 
   for (const r of data) {
     const kmSince = r.km_since_last_fuel
       ? `<b style="color:#1a73e8">${fmtNum(r.km_since_last_fuel)}</b> กม.<br><small style="color:#888">จากครั้งก่อน</small>`
       : `<span style="color:#aaa">—</span>`;
+
+    // OCR status badge
+    let ocrBadge = "";
+    if (r.ocr_status === "matched")          ocrBadge = `<span class="badge b-ok" title="AI ตรวจแล้ว: ตรง">✅</span>`;
+    else if (r.ocr_status === "rejected")    ocrBadge = `<span class="badge b-exp" title="AI ตรวจแล้ว: ไม่ตรง">⚠️</span>`;
+    else if (r.ocr_status === "admin_override") ocrBadge = `<span class="badge b-warn" title="admin override">🛡</span>`;
+    else if (r.ocr_status === "pending")     ocrBadge = `<span class="badge b-sent" title="รอ AI ตรวจ">⏳</span>`;
+    else if (r.ocr_status === "error")       ocrBadge = `<span class="badge b-sent" title="AI error">❌</span>`;
+    else                                     ocrBadge = `<span style="color:#aaa">—</span>`;
+
     html += `<tr style="cursor:pointer" onclick="showFuelDetail(${r.id})">
+      <td><code style="background:#f5f5f5;padding:2px 6px;border-radius:4px;font-size:11px">#${r.id}</code></td>
       <td>${thaiDateShort(r.log_date)}<br><small style="color:#888">${fmtTime(r.created_at)}</small></td>
       <td><b>${r.trucks?.plate_number || "-"}</b></td>
       <td>${r.trucks?.warehouse || "-"}</td>
@@ -1346,11 +1357,54 @@ async function loadFuel() {
       <td><small style="color:#666">฿${r.liters && r.price_per_liter ? fmtNum(Math.round(r.liters * r.price_per_liter * 100) / 100) : "-"}</small></td>
       <td>${r.km_per_liter ? r.km_per_liter + " กม./ล." : "-"}${r.anomaly_flag ? ` <span class="badge b-crit" title="${r.anomaly_note}">⚠️</span>` : ""}</td>
       <td>${r.station_name || "-"}</td>
+      <td onclick="event.stopPropagation()" style="text-align:center;white-space:nowrap">
+        ${ocrBadge}
+        <button class="btn btn-primary" style="width:auto;padding:3px 8px;font-size:11px;margin-top:4px;display:block" onclick="event.stopPropagation();runFuelOcr(${r.id})">🔍 AI ตรวจ</button>
+      </td>
       <td>${r.latitude && r.longitude ? `<a onclick="event.stopPropagation()" href="https://maps.google.com/?q=${r.latitude},${r.longitude}" target="_blank" style="font-size:13px">📍</a>` : "<small style='color:#aaa'>-</small>"}</td>
     </tr>`;
   }
   html += `</table></div></div>`;
   el.innerHTML = html;
+}
+
+// รัน OCR กับ fuel_log id ที่ระบุ — เรียกจากปุ่ม 🔍 AI ในตาราง
+async function runFuelOcr(id) {
+  const confirmed = confirm(`ให้ Claude AI ตรวจบิล #${id}?\n\nใช้เวลา 5-15 วินาที + เสียค่า API ~0.04 บาท`);
+  if (!confirmed) return;
+
+  // แสดง toast / status
+  const old = document.title;
+  document.title = `⏳ AI กำลังตรวจ #${id}...`;
+  const res = await api("test-ocr-fuel", { method: "POST", body: JSON.stringify({ id }) });
+  document.title = old;
+
+  if (!res?.success) {
+    alert(`❌ ${res?.error || "ทดสอบไม่สำเร็จ"}`);
+    return;
+  }
+
+  const ext = res.extracted || {};
+  const mList = (res.mismatches || []).map(m => `• ${m.label}\n   ในระบบ: ${m.expected}\n   ในบิล:  ${m.got}`).join("\n\n") || "(ทุกอย่างตรง)";
+
+  const summary = `🔍 ผลตรวจบิล #${id}\n\n` +
+    `สถานะ: ${res.status === "matched" ? "✅ ตรงทั้งหมด" : `⚠️ ไม่ตรง ${res.mismatches.length} จุด`}\n\n` +
+    `═══ AI อ่านได้ ═══\n` +
+    `ชื่อบริษัท: ${ext.company_name || "-"}\n` +
+    `เลขผู้เสียภาษี: ${ext.tax_id || "-"}\n` +
+    `ที่อยู่: ${(ext.address || "-").slice(0, 80)}\n` +
+    `ทะเบียน: ${ext.plate_number || "-"}\n` +
+    `เลขไมล์: ${ext.mileage || "-"}\n` +
+    `ยอดเงิน: ${ext.total || "-"}\n` +
+    `ปั๊ม: ${ext.station_name || "-"}\n` +
+    `วันที่: ${ext.date || "-"}\n` +
+    `ใบกำกับภาษี: ${ext.is_tax_invoice === true ? "ใช่" : ext.is_tax_invoice === false ? "ไม่" : "-"}\n` +
+    `คุณภาพรูป: ${ext.image_quality || "-"}\n` +
+    `ความมั่นใจ: ${ext.confidence ?? "-"}\n\n` +
+    `═══ รายการที่ไม่ตรง ═══\n${mList}`;
+
+  alert(summary);
+  loadFuel();  // refresh ตารางให้เห็น badge อัปเดต
 }
 
 // ════════════════════════════════════════════════════════════
@@ -2540,14 +2594,20 @@ async function exportBillsZip() {
   const JSZip = await loadJSZip();
   const zip = new JSZip();
   let downloaded = 0;
-  let csvLines = ["type,date,plate,driver,mileage,amount,description,bill_url"];
+  // Detail CSV — ทุกรายการ
+  let csvLines = ["type,date,company,plate,warehouse,driver,mileage,amount,description"];
 
-  // Fuel
+  // helper: sanitize ชื่อโฟลเดอร์
+  const safe = (s) => (s || "-").toString().replace(/[\\/:*?"<>|]/g, "_").replace(/\s+/g, "_");
+
+  // Fuel — แบ่งตามบริษัท → ทะเบียน → ไฟล์
   for (const r of data.fuel || []) {
-    const plate = (r.trucks?.plate_number || `t${r.truck_id}`).replace(/[^a-zA-Z0-9ก-๙]/g, "_");
+    const plate = safe(r.trucks?.plate_number || `t${r.truck_id}`);
+    const company = safe(r.trucks?.companies?.short_name || r.trucks?.companies?.name || "no_company");
     const date = r.log_date;
-    const folder = zip.folder(`fuel/${plate}_${date}`);
-    csvLines.push(`fuel,${date},${plate},${r.drivers?.name || ""},${r.mileage || ""},${r.total_cost || ""},"${r.station_name || ""}","${r.bill_image_path || ""}"`);
+    const folder = zip.folder(`น้ำมัน/${company}/${plate}/${date}_${r.id}`);
+    const amount = r.total_cost || r.total_cost_entered || 0;
+    csvLines.push(`fuel,${date},"${r.trucks?.companies?.name || ""}",${plate},${r.trucks?.warehouse || ""},"${r.drivers?.name || ""}",${r.mileage || ""},${amount},"${r.station_name || ""}"`);
     if (r.image_path) {
       try {
         const blob = await (await fetch(r.image_path)).blob();
@@ -2566,10 +2626,11 @@ async function exportBillsZip() {
   }
   // Maintenance
   for (const r of data.maintenance || []) {
-    const plate = (r.trucks?.plate_number || `t${r.truck_id}`).replace(/[^a-zA-Z0-9ก-๙]/g, "_");
+    const plate = safe(r.trucks?.plate_number || `t${r.truck_id}`);
+    const company = safe(r.trucks?.companies?.short_name || r.trucks?.companies?.name || "no_company");
     const date = r.maintenance_date;
-    const folder = zip.folder(`maintenance/${plate}_${date}_${r.maintenance_type}`);
-    csvLines.push(`maintenance,${date},${plate},${r.drivers?.name || ""},${r.mileage_at_service || ""},${r.cost || ""},"${(r.shop_name || "") + " " + (r.notes || "")}","${r.bill_image_path || ""}"`);
+    const folder = zip.folder(`ซ่อมบำรุง/${company}/${plate}/${date}_${safe(r.maintenance_type)}_${r.id}`);
+    csvLines.push(`maintenance,${date},"${r.trucks?.companies?.name || ""}",${plate},${r.trucks?.warehouse || ""},"${r.drivers?.name || ""}",${r.mileage_at_service || ""},${r.cost || ""},"${(r.shop_name || "") + " " + (r.notes || "")}"`);
     if (r.mileage_image_path) {
       try {
         const blob = await (await fetch(r.mileage_image_path)).blob();
@@ -2587,8 +2648,69 @@ async function exportBillsZip() {
     msgEl.textContent = `⏳ ดาวน์โหลด ${downloaded}/${totalImages}...`;
   }
 
-  // เพิ่ม CSV summary
-  zip.file("summary.csv", "﻿" + csvLines.join("\n"));
+  // CSV detail — ทุกรายการ
+  zip.file("01_รายการทั้งหมด.csv", "﻿" + csvLines.join("\n"));
+
+  // CSV: สรุปต่อรถ (fuel + maintenance รวม)
+  const fS = data.fuel_summary || { by_truck: [], by_company: [], grand_total: 0, grand_count: 0 };
+  const mS = data.maintenance_summary || { by_truck: [], by_company: [], grand_total: 0, grand_count: 0 };
+
+  let perTruckCsv = ["ทะเบียน,โกดัง,บริษัท,เติมน้ำมัน(ครั้ง),ค่าน้ำมัน(บาท),ซ่อมบำรุง(ครั้ง),ค่าซ่อม(บาท),ยอดรวม(บาท)"];
+  const truckMap = {};
+  fS.by_truck.forEach(t => {
+    truckMap[t.truck_id] = { ...t, fuel_count: t.count, fuel_total: t.total, maint_count: 0, maint_total: 0 };
+  });
+  mS.by_truck.forEach(t => {
+    if (truckMap[t.truck_id]) {
+      truckMap[t.truck_id].maint_count = t.count;
+      truckMap[t.truck_id].maint_total = t.total;
+    } else {
+      truckMap[t.truck_id] = { ...t, fuel_count: 0, fuel_total: 0, maint_count: t.count, maint_total: t.total };
+    }
+  });
+  Object.values(truckMap).forEach(t => {
+    const total = (t.fuel_total || 0) + (t.maint_total || 0);
+    perTruckCsv.push(`${t.plate},${t.warehouse},"${t.company_name}",${t.fuel_count},${t.fuel_total || 0},${t.maint_count},${t.maint_total || 0},${total}`);
+  });
+  perTruckCsv.push(`,,,,${fS.grand_total},,${mS.grand_total},${fS.grand_total + mS.grand_total}`);
+  zip.file("02_สรุปแต่ละคัน.csv", "﻿" + perTruckCsv.join("\n"));
+
+  // CSV: สรุปต่อบริษัท
+  let perCompanyCsv = ["บริษัท,จำนวนรถ(น้ำมัน),รายการน้ำมัน,ค่าน้ำมัน(บาท),รายการซ่อม,ค่าซ่อม(บาท),ยอดรวม(บาท)"];
+  const compMap = {};
+  fS.by_company.forEach(c => {
+    compMap[c.company_id] = { ...c, fuel_count: c.count, fuel_total: c.total, maint_count: 0, maint_total: 0 };
+  });
+  mS.by_company.forEach(c => {
+    if (compMap[c.company_id]) {
+      compMap[c.company_id].maint_count = c.count;
+      compMap[c.company_id].maint_total = c.total;
+    } else {
+      compMap[c.company_id] = { ...c, truck_count: c.truck_count || 0, fuel_count: 0, fuel_total: 0, maint_count: c.count, maint_total: c.total };
+    }
+  });
+  Object.values(compMap).forEach(c => {
+    const total = (c.fuel_total || 0) + (c.maint_total || 0);
+    perCompanyCsv.push(`"${c.company_name}",${c.truck_count || 0},${c.fuel_count},${c.fuel_total || 0},${c.maint_count},${c.maint_total || 0},${total}`);
+  });
+  perCompanyCsv.push(`รวมทั้งหมด,,,${fS.grand_total},,${mS.grand_total},${fS.grand_total + mS.grand_total}`);
+  zip.file("03_สรุปแต่ละบริษัท.csv", "﻿" + perCompanyCsv.join("\n"));
+
+  // README.txt
+  const thaiMonth2 = ["มกราคม","กุมภาพันธ์","มีนาคม","เมษายน","พฤษภาคม","มิถุนายน","กรกฎาคม","สิงหาคม","กันยายน","ตุลาคม","พฤศจิกายน","ธันวาคม"][parseInt(month) - 1];
+  const readme = `📋 รายงานบิล ${thaiMonth2} ${parseInt(year) + 543}\n` +
+    `═══════════════════════════════════════\n\n` +
+    `💰 ยอดรวมทั้งสิ้น: ฿${fmtNum(fS.grand_total + mS.grand_total)}\n` +
+    `   ⛽ ค่าน้ำมัน:      ฿${fmtNum(fS.grand_total)}  (${fS.grand_count} รายการ)\n` +
+    `   🔧 ค่าซ่อมบำรุง:    ฿${fmtNum(mS.grand_total)}  (${mS.grand_count} รายการ)\n\n` +
+    `📁 โครงสร้างไฟล์:\n` +
+    `   01_รายการทั้งหมด.csv      — ทุกรายการรายละเอียด\n` +
+    `   02_สรุปแต่ละคัน.csv        — ค่าน้ำมัน + ซ่อมต่อรถ\n` +
+    `   03_สรุปแต่ละบริษัท.csv     — ค่าน้ำมัน + ซ่อมต่อบริษัท\n` +
+    `   น้ำมัน/{บริษัท}/{ทะเบียน}/{วันที่}/  — รูปไมล์ + บิล\n` +
+    `   ซ่อมบำรุง/{บริษัท}/{ทะเบียน}/{วันที่}/ — รูปไมล์ + บิล\n\n` +
+    `Generated: ${new Date().toLocaleString("th-TH")}\n`;
+  zip.file("README.txt", readme);
 
   msgEl.textContent = "⏳ กำลังสร้าง ZIP...";
   const blob = await zip.generateAsync({ type: "blob" });
@@ -2624,69 +2746,171 @@ async function exportBillsPDF() {
   // สร้าง HTML report → ใช้ window.print() เปิด print dialog → save as PDF
   const thaiMonth = ["มกราคม","กุมภาพันธ์","มีนาคม","เมษายน","พฤษภาคม","มิถุนายน","กรกฎาคม","สิงหาคม","กันยายน","ตุลาคม","พฤศจิกายน","ธันวาคม"][parseInt(month) - 1];
   const yearThai = parseInt(year) + 543;
-  const fuelTotal = (data.fuel || []).reduce((s, r) => s + (r.total_cost || 0), 0);
-  const maintTotal = (data.maintenance || []).reduce((s, r) => s + (r.cost || 0), 0);
+
+  // ใช้ summary ที่ backend คำนวณมาให้
+  const fS = data.fuel_summary || { grand_total: 0, grand_count: 0, by_truck: [], by_company: [] };
+  const mS = data.maintenance_summary || { grand_total: 0, grand_count: 0, by_truck: [], by_company: [] };
+  const gS = data.grand_summary || { total: 0, fuel_total: 0, maintenance_total: 0 };
+
+  // ── จัดกลุ่ม fuel rows ตามทะเบียน เพื่อโชว์เป็น section ของแต่ละคัน ──
+  function groupByTruck(rows, costField) {
+    const groups = {};
+    for (const r of rows) {
+      const key = (r.trucks?.plate_number || "-") + "|" + (r.trucks?.id || 0);
+      if (!groups[key]) {
+        groups[key] = {
+          plate:        r.trucks?.plate_number || "-",
+          warehouse:    r.trucks?.warehouse || "-",
+          company_name: r.trucks?.companies?.name || "(ไม่ระบุบริษัท)",
+          rows: [],
+          total: 0,
+        };
+      }
+      const cost = parseFloat(r[costField] || r.total_cost_entered || r.total_cost || r.cost || 0) || 0;
+      groups[key].rows.push(r);
+      groups[key].total += cost;
+    }
+    return Object.values(groups).sort((a, b) => b.total - a.total);
+  }
+  const fuelGroups  = groupByTruck(data.fuel || [], "total_cost");
+  const maintGroups = groupByTruck(data.maintenance || [], "cost");
 
   const html = `<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><title>รายงาน ${thaiMonth} ${yearThai}</title>
 <style>
-  body { font-family: 'Sarabun', sans-serif; padding: 20px; }
+  body { font-family: 'Sarabun', sans-serif; padding: 20px; color: #222; }
   h1 { font-size: 22px; margin-bottom: 4px; }
-  h2 { font-size: 18px; margin-top: 24px; border-bottom: 2px solid #1a73e8; padding-bottom: 4px; }
-  table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; }
-  th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; }
+  h2 { font-size: 17px; margin-top: 28px; border-bottom: 2px solid #1a73e8; padding-bottom: 4px; }
+  h3 { font-size: 14px; margin-top: 18px; margin-bottom: 4px; background: #f0f4ff; padding: 6px 10px; border-left: 4px solid #1a73e8; }
+  table { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 12px; }
+  th, td { border: 1px solid #ccc; padding: 5px 8px; text-align: left; }
   th { background: #f5f5f5; }
   .total { font-weight: bold; background: #fff3e0; }
+  .grand { font-weight: bold; background: #e8f5e9; font-size: 14px; }
   .right { text-align: right; }
-  @media print { body { padding: 10px; } }
+  .center { text-align: center; }
+  .truck-total { font-weight: bold; background: #e3f2fd; }
+  .company-total { font-weight: bold; background: #fce4ec; }
+  .summary-box { background: linear-gradient(135deg,#1a73e8,#0d47a1); color: #fff; padding: 14px 18px; border-radius: 8px; margin: 12px 0; }
+  .summary-box h2 { color: #fff; border-bottom-color: rgba(255,255,255,0.5); margin-top: 0; }
+  @media print { body { padding: 10px; } h2 { page-break-before: auto; } h3 { page-break-after: avoid; } table { page-break-inside: auto; } tr { page-break-inside: avoid; } }
 </style></head><body>
   <h1>📋 รายงานบิล - ${thaiMonth} ${yearThai}</h1>
   <div style="color:#666;font-size:13px">สร้างเมื่อ ${new Date().toLocaleString("th-TH")}</div>
 
+  <!-- ═══ SUMMARY BOX ═══ -->
+  ${type === "all" ? `
+  <div class="summary-box">
+    <h2>💰 สรุปยอดรวมทั้งหมด</h2>
+    <table style="background:transparent;color:#fff;font-size:14px">
+      <tr><td style="border:none">⛽ ค่าน้ำมันรวม</td><td class="right" style="border:none"><b>฿${fmtNum(gS.fuel_total)}</b> &nbsp;(${fS.grand_count} รายการ)</td></tr>
+      <tr><td style="border:none">🔧 ค่าซ่อมบำรุงรวม</td><td class="right" style="border:none"><b>฿${fmtNum(gS.maintenance_total)}</b> &nbsp;(${mS.grand_count} รายการ)</td></tr>
+      <tr style="border-top:2px solid rgba(255,255,255,0.5)"><td style="border:none;font-size:16px">💵 ยอดรวมทั้งสิ้น</td><td class="right" style="border:none;font-size:18px"><b>฿${fmtNum(gS.total)}</b></td></tr>
+    </table>
+  </div>
+  ` : ""}
+
   ${(type === "all" || type === "fuel") ? `
-  <h2>⛽ เติมน้ำมัน (${(data.fuel || []).length} รายการ)</h2>
+  <!-- ═══ FUEL: สรุปต่อบริษัท ═══ -->
+  <h2>⛽ น้ำมัน — สรุปรวมต่อบริษัท</h2>
   <table>
-    <tr><th>วันที่</th><th>ทะเบียน</th><th>คนขับ</th><th>ไมล์</th><th class="right">ลิตร</th><th class="right">ราคา/ล.</th><th class="right">รวม</th><th>ปั๊ม</th></tr>
-    ${(data.fuel || []).map(r => `
+    <tr><th>บริษัท</th><th class="right">จำนวนรถ</th><th class="right">รายการ</th><th class="right">ยอดรวม (บาท)</th><th class="right">% ของยอดรวม</th></tr>
+    ${fS.by_company.map(c => `
       <tr>
-        <td>${r.log_date}</td>
-        <td>${r.trucks?.plate_number || ""}</td>
-        <td>${r.drivers?.name || ""}</td>
-        <td class="right">${fmtNum(r.mileage)}</td>
-        <td class="right">${fmtNum(r.liters)}</td>
-        <td class="right">${fmtNum(r.price_per_liter)}</td>
-        <td class="right"><b>฿${fmtNum(r.total_cost)}</b></td>
-        <td>${r.station_name || "-"}</td>
+        <td><b>${c.company_name}</b>${c.short_name ? ` <span style="color:#888">(${c.short_name})</span>` : ""}</td>
+        <td class="right">${c.truck_count}</td>
+        <td class="right">${c.count}</td>
+        <td class="right"><b>฿${fmtNum(c.total)}</b></td>
+        <td class="right">${fS.grand_total ? Math.round(c.total / fS.grand_total * 1000) / 10 : 0}%</td>
       </tr>`).join("")}
-    <tr class="total"><td colspan="6" class="right">รวมน้ำมัน:</td><td class="right">฿${fmtNum(Math.round(fuelTotal))}</td><td></td></tr>
+    <tr class="grand"><td colspan="3" class="right">รวมน้ำมันทุกบริษัท:</td><td class="right">฿${fmtNum(fS.grand_total)}</td><td class="right">100%</td></tr>
   </table>
+
+  <!-- ═══ FUEL: สรุปต่อรถ ═══ -->
+  <h2>⛽ น้ำมัน — สรุปรวมต่อรถแต่ละคัน</h2>
+  <table>
+    <tr><th>ทะเบียน</th><th>โกดัง</th><th>บริษัท</th><th class="right">เติม (ครั้ง)</th><th class="right">ยอดรวม (บาท)</th></tr>
+    ${fS.by_truck.map(t => `
+      <tr>
+        <td><b>${t.plate}</b></td>
+        <td>${t.warehouse}</td>
+        <td>${t.company_name}</td>
+        <td class="right">${t.count}</td>
+        <td class="right"><b>฿${fmtNum(t.total)}</b></td>
+      </tr>`).join("")}
+    <tr class="grand"><td colspan="4" class="right">รวมทุกคัน:</td><td class="right">฿${fmtNum(fS.grand_total)}</td></tr>
+  </table>
+
+  <!-- ═══ FUEL: รายการแยกตามรถ ═══ -->
+  <h2>⛽ น้ำมัน — รายละเอียดทุกรายการ (แยกตามรถ)</h2>
+  ${fuelGroups.map(g => `
+    <h3>🚛 ${g.plate} &nbsp;<span style="font-weight:normal;color:#666">(${g.warehouse} · ${g.company_name})</span></h3>
+    <table>
+      <tr><th>วันที่</th><th>คนขับ</th><th class="right">ไมล์</th><th class="right">ลิตร</th><th class="right">ราคา/ล.</th><th class="right">รวม</th><th>ปั๊ม</th></tr>
+      ${g.rows.map(r => `
+        <tr>
+          <td>${r.log_date}</td>
+          <td>${r.drivers?.name || ""}</td>
+          <td class="right">${fmtNum(r.mileage)}</td>
+          <td class="right">${fmtNum(r.liters)}</td>
+          <td class="right">${fmtNum(r.price_per_liter)}</td>
+          <td class="right"><b>฿${fmtNum(r.total_cost)}</b></td>
+          <td>${r.station_name || "-"}</td>
+        </tr>`).join("")}
+      <tr class="truck-total"><td colspan="5" class="right">รวม ${g.plate}:</td><td class="right">฿${fmtNum(g.total)}</td><td></td></tr>
+    </table>
+  `).join("")}
   ` : ""}
 
   ${(type === "all" || type === "maintenance") ? `
-  <h2>🔧 ซ่อมบำรุง (${(data.maintenance || []).length} รายการ)</h2>
+  <!-- ═══ MAINTENANCE: สรุปต่อบริษัท ═══ -->
+  <h2>🔧 ซ่อมบำรุง — สรุปรวมต่อบริษัท</h2>
   <table>
-    <tr><th>วันที่</th><th>ทะเบียน</th><th>ประเภท</th><th>ร้าน</th><th>ไมล์</th><th class="right">ยอด</th><th>หมายเหตุ</th></tr>
-    ${(data.maintenance || []).map(r => `
+    <tr><th>บริษัท</th><th class="right">จำนวนรถ</th><th class="right">รายการ</th><th class="right">ยอดรวม (บาท)</th></tr>
+    ${mS.by_company.map(c => `
       <tr>
-        <td>${r.maintenance_date}</td>
-        <td>${r.trucks?.plate_number || ""}</td>
-        <td>${MAINT_LABELS[r.maintenance_type] || r.maintenance_type}</td>
-        <td>${r.shop_name || "-"}</td>
-        <td class="right">${fmtNum(r.mileage_at_service)}</td>
-        <td class="right"><b>฿${fmtNum(r.cost)}</b></td>
-        <td>${(r.notes || "").slice(0, 50)}</td>
+        <td><b>${c.company_name}</b></td>
+        <td class="right">${c.truck_count}</td>
+        <td class="right">${c.count}</td>
+        <td class="right"><b>฿${fmtNum(c.total)}</b></td>
       </tr>`).join("")}
-    <tr class="total"><td colspan="5" class="right">รวมซ่อมบำรุง:</td><td class="right">฿${fmtNum(Math.round(maintTotal))}</td><td></td></tr>
+    <tr class="grand"><td colspan="3" class="right">รวมซ่อมทุกบริษัท:</td><td class="right">฿${fmtNum(mS.grand_total)}</td></tr>
   </table>
+
+  <!-- ═══ MAINTENANCE: สรุปต่อรถ ═══ -->
+  <h2>🔧 ซ่อมบำรุง — สรุปรวมต่อรถแต่ละคัน</h2>
+  <table>
+    <tr><th>ทะเบียน</th><th>โกดัง</th><th>บริษัท</th><th class="right">รายการ</th><th class="right">ยอดรวม (บาท)</th></tr>
+    ${mS.by_truck.map(t => `
+      <tr>
+        <td><b>${t.plate}</b></td>
+        <td>${t.warehouse}</td>
+        <td>${t.company_name}</td>
+        <td class="right">${t.count}</td>
+        <td class="right"><b>฿${fmtNum(t.total)}</b></td>
+      </tr>`).join("")}
+    <tr class="grand"><td colspan="4" class="right">รวมทุกคัน:</td><td class="right">฿${fmtNum(mS.grand_total)}</td></tr>
+  </table>
+
+  <!-- ═══ MAINTENANCE: รายการแยกตามรถ ═══ -->
+  <h2>🔧 ซ่อมบำรุง — รายละเอียดทุกรายการ (แยกตามรถ)</h2>
+  ${maintGroups.map(g => `
+    <h3>🚛 ${g.plate} &nbsp;<span style="font-weight:normal;color:#666">(${g.warehouse} · ${g.company_name})</span></h3>
+    <table>
+      <tr><th>วันที่</th><th>ประเภท</th><th>ร้าน</th><th class="right">ไมล์</th><th class="right">ยอด</th><th>หมายเหตุ</th></tr>
+      ${g.rows.map(r => `
+        <tr>
+          <td>${r.maintenance_date}</td>
+          <td>${MAINT_LABELS[r.maintenance_type] || r.maintenance_type}</td>
+          <td>${r.shop_name || "-"}</td>
+          <td class="right">${fmtNum(r.mileage_at_service)}</td>
+          <td class="right"><b>฿${fmtNum(r.cost)}</b></td>
+          <td>${(r.notes || "").slice(0, 50)}</td>
+        </tr>`).join("")}
+      <tr class="truck-total"><td colspan="4" class="right">รวม ${g.plate}:</td><td class="right">฿${fmtNum(g.total)}</td><td></td></tr>
+    </table>
+  `).join("")}
   ` : ""}
 
-  ${type === "all" ? `
-  <h2>💰 สรุปรวม</h2>
-  <table>
-    <tr><td>ยอดน้ำมันรวม</td><td class="right"><b>฿${fmtNum(Math.round(fuelTotal))}</b></td></tr>
-    <tr><td>ยอดซ่อมบำรุงรวม</td><td class="right"><b>฿${fmtNum(Math.round(maintTotal))}</b></td></tr>
-    <tr class="total"><td>รวมทั้งหมด</td><td class="right"><b>฿${fmtNum(Math.round(fuelTotal + maintTotal))}</b></td></tr>
-  </table>
-  ` : ""}
 </body></html>`;
 
   const win = window.open("", "_blank");
