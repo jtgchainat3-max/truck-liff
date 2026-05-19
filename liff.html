@@ -574,6 +574,7 @@ const API_BASE = "https://joevecrppgctnemaqgan.supabase.co/functions/v1/liff-api
 // STATE
 // ════════════════════════════════════════════════════════════
 let lineUserId      = null;
+let lineIdToken     = null;  // LIFF ID token — ส่งไป backend verify
 let driverInfo      = null;
 let currentType     = null;   // 'morning' | 'evening'
 let mileageBlob     = null;   // รูปไมล์ (มอนิ่ง/อิฟนิ่ง)
@@ -678,6 +679,14 @@ async function init() {
     return;
   }
   lineUserId = profile.userId;
+
+  // ⭐ เก็บ LIFF ID token เพื่อส่งไป backend verify (กัน impersonation)
+  try {
+    lineIdToken = liff.getIDToken();
+    dlog(`✓ ได้ id_token (${lineIdToken ? lineIdToken.length : 0} chars)`);
+  } catch (e) {
+    dlog(`⚠️ getIDToken ไม่ได้: ${e.message}`);
+  }
 
   // ⭐ GPS warmup — เริ่มขอตำแหน่งทันที (ไม่รอจนกว่าจะถ่ายรูป)
   // ทำให้ permission popup ขึ้นเร็ว + cache position สำหรับใช้ตอนถ่ายรูป
@@ -1072,7 +1081,7 @@ function appendGPSToFormData(fd, key) {
 // ════════════════════════════════════════════════════════════
 async function loadMenu(deepType = null) {
   try {
-    const data = await apiFetch(`driver-status?line_user_id=${encodeURIComponent(lineUserId || "")}`);
+    const data = await apiFetch(`driver-status?line_user_id=${encodeURIComponent(lineUserId || "")}${lineIdToken ? `&id_token=${encodeURIComponent(lineIdToken)}` : ""}`);
 
     // API error
     if (data?.error && !data.registered) {
@@ -1247,6 +1256,7 @@ async function doRegister() {
   const fd = new FormData();
   fd.append("registration_code", regCode);
   fd.append("line_user_id", lineUserId);
+  if (lineIdToken) fd.append("id_token", lineIdToken);
   fd.append("driver_name",  name);
   fd.append("phone",        phone);
   fd.append("driver_type",  type);
@@ -1364,7 +1374,7 @@ async function showTruckPickerForScreen(screen) {
   listEl.innerHTML = `<div class="loader" style="padding:12px"><div class="spinner"></div><div>กำลังโหลดรายการรถ...</div></div>`;
 
   if (!allTrucksCache) {
-    const data = await apiFetch(`smart-match?line_user_id=${lineUserId}&mileage=0`).catch(() => null);
+    const data = await apiFetch(`smart-match?line_user_id=${encodeURIComponent(lineUserId)}&mileage=0${lineIdToken ? `&id_token=${encodeURIComponent(lineIdToken)}` : ""}`).catch(() => null);
     if (!data || data.error) {
       listEl.innerHTML = `<div class="alert alert-err">โหลดรายการรถไม่สำเร็จ</div>`;
       return;
@@ -1623,6 +1633,7 @@ async function confirmMileage() {
 
   const fd  = new FormData();
   fd.append("line_user_id",    lineUserId);
+  if (lineIdToken) fd.append("id_token", lineIdToken);
   fd.append("log_type",        currentType);
   fd.append("mileage",         mileageVal);
   fd.append("photo_timestamp", photoTs);
@@ -1790,9 +1801,9 @@ async function submitFuel() {
     return;
   }
 
-  // ⚠️ ไม่ปัด liters — เก็บ precision เต็มที่ ให้ admin/บัญชีเห็นยอดที่ถูกต้องทุกบาท
-  // เก็บทศนิยม 6 ตำแหน่ง (precision สูงพอที่จะคืน total_cost ได้แม่นทุกสตางค์)
-  const liters = Math.round((total / price) * 1000000) / 1000000;
+  // ⚠️ ไม่ปัด liters — เก็บ precision สูงสุด 10 ตำแหน่ง
+  // ตัวเลขแม่นยำพอที่จะคืน total_cost ได้แม่นทุกสตางค์ ไม่ลดทอน
+  const liters = Math.round((total / price) * 1e10) / 1e10;
   if (!liters || liters <= 0) {
     alert("ระบบคำนวณลิตรไม่ถูกต้อง — กรุณาตรวจสอบยอดเงินและราคา");
     return;
@@ -1824,6 +1835,7 @@ async function submitFuel() {
 
   const fd = new FormData();
   fd.append("line_user_id",    lineUserId);
+  if (lineIdToken) fd.append("id_token", lineIdToken);
   fd.append("truck_id",        truckId);
   fd.append("photo_timestamp", photoTs || nowBKK());
   fd.append("image",           fuelBlob, "fuel_mileage.jpg");
@@ -2113,6 +2125,7 @@ async function submitMaintenance() {
 
   const fd = new FormData();
   fd.append("line_user_id",       lineUserId);
+  if (lineIdToken) fd.append("id_token", lineIdToken);
   fd.append("truck_id",           truckId);
   fd.append("maintenance_type",   type);
   fd.append("mileage_at_service", mile);
