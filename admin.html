@@ -3628,8 +3628,12 @@ async function openEditTruck(id) {
   await loadCompanyOptions("et_company", null);
 
   // ── Populate dropdown "ผูกเป็นรถประจำตัว" ด้วยรายชื่อคนขับ ──
+  // ⚡ ใช้ cache ถ้ามี — ไม่ต้องดึงจาก API ทุกครั้ง (driver list เปลี่ยนช้า)
   const reservedSel = document.getElementById("et_reserved");
-  const drivers = await api("drivers");
+  const drivers = (allDriversCache && allDriversCache.length > 0)
+    ? allDriversCache
+    : await api("drivers");
+  if (Array.isArray(drivers) && drivers.length > 0) allDriversCache = drivers;
   reservedSel.innerHTML = `<option value="">— ไม่ผูก (ใครเลือกก็ได้) —</option>` +
     (Array.isArray(drivers) ? drivers : [])
       .filter(d => d.is_active !== false)
@@ -4075,6 +4079,16 @@ function applyRoleVisibility() {
 
   // ⭐ Toggle body class — CSS ซ่อน .super-only ทันที (รวมถึง DOM ที่ render ใหม่ภายหลัง)
   document.body.classList.toggle("role-non-super", !isSuper);
+
+  // ⭐ ถ้า active section อยู่ใน tab ที่ user ไม่มีสิทธิ์ → switch ไปแท็บแรกที่เห็น
+  const activeSection = document.querySelector(".section.active");
+  if (activeSection) {
+    const activeKey = activeSection.id.replace(/^sec-/, "");
+    if (!visibleTabs.has(activeKey) && visibleTabs.size > 0) {
+      const firstVisible = [...visibleTabs][0];
+      if (typeof switchTab === "function") switchTab(firstVisible);
+    }
+  }
 
   // badge role
   const badge = document.getElementById("userRoleBadge");
