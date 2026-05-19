@@ -611,6 +611,53 @@ tr:hover td{background:#fafafa}
     <h3>⚙️ ตั้งค่าระบบ</h3>
     <div id="settingsContent"><div class="loader"><div class="spinner"></div>กำลังโหลด...</div></div>
   </div>
+  <!-- 💾 Storage Management -->
+  <div class="card">
+    <h3>💾 จัดการพื้นที่เก็บไฟล์</h3>
+    <div id="storageStatus" style="margin-bottom:14px">
+      <div class="loader"><div class="spinner"></div>กำลังโหลด...</div>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <button class="btn btn-gray" style="width:auto;padding:10px 16px" onclick="loadStorageStatus()">🔄 รีเฟรช</button>
+      <button class="btn btn-orange" style="width:auto;padding:10px 16px" onclick="cleanupOldMileage()">🗑 ลบรูปไมล์เก่า (3 เดือน)</button>
+    </div>
+  </div>
+
+  <!-- 📥 Export บิล -->
+  <div class="card">
+    <h3>📥 Export บิล (สำหรับบัญชี)</h3>
+    <div class="filter-row">
+      <div class="form-group" style="flex:0 0 130px">
+        <label>ปี</label>
+        <select id="exportYear"></select>
+      </div>
+      <div class="form-group" style="flex:0 0 130px">
+        <label>เดือน</label>
+        <select id="exportMonth">
+          <option value="01">ม.ค.</option><option value="02">ก.พ.</option>
+          <option value="03">มี.ค.</option><option value="04">เม.ย.</option>
+          <option value="05">พ.ค.</option><option value="06">มิ.ย.</option>
+          <option value="07">ก.ค.</option><option value="08">ส.ค.</option>
+          <option value="09">ก.ย.</option><option value="10">ต.ค.</option>
+          <option value="11">พ.ย.</option><option value="12">ธ.ค.</option>
+        </select>
+      </div>
+      <div class="form-group" style="flex:0 0 150px">
+        <label>ประเภท</label>
+        <select id="exportType">
+          <option value="all">ทั้งหมด</option>
+          <option value="fuel">น้ำมัน</option>
+          <option value="maintenance">ซ่อมบำรุง</option>
+        </select>
+      </div>
+      <div style="flex:1;display:flex;align-items:flex-end;gap:8px">
+        <button class="btn btn-primary" style="width:auto;padding:10px 16px" onclick="exportBillsZip()">📦 Download ZIP</button>
+        <button class="btn btn-success" style="width:auto;padding:10px 16px" onclick="exportBillsPDF()">📄 Export PDF สรุป</button>
+      </div>
+    </div>
+    <div id="exportMsg" style="margin-top:10px;font-size:13px"></div>
+  </div>
+
   <div class="card">
     <h3>📨 ทดสอบส่งแจ้งเตือน</h3>
     <div class="form-row">
@@ -2158,7 +2205,289 @@ async function submitAddDriver() {
 // SETTINGS
 // ════════════════════════════════════════════════════════════
 async function loadSettings() {
-  await Promise.all([loadNotifTargets(), loadSystemSettings(), loadRegCode()]);
+  await Promise.all([loadNotifTargets(), loadSystemSettings(), loadRegCode(), loadStorageStatus(), populateExportFilters()]);
+}
+
+// ════════════════════════════════════════════════════════════
+// STORAGE STATUS + CLEANUP
+// ════════════════════════════════════════════════════════════
+async function loadStorageStatus() {
+  const el = document.getElementById("storageStatus");
+  if (!el) return;
+  el.innerHTML = `<div class="loader"><div class="spinner"></div>กำลังโหลด...</div>`;
+  const data = await api("storage-status");
+  if (!data || data.error) {
+    el.innerHTML = `<div class="alert alert-err">${data?.error || "โหลดไม่สำเร็จ"}</div>`;
+    return;
+  }
+
+  const sb = data.supabase || {};
+  const usage = data.usage || [];
+  const byLoc = {};
+  usage.forEach(u => {
+    if (!byLoc[u.location]) byLoc[u.location] = 0;
+    byLoc[u.location] += u.count;
+  });
+
+  el.innerHTML = `
+    <div class="summary-grid" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr))">
+      <div class="sbox blue">
+        <div class="num">${sb.total_files || 0}</div>
+        <div class="lbl">ไฟล์ใน Supabase</div>
+      </div>
+      <div class="sbox ${sb.total_mb > 800 ? 'red' : sb.total_mb > 500 ? 'orange' : 'green'}">
+        <div class="num">${sb.total_mb || 0} MB</div>
+        <div class="lbl">ขนาด Supabase / 1024 MB</div>
+      </div>
+      <div class="sbox ${data.r2_configured ? 'green' : 'orange'}">
+        <div class="num">${data.r2_configured ? '✅' : '⏳'}</div>
+        <div class="lbl">Cloudflare R2 ${data.r2_configured ? 'พร้อม' : 'ยังไม่ตั้ง'}</div>
+      </div>
+      <div class="sbox blue">
+        <div class="num">${byLoc.supabase || 0}</div>
+        <div class="lbl">รายการใน Supabase DB</div>
+      </div>
+      <div class="sbox green">
+        <div class="num">${byLoc.r2 || 0}</div>
+        <div class="lbl">รายการใน R2 DB</div>
+      </div>
+    </div>
+    ${!data.r2_configured ? `
+      <div class="alert alert-warn" style="margin-top:10px;font-size:13px">
+        💡 R2 ยังไม่ตั้งค่า — บิลทั้งหมดเก็บใน Supabase (จะเต็ม 1GB เร็ว)<br>
+        ดูวิธีตั้งค่า: ใส่ env vars <code>R2_ENDPOINT</code>, <code>R2_ACCESS_KEY</code>, <code>R2_SECRET_KEY</code>, <code>R2_BUCKET</code> ใน Supabase Functions Secrets
+      </div>
+    ` : ""}
+  `;
+}
+
+async function cleanupOldMileage() {
+  const months = parseInt(prompt("ลบรูปไมล์เก่ากว่ากี่เดือน?\n(เก็บข้อมูลตัวเลขไว้ — ลบเฉพาะรูป)", "3") || "0");
+  if (!months || months < 1) return;
+  if (!confirm(`ยืนยันลบรูปไมล์เก่ากว่า ${months} เดือน?\n\n• ลบเฉพาะรูป mileage_logs (เช้า/เย็น) — บิลน้ำมัน/ซ่อมไม่ลบ\n• ข้อมูลตัวเลข (ไมล์, GPS, เวลา) จะยังอยู่ครบ\n• ทำซ้ำได้ทุกเมื่อ`)) return;
+
+  const res = await api("cleanup-old-mileage", { method: "POST", body: JSON.stringify({ months }) });
+  if (res?.success) {
+    alert(`✅ ลบรูปสำเร็จ ${res.deleted_count} รูป (เก่ากว่า ${months} เดือน)`);
+    loadStorageStatus();
+  } else {
+    alert("❌ " + (res?.error || "ลบไม่สำเร็จ"));
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// EXPORT BILLS
+// ════════════════════════════════════════════════════════════
+function populateExportFilters() {
+  const yearSel = document.getElementById("exportYear");
+  if (yearSel && !yearSel.options.length) {
+    const now = new Date();
+    for (let y = now.getFullYear(); y >= now.getFullYear() - 3; y--) {
+      yearSel.innerHTML += `<option value="${y}">${y + 543}</option>`;
+    }
+  }
+  const monthSel = document.getElementById("exportMonth");
+  if (monthSel && !monthSel.value) {
+    monthSel.value = String(new Date().getMonth() + 1).padStart(2, "0");
+  }
+}
+
+async function loadJSZip() {
+  if (window.JSZip) return window.JSZip;
+  await new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = "https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js";
+    s.onload = resolve; s.onerror = reject;
+    document.head.appendChild(s);
+  });
+  return window.JSZip;
+}
+
+async function exportBillsZip() {
+  const year = document.getElementById("exportYear").value;
+  const month = document.getElementById("exportMonth").value;
+  const type = document.getElementById("exportType").value;
+  const msgEl = document.getElementById("exportMsg");
+
+  msgEl.style.color = "#888";
+  msgEl.textContent = "⏳ กำลังโหลดข้อมูล...";
+
+  const data = await api(`export-bills?year=${year}&month=${month}&type=${type}`);
+  if (!data || data.error) {
+    msgEl.style.color = "#e53935";
+    msgEl.textContent = "❌ " + (data?.error || "ดึงข้อมูลไม่สำเร็จ");
+    return;
+  }
+
+  const totalImages = (data.fuel || []).filter(f => f.image_path || f.bill_image_path).length * 2 +
+                      (data.maintenance || []).filter(m => m.bill_image_path || m.mileage_image_path).length * 2;
+  if (totalImages === 0) {
+    msgEl.style.color = "#aaa";
+    msgEl.textContent = "ไม่มีรูปในเดือนที่เลือก";
+    return;
+  }
+
+  msgEl.textContent = `⏳ กำลังโหลดรูป ${totalImages} ไฟล์...`;
+
+  const JSZip = await loadJSZip();
+  const zip = new JSZip();
+  let downloaded = 0;
+  let csvLines = ["type,date,plate,driver,mileage,amount,description,bill_url"];
+
+  // Fuel
+  for (const r of data.fuel || []) {
+    const plate = (r.trucks?.plate_number || `t${r.truck_id}`).replace(/[^a-zA-Z0-9ก-๙]/g, "_");
+    const date = r.log_date;
+    const folder = zip.folder(`fuel/${plate}_${date}`);
+    csvLines.push(`fuel,${date},${plate},${r.drivers?.name || ""},${r.mileage || ""},${r.total_cost || ""},"${r.station_name || ""}","${r.bill_image_path || ""}"`);
+    if (r.image_path) {
+      try {
+        const blob = await (await fetch(r.image_path)).blob();
+        folder.file(`mileage.jpg`, blob);
+        downloaded++;
+      } catch (e) { console.error("download mileage failed", e); }
+    }
+    if (r.bill_image_path) {
+      try {
+        const blob = await (await fetch(r.bill_image_path)).blob();
+        folder.file(`bill.jpg`, blob);
+        downloaded++;
+      } catch (e) { console.error("download bill failed", e); }
+    }
+    msgEl.textContent = `⏳ ดาวน์โหลด ${downloaded}/${totalImages}...`;
+  }
+  // Maintenance
+  for (const r of data.maintenance || []) {
+    const plate = (r.trucks?.plate_number || `t${r.truck_id}`).replace(/[^a-zA-Z0-9ก-๙]/g, "_");
+    const date = r.maintenance_date;
+    const folder = zip.folder(`maintenance/${plate}_${date}_${r.maintenance_type}`);
+    csvLines.push(`maintenance,${date},${plate},${r.drivers?.name || ""},${r.mileage_at_service || ""},${r.cost || ""},"${(r.shop_name || "") + " " + (r.notes || "")}","${r.bill_image_path || ""}"`);
+    if (r.mileage_image_path) {
+      try {
+        const blob = await (await fetch(r.mileage_image_path)).blob();
+        folder.file(`mileage.jpg`, blob);
+        downloaded++;
+      } catch {}
+    }
+    if (r.bill_image_path) {
+      try {
+        const blob = await (await fetch(r.bill_image_path)).blob();
+        folder.file(`bill.jpg`, blob);
+        downloaded++;
+      } catch {}
+    }
+    msgEl.textContent = `⏳ ดาวน์โหลด ${downloaded}/${totalImages}...`;
+  }
+
+  // เพิ่ม CSV summary
+  zip.file("summary.csv", "﻿" + csvLines.join("\n"));
+
+  msgEl.textContent = "⏳ กำลังสร้าง ZIP...";
+  const blob = await zip.generateAsync({ type: "blob" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `bills_${year}-${month}_${type}.zip`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  msgEl.style.color = "#2e7d32";
+  msgEl.textContent = `✅ ดาวน์โหลด ZIP เสร็จ — ${downloaded} รูป + summary.csv`;
+}
+
+async function exportBillsPDF() {
+  const year = document.getElementById("exportYear").value;
+  const month = document.getElementById("exportMonth").value;
+  const type = document.getElementById("exportType").value;
+  const msgEl = document.getElementById("exportMsg");
+
+  msgEl.style.color = "#888";
+  msgEl.textContent = "⏳ กำลังสร้างรายงาน...";
+
+  const data = await api(`export-bills?year=${year}&month=${month}&type=${type}`);
+  if (!data || data.error) {
+    msgEl.style.color = "#e53935";
+    msgEl.textContent = "❌ " + (data?.error || "ดึงข้อมูลไม่สำเร็จ");
+    return;
+  }
+
+  // สร้าง HTML report → ใช้ window.print() เปิด print dialog → save as PDF
+  const thaiMonth = ["มกราคม","กุมภาพันธ์","มีนาคม","เมษายน","พฤษภาคม","มิถุนายน","กรกฎาคม","สิงหาคม","กันยายน","ตุลาคม","พฤศจิกายน","ธันวาคม"][parseInt(month) - 1];
+  const yearThai = parseInt(year) + 543;
+  const fuelTotal = (data.fuel || []).reduce((s, r) => s + (r.total_cost || 0), 0);
+  const maintTotal = (data.maintenance || []).reduce((s, r) => s + (r.cost || 0), 0);
+
+  const html = `<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><title>รายงาน ${thaiMonth} ${yearThai}</title>
+<style>
+  body { font-family: 'Sarabun', sans-serif; padding: 20px; }
+  h1 { font-size: 22px; margin-bottom: 4px; }
+  h2 { font-size: 18px; margin-top: 24px; border-bottom: 2px solid #1a73e8; padding-bottom: 4px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; }
+  th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; }
+  th { background: #f5f5f5; }
+  .total { font-weight: bold; background: #fff3e0; }
+  .right { text-align: right; }
+  @media print { body { padding: 10px; } }
+</style></head><body>
+  <h1>📋 รายงานบิล - ${thaiMonth} ${yearThai}</h1>
+  <div style="color:#666;font-size:13px">สร้างเมื่อ ${new Date().toLocaleString("th-TH")}</div>
+
+  ${(type === "all" || type === "fuel") ? `
+  <h2>⛽ เติมน้ำมัน (${(data.fuel || []).length} รายการ)</h2>
+  <table>
+    <tr><th>วันที่</th><th>ทะเบียน</th><th>คนขับ</th><th>ไมล์</th><th class="right">ลิตร</th><th class="right">ราคา/ล.</th><th class="right">รวม</th><th>ปั๊ม</th></tr>
+    ${(data.fuel || []).map(r => `
+      <tr>
+        <td>${r.log_date}</td>
+        <td>${r.trucks?.plate_number || ""}</td>
+        <td>${r.drivers?.name || ""}</td>
+        <td class="right">${fmtNum(r.mileage)}</td>
+        <td class="right">${fmtNum(r.liters)}</td>
+        <td class="right">${fmtNum(r.price_per_liter)}</td>
+        <td class="right"><b>฿${fmtNum(r.total_cost)}</b></td>
+        <td>${r.station_name || "-"}</td>
+      </tr>`).join("")}
+    <tr class="total"><td colspan="6" class="right">รวมน้ำมัน:</td><td class="right">฿${fmtNum(Math.round(fuelTotal))}</td><td></td></tr>
+  </table>
+  ` : ""}
+
+  ${(type === "all" || type === "maintenance") ? `
+  <h2>🔧 ซ่อมบำรุง (${(data.maintenance || []).length} รายการ)</h2>
+  <table>
+    <tr><th>วันที่</th><th>ทะเบียน</th><th>ประเภท</th><th>ร้าน</th><th>ไมล์</th><th class="right">ยอด</th><th>หมายเหตุ</th></tr>
+    ${(data.maintenance || []).map(r => `
+      <tr>
+        <td>${r.maintenance_date}</td>
+        <td>${r.trucks?.plate_number || ""}</td>
+        <td>${MAINT_LABELS[r.maintenance_type] || r.maintenance_type}</td>
+        <td>${r.shop_name || "-"}</td>
+        <td class="right">${fmtNum(r.mileage_at_service)}</td>
+        <td class="right"><b>฿${fmtNum(r.cost)}</b></td>
+        <td>${(r.notes || "").slice(0, 50)}</td>
+      </tr>`).join("")}
+    <tr class="total"><td colspan="5" class="right">รวมซ่อมบำรุง:</td><td class="right">฿${fmtNum(Math.round(maintTotal))}</td><td></td></tr>
+  </table>
+  ` : ""}
+
+  ${type === "all" ? `
+  <h2>💰 สรุปรวม</h2>
+  <table>
+    <tr><td>ยอดน้ำมันรวม</td><td class="right"><b>฿${fmtNum(Math.round(fuelTotal))}</b></td></tr>
+    <tr><td>ยอดซ่อมบำรุงรวม</td><td class="right"><b>฿${fmtNum(Math.round(maintTotal))}</b></td></tr>
+    <tr class="total"><td>รวมทั้งหมด</td><td class="right"><b>฿${fmtNum(Math.round(fuelTotal + maintTotal))}</b></td></tr>
+  </table>
+  ` : ""}
+</body></html>`;
+
+  const win = window.open("", "_blank");
+  win.document.write(html);
+  win.document.close();
+  setTimeout(() => win.print(), 500);
+
+  msgEl.style.color = "#2e7d32";
+  msgEl.textContent = `✅ เปิดหน้ารายงานแล้ว — กด "Save as PDF" ในหน้าต่าง print`;
 }
 
 // ── Registration code (รหัสที่คนขับใส่ตอนสมัคร) ─────────
