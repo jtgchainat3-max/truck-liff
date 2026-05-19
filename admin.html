@@ -617,6 +617,21 @@ tr:hover td{background:#fafafa}
   <!-- 🤖 AI + LINE Integration Status -->
   <div class="card">
     <h3>🤖 สถานะ AI & LINE</h3>
+
+    <!-- ⚡ Master toggle — เปิด/ปิดระบบ AI ตรวจบิล อัตโนมัติ -->
+    <div id="ocrToggleBox" style="background:#f0f7ff;border:2px solid #1a73e8;border-radius:10px;padding:14px;margin-bottom:14px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+      <div style="flex:1;min-width:200px">
+        <div style="font-size:15px;font-weight:700;color:#0d47a1">⚡ ระบบ AI ตรวจบิลอัตโนมัติ</div>
+        <div id="ocrToggleDesc" style="font-size:12px;color:#666;margin-top:4px">กำลังโหลด...</div>
+      </div>
+      <label style="position:relative;display:inline-block;width:60px;height:32px;cursor:pointer">
+        <input type="checkbox" id="ocrToggle" onchange="toggleOcr()" style="opacity:0;width:0;height:0">
+        <span id="ocrToggleSlider" style="position:absolute;top:0;left:0;right:0;bottom:0;background:#ccc;border-radius:32px;transition:.3s">
+          <span id="ocrToggleKnob" style="position:absolute;height:24px;width:24px;left:4px;bottom:4px;background:#fff;border-radius:50%;transition:.3s;box-shadow:0 2px 4px rgba(0,0,0,0.2)"></span>
+        </span>
+      </label>
+    </div>
+
     <div id="systemStatusBox" style="margin-bottom:12px">
       <div class="loader"><div class="spinner"></div>กำลังโหลด...</div>
     </div>
@@ -2395,6 +2410,23 @@ async function loadSystemStatus() {
   const s = await api("system-status");
   if (!s) { el.innerHTML = `<div class="alert alert-err">โหลดสถานะไม่สำเร็จ</div>`; return; }
 
+  // ── อัปเดต toggle ระบบ OCR ──
+  const toggleEl = document.getElementById("ocrToggle");
+  const slider   = document.getElementById("ocrToggleSlider");
+  const knob     = document.getElementById("ocrToggleKnob");
+  const descEl   = document.getElementById("ocrToggleDesc");
+  toggleEl.checked = !!s.ocr_enabled;
+  toggleEl.disabled = !s.ocr_configured;
+  slider.style.background = s.ocr_enabled ? "#2e7d32" : "#ccc";
+  knob.style.left = s.ocr_enabled ? "32px" : "4px";
+  if (!s.ocr_configured) {
+    descEl.innerHTML = `<span style="color:#c62828">⚠️ ยังไม่ได้ตั้ง ANTHROPIC_API_KEY — toggle ไม่ทำงานจนกว่าจะตั้ง</span>`;
+  } else if (s.ocr_enabled) {
+    descEl.innerHTML = `<span style="color:#2e7d32"><b>เปิด</b></span> — ทุกบิลที่ส่งใหม่ AI จะตรวจอัตโนมัติ (~0.04 บาท/รูป)`;
+  } else {
+    descEl.innerHTML = `<span style="color:#c62828"><b>ปิด</b></span> — ระบบจะไม่เรียก AI ตอนคนขับส่งบิล (admin ยังกด 🔍 manual ในตารางได้)`;
+  }
+
   const row = (label, ok, desc) => `
     <div style="display:flex;align-items:center;padding:8px 12px;background:${ok?"#e8f5e9":"#ffebee"};border-radius:6px;margin-bottom:6px">
       <div style="flex:0 0 30px;font-size:20px">${ok?"✅":"❌"}</div>
@@ -2405,9 +2437,10 @@ async function loadSystemStatus() {
     </div>`;
 
   el.innerHTML =
-    row("Claude AI (OCR ตรวจบิล)", s.ocr_configured,
-        s.ocr_configured ? "ANTHROPIC_API_KEY ตั้งแล้ว — AI พร้อมตรวจบิลอัตโนมัติ"
-                         : "ยังไม่ได้ตั้ง ANTHROPIC_API_KEY → ระบบจะ skip OCR (บันทึกได้ปกติแค่ไม่มี AI)") +
+    row("Claude AI (OCR ตรวจบิล)", s.ocr_configured && s.ocr_enabled,
+        !s.ocr_configured ? "ยังไม่ได้ตั้ง ANTHROPIC_API_KEY → ระบบจะ skip OCR (บันทึกได้ปกติแค่ไม่มี AI)"
+        : !s.ocr_enabled  ? "⚠️ admin ปิดระบบ AI ตรวจบิลไว้ — เปิดด้วย toggle ด้านบน"
+        : "ANTHROPIC_API_KEY ตั้งแล้ว + เปิดใช้งาน — AI ตรวจบิลอัตโนมัติ") +
     row("LINE Bot (ส่งแจ้งเตือน)", s.line_configured,
         s.line_configured ? "LINE_CHANNEL_ACCESS_TOKEN ตั้งแล้ว"
                           : "ยังไม่ได้ตั้ง LINE_CHANNEL_ACCESS_TOKEN → ส่งแจ้งเตือนคนขับไม่ได้") +
@@ -2417,6 +2450,25 @@ async function loadSystemStatus() {
     row("Cloudflare R2 Storage", s.r2_configured,
         s.r2_configured ? "R2 ใช้งานได้ — รูปบิล/license เก็บใน R2"
                         : "R2 ไม่ได้ตั้ง — รูปทุกอย่างเก็บใน Supabase Storage");
+}
+
+async function toggleOcr() {
+  const toggleEl = document.getElementById("ocrToggle");
+  const newVal = toggleEl.checked;  // true = เปิด, false = ปิด
+  // ป้องกัน flip ตอน API ยัง pending — disable ชั่วคราว
+  toggleEl.disabled = true;
+  const res = await api("settings", {
+    method: "PUT",
+    body: JSON.stringify({ key: "ocr_enabled", value: newVal ? "true" : "false", note: "AI ตรวจบิลอัตโนมัติ (true/false)" })
+  });
+  toggleEl.disabled = false;
+  if (!res?.success) {
+    // revert
+    toggleEl.checked = !newVal;
+    alert(`❌ ${res?.error || "บันทึกไม่สำเร็จ"}`);
+    return;
+  }
+  loadSystemStatus();  // refresh UI
 }
 
 async function testLineAdmin() {
