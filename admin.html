@@ -614,6 +614,20 @@ tr:hover td{background:#fafafa}
     <h3>⚙️ ตั้งค่าระบบ</h3>
     <div id="settingsContent"><div class="loader"><div class="spinner"></div>กำลังโหลด...</div></div>
   </div>
+  <!-- 🤖 AI + LINE Integration Status -->
+  <div class="card">
+    <h3>🤖 สถานะ AI & LINE</h3>
+    <div id="systemStatusBox" style="margin-bottom:12px">
+      <div class="loader"><div class="spinner"></div>กำลังโหลด...</div>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <button class="btn btn-gray" style="width:auto;padding:10px 16px" onclick="loadSystemStatus()">🔄 รีเฟรชสถานะ</button>
+      <button class="btn btn-primary" style="width:auto;padding:10px 16px" onclick="testLineAdmin()">📨 ทดสอบส่ง LINE เข้ากลุ่มแอดมิน</button>
+      <button class="btn btn-success" style="width:auto;padding:10px 16px" onclick="testOcrFuel()">🔍 ทดสอบ AI อ่านบิล (ใส่ #fuel_log_id)</button>
+    </div>
+    <div id="systemTestMsg" style="margin-top:10px;font-size:13px"></div>
+  </div>
+
   <!-- 💾 Storage Management -->
   <div class="card">
     <h3>💾 จัดการพื้นที่เก็บไฟล์</h3>
@@ -2315,7 +2329,84 @@ async function submitAddDriver() {
 // SETTINGS
 // ════════════════════════════════════════════════════════════
 async function loadSettings() {
-  await Promise.all([loadNotifTargets(), loadSystemSettings(), loadRegCode(), loadStorageStatus(), populateExportFilters()]);
+  await Promise.all([loadNotifTargets(), loadSystemSettings(), loadRegCode(), loadStorageStatus(), loadSystemStatus(), populateExportFilters()]);
+}
+
+// ════════════════════════════════════════════════════════════
+// SYSTEM STATUS — AI + LINE integration
+// ════════════════════════════════════════════════════════════
+async function loadSystemStatus() {
+  const el = document.getElementById("systemStatusBox");
+  el.innerHTML = `<div class="loader"><div class="spinner"></div>กำลังโหลด...</div>`;
+  const s = await api("system-status");
+  if (!s) { el.innerHTML = `<div class="alert alert-err">โหลดสถานะไม่สำเร็จ</div>`; return; }
+
+  const row = (label, ok, desc) => `
+    <div style="display:flex;align-items:center;padding:8px 12px;background:${ok?"#e8f5e9":"#ffebee"};border-radius:6px;margin-bottom:6px">
+      <div style="flex:0 0 30px;font-size:20px">${ok?"✅":"❌"}</div>
+      <div style="flex:1">
+        <b style="color:${ok?"#2e7d32":"#c62828"}">${label}</b>
+        <div style="font-size:12px;color:#666;margin-top:2px">${desc}</div>
+      </div>
+    </div>`;
+
+  el.innerHTML =
+    row("Claude AI (OCR ตรวจบิล)", s.ocr_configured,
+        s.ocr_configured ? "ANTHROPIC_API_KEY ตั้งแล้ว — AI พร้อมตรวจบิลอัตโนมัติ"
+                         : "ยังไม่ได้ตั้ง ANTHROPIC_API_KEY → ระบบจะ skip OCR (บันทึกได้ปกติแค่ไม่มี AI)") +
+    row("LINE Bot (ส่งแจ้งเตือน)", s.line_configured,
+        s.line_configured ? "LINE_CHANNEL_ACCESS_TOKEN ตั้งแล้ว"
+                          : "ยังไม่ได้ตั้ง LINE_CHANNEL_ACCESS_TOKEN → ส่งแจ้งเตือนคนขับไม่ได้") +
+    row("กลุ่มแอดมิน LINE", s.admin_group_configured,
+        s.admin_group_configured ? "LINE_ADMIN_GROUP_ID ตั้งแล้ว — ถ้า AI เจอบิลไม่ตรงจะแจ้งเข้ากลุ่ม"
+                                 : "ยังไม่ได้ตั้ง LINE_ADMIN_GROUP_ID → ไม่มีการแจ้งเข้ากลุ่มแอดมิน") +
+    row("Cloudflare R2 Storage", s.r2_configured,
+        s.r2_configured ? "R2 ใช้งานได้ — รูปบิล/license เก็บใน R2"
+                        : "R2 ไม่ได้ตั้ง — รูปทุกอย่างเก็บใน Supabase Storage");
+}
+
+async function testLineAdmin() {
+  const msgEl = document.getElementById("systemTestMsg");
+  msgEl.style.color = "#888";
+  msgEl.textContent = "⏳ กำลังส่งข้อความทดสอบ...";
+  const res = await api("test-line-admin", { method: "POST", body: "{}" });
+  if (res?.success) {
+    msgEl.style.color = "#2e7d32";
+    msgEl.textContent = `✅ ${res.message}`;
+  } else {
+    msgEl.style.color = "#c62828";
+    msgEl.textContent = `❌ ${res?.error || "ส่งไม่สำเร็จ"}`;
+  }
+}
+
+async function testOcrFuel() {
+  const msgEl = document.getElementById("systemTestMsg");
+  const idStr = prompt("ใส่ fuel_log id ที่จะทดสอบ (ดูจากตารางน้ำมัน):");
+  if (!idStr) return;
+  const id = parseInt(idStr);
+  if (!id) { alert("ID ไม่ถูกต้อง"); return; }
+
+  msgEl.style.color = "#888";
+  msgEl.textContent = `⏳ กำลังให้ Claude AI อ่านบิล #${id}... (ใช้เวลา 5-15 วินาที)`;
+  const res = await api("test-ocr-fuel", { method: "POST", body: JSON.stringify({ id }) });
+  if (res?.success) {
+    const ext = res.extracted || {};
+    const mList = res.mismatches.length
+      ? res.mismatches.map(m => `• ${m.label}: ในระบบ="${m.expected}" / ในบิล="${m.got}"`).join("\n")
+      : "(ทุกอย่างตรง)";
+    msgEl.style.color = res.status === "matched" ? "#2e7d32" : "#e65100";
+    msgEl.innerHTML = `
+      <div style="background:#fff;padding:12px;border-radius:8px;border:1px solid #ddd;margin-top:8px">
+        <b>สถานะ:</b> ${res.status === "matched" ? "✅ ตรงทั้งหมด" : `⚠️ ไม่ตรง ${res.mismatches.length} จุด`}<br><br>
+        <b>AI อ่านได้:</b>
+        <pre style="background:#f5f5f5;padding:8px;border-radius:4px;font-size:12px;white-space:pre-wrap;max-height:200px;overflow:auto">${JSON.stringify(ext, null, 2)}</pre>
+        <b>รายการที่ไม่ตรง:</b>
+        <pre style="background:#fff3e0;padding:8px;border-radius:4px;font-size:12px;white-space:pre-wrap">${mList}</pre>
+      </div>`;
+  } else {
+    msgEl.style.color = "#c62828";
+    msgEl.textContent = `❌ ${res?.error || "ทดสอบไม่สำเร็จ"}`;
+  }
 }
 
 // ════════════════════════════════════════════════════════════
