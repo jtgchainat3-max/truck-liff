@@ -658,7 +658,6 @@ tr:hover td{background:#fafafa}
     <div style="display:flex;gap:10px;flex-wrap:wrap">
       <button class="btn btn-gray" style="width:auto;padding:10px 16px" onclick="loadSystemStatus()">🔄 รีเฟรชสถานะ</button>
       <button class="btn btn-primary" style="width:auto;padding:10px 16px" onclick="testLineAdmin()">📨 ทดสอบส่ง LINE เข้ากลุ่มแอดมิน</button>
-      <button class="btn btn-success" style="width:auto;padding:10px 16px" onclick="testOcrFuel()">🔍 ทดสอบ AI อ่านบิล (ใส่ #fuel_log_id)</button>
     </div>
     <div id="systemTestMsg" style="margin-top:10px;font-size:13px"></div>
   </div>
@@ -1369,22 +1368,13 @@ async function loadFuel() {
       <div class="sbox orange"><div class="num">${fmtNum(Math.round(totalLiters))}</div><div class="lbl">ลิตรรวม</div></div>
       <div class="sbox red"><div class="num">฿${fmtNum(Math.round(totalCost))}</div><div class="lbl">ค่าน้ำมันรวม</div></div>
     </div>
-    <div class="card"><h3>ประวัติเติมน้ำมัน <small style="color:#888;font-weight:400">(กดที่แถวเพื่อดูรูป + เทียบบิล · กด 🔍 AI เพื่อให้ Claude ตรวจบิลใบนั้น)</small></h3><div class="tbl-wrap"><table>
-      <tr><th>#ID</th><th>วันที่/เวลา</th><th>ทะเบียน</th><th>โกดัง</th><th>คนขับ</th><th>ไมล์</th><th>วิ่งได้</th><th>ลิตร</th><th>ราคา/ล.</th><th style="background:#e3f2fd">💰 ยอดที่กรอก</th><th>คำนวณ</th><th>กม./ล.</th><th>ปั๊ม</th><th>AI</th><th>GPS</th></tr>`;
+    <div class="card"><h3>ประวัติเติมน้ำมัน <small style="color:#888;font-weight:400">(กดที่แถวเพื่อดูรูป + เทียบบิล)</small></h3><div class="tbl-wrap"><table>
+      <tr><th>#ID</th><th>วันที่/เวลา</th><th>ทะเบียน</th><th>โกดัง</th><th>คนขับ</th><th>ไมล์</th><th>วิ่งได้</th><th>ลิตร</th><th>ราคา/ล.</th><th style="background:#e3f2fd">💰 ยอดที่กรอก</th><th>คำนวณ</th><th>กม./ล.</th><th>ปั๊ม</th><th>GPS</th></tr>`;
 
   for (const r of data) {
     const kmSince = r.km_since_last_fuel
       ? `<b style="color:#1a73e8">${fmtNum(r.km_since_last_fuel)}</b> กม.<br><small style="color:#888">จากครั้งก่อน</small>`
       : `<span style="color:#aaa">—</span>`;
-
-    // OCR status badge
-    let ocrBadge = "";
-    if (r.ocr_status === "matched")          ocrBadge = `<span class="badge b-ok" title="AI ตรวจแล้ว: ตรง">✅</span>`;
-    else if (r.ocr_status === "rejected")    ocrBadge = `<span class="badge b-exp" title="AI ตรวจแล้ว: ไม่ตรง">⚠️</span>`;
-    else if (r.ocr_status === "admin_override") ocrBadge = `<span class="badge b-warn" title="admin override">🛡</span>`;
-    else if (r.ocr_status === "pending")     ocrBadge = `<span class="badge b-sent" title="รอ AI ตรวจ">⏳</span>`;
-    else if (r.ocr_status === "error")       ocrBadge = `<span class="badge b-sent" title="AI error">❌</span>`;
-    else                                     ocrBadge = `<span style="color:#aaa">—</span>`;
 
     html += `<tr style="cursor:pointer" onclick="showFuelDetail(${r.id})">
       <td><code style="background:#f5f5f5;padding:2px 6px;border-radius:4px;font-size:11px">#${r.id}</code></td>
@@ -1400,10 +1390,6 @@ async function loadFuel() {
       <td><small style="color:#666">฿${r.liters && r.price_per_liter ? fmtNum(Math.round(r.liters * r.price_per_liter * 100) / 100) : "-"}</small></td>
       <td>${r.km_per_liter ? r.km_per_liter + " กม./ล." : "-"}${r.anomaly_flag ? ` <span class="badge b-crit" title="${r.anomaly_note}">⚠️</span>` : ""}</td>
       <td>${r.station_name || "-"}</td>
-      <td onclick="event.stopPropagation()" style="text-align:center;white-space:nowrap">
-        ${ocrBadge}
-        <button class="btn btn-primary" style="width:auto;padding:3px 8px;font-size:11px;margin-top:4px;display:block" onclick="event.stopPropagation();runFuelOcr(${r.id})">🔍 AI ตรวจ</button>
-      </td>
       <td>${r.latitude && r.longitude ? `<a onclick="event.stopPropagation()" href="https://maps.google.com/?q=${r.latitude},${r.longitude}" target="_blank" style="font-size:13px">📍</a>` : "<small style='color:#aaa'>-</small>"}</td>
     </tr>`;
   }
@@ -1446,8 +1432,12 @@ async function runFuelOcr(id) {
     if (!Array.isArray(arr) || arr.length === 0) return `${label}: (ไม่มี)`;
     return `${label} (${arr.length}):\n` + arr.map((n, i) => `  ${i+1}. ${n}`).join("\n");
   };
+  const rawTextSection = ext.raw_text
+    ? `═══ 📝 ข้อความดิบที่ AI อ่านได้ (สำหรับ verify) ═══\n${ext.raw_text}\n\n`
+    : "";
   const summary = `🔍 ผลตรวจบิล #${id}\n\n` +
     `สถานะ: ${res.status === "matched" ? "✅ ตรงทั้งหมด" : `⚠️ ไม่ตรง ${res.mismatches.length} จุด`}\n\n` +
+    rawTextSection +
     `═══ ข้อมูลทั้งหมดที่ AI ดึงจากบิล ═══\n` +
     listFmt(ext.all_company_names, "📋 ชื่อบริษัท") + "\n\n" +
     listFmt(ext.all_tax_ids, "🆔 เลขผู้เสียภาษี") + "\n\n" +
