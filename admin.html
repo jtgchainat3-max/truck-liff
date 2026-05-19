@@ -1446,11 +1446,11 @@ async function loadFuel() {
       <td>${esc(r.drivers?.name) || "-"}</td>
       <td>${fmtNum(r.mileage)}</td>
       <td>${kmSince}</td>
-      <td>${fmtNum(r.liters)} ล.</td>
+      <td>${fmtNum(r.liters != null ? Math.round(r.liters * 100) / 100 : null)} ล.</td>
       <td>${fmtNum(r.price_per_liter)} ฿</td>
-      <td style="background:#e3f2fd"><b style="font-size:15px;color:#0d47a1">฿${fmtNum(r.total_cost_entered ?? r.total_cost)}</b>${r.total_cost_entered ? "" : "<br><small style='color:#aaa;font-size:10px'>(เก่า/คำนวณ)</small>"}</td>
-      <td><small style="color:#666">฿${r.liters && r.price_per_liter ? fmtNum(Math.round(r.liters * r.price_per_liter * 100) / 100) : "-"}</small></td>
-      <td>${r.km_per_liter ? r.km_per_liter + " กม./ล." : "-"}${r.anomaly_flag ? ` <span class="badge b-crit" title="${esc(r.anomaly_note)}">⚠️</span>` : ""}</td>
+      <td style="background:#e3f2fd"><b style="font-size:15px;color:#0d47a1">฿${fmtNum(Math.round(r.total_cost_entered ?? r.total_cost ?? 0))}</b>${r.total_cost_entered ? "" : "<br><small style='color:#aaa;font-size:10px'>(เก่า/คำนวณ)</small>"}</td>
+      <td><small style="color:#666">฿${r.liters && r.price_per_liter ? fmtNum(Math.round(r.liters * r.price_per_liter)) : "-"}</small></td>
+      <td>${r.km_per_liter ? (Math.round(r.km_per_liter * 100) / 100) + " กม./ล." : "-"}${r.anomaly_flag ? ` <span class="badge b-crit" title="${esc(r.anomaly_note)}">⚠️</span>` : ""}</td>
       <td>${esc(r.station_name) || "-"}</td>
       <td>${r.latitude && r.longitude ? `<a onclick="event.stopPropagation()" href="https://maps.google.com/?q=${r.latitude},${r.longitude}" target="_blank" style="font-size:13px">📍</a>` : "<small style='color:#aaa'>-</small>"}</td>
       <td onclick="event.stopPropagation()" style="text-align:center;white-space:nowrap" class="super-only">
@@ -1753,7 +1753,7 @@ async function loadVerifyQueue() {
           <!-- Info row — เพิ่มรายละเอียดสำคัญ -->
           <div style="background:#f5f5f5;border-radius:6px;padding:10px 12px;font-size:13px;color:#444;margin-bottom:10px;line-height:1.7">
             ${isFuel
-              ? `🛢 <b>${fmtNum(r.liters)}</b> ลิตร × ฿${fmtNum(r.price_per_liter)} = <b>฿${fmtNum(Math.round(r.liters * r.price_per_liter * 100) / 100)}</b> (คำนวณ) ${r.km_per_liter ? `· ${r.km_per_liter} กม./ล.` : ""} · ⛽ ปั๊ม: <b>${esc(r.station_name) || "-"}</b>`
+              ? `🛢 <b>${fmtNum(Math.round((r.liters || 0) * 100) / 100)}</b> ลิตร × ฿${fmtNum(r.price_per_liter)} = <b>฿${fmtNum(Math.round((r.liters || 0) * (r.price_per_liter || 0)))}</b> (คำนวณ) ${r.km_per_liter ? `· ${Math.round(r.km_per_liter * 100) / 100} กม./ล.` : ""} · ⛽ ปั๊ม: <b>${esc(r.station_name) || "-"}</b>`
               : `🔧 <b>${esc(MAINT_LABELS[r.maintenance_type] || r.maintenance_type)}</b> · ร้าน: <b>${esc(r.shop_name) || "-"}</b> ${r.notes ? `<br>📝 ${esc(r.notes)}` : ""}`
             }
           </div>
