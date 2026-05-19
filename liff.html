@@ -1636,7 +1636,9 @@ async function submitFuel() {
     return;
   }
 
-  const liters = Math.round((total / price) * 100) / 100;  // ปัดทศนิยม 2 ตำแหน่ง
+  // ⚠️ ไม่ปัด liters — เก็บ precision เต็มที่ ให้ admin/บัญชีเห็นยอดที่ถูกต้องทุกบาท
+  // เก็บทศนิยม 4 ตำแหน่ง (พอที่จะคืน total_cost ได้แม่น)
+  const liters = Math.round((total / price) * 10000) / 10000;
   if (!liters || liters <= 0) {
     alert("ระบบคำนวณลิตรไม่ถูกต้อง — กรุณาตรวจสอบยอดเงินและราคา");
     return;
@@ -1674,6 +1676,7 @@ async function submitFuel() {
   fd.append("bill_image",      fuelBillBlob, "fuel_bill.jpg");
   fd.append("liters",          liters);
   fd.append("price_per_liter", price);
+  fd.append("total_cost",      total);  // ⚠️ ส่งยอดที่ user กรอกตรงๆ ป้องกัน rounding loss
   fd.append("mileage",         mileage);
   if (station) fd.append("station_name", station);
   appendGPSToFormData(fd, "fuel");
