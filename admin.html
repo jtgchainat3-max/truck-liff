@@ -1246,10 +1246,10 @@ async function loadDaily() {
     if (trips.length === 0) {
       // รถยังไม่ส่งอะไรเลยวันนี้
       const assigned = t.assigned_driver_name
-        ? `<small style="color:#aaa">ประจำ: ${t.assigned_driver_name}</small>`
+        ? `<small style="color:#aaa">ประจำ: ${esc(t.assigned_driver_name)}</small>`
         : `<small style="color:#aaa">ยังไม่มีคนขับวันนี้</small>`;
       html += `<tr style="${rowBg};opacity:.6">
-        <td><b>${t.plate_number}</b><br><small style="color:#888">${t.warehouse}</small></td>
+        <td><b>${esc(t.plate_number)}</b><br><small style="color:#888">${esc(t.warehouse)}</small></td>
         <td>${assigned}</td>
         <td colspan="4" style="text-align:center;color:#888">— ยังไม่มีการบันทึก —</td>
       </tr>`;
@@ -1264,7 +1264,7 @@ async function loadDaily() {
       // ⭐ คนขับของ trip นี้ — เอาจาก morning ก่อน (เพราะเป็นจุดเริ่มเที่ยว)
       // ถ้าไม่มี morning ก็เอาจาก evening
       const tripDriver = m?.drivers || e?.drivers || null;
-      const tripDriverName = tripDriver?.name || "<span style='color:#aaa'>-</span>";
+      const tripDriverName = tripDriver?.name ? esc(tripDriver.name) : "<span style='color:#aaa'>-</span>";
       // route: ใช้ override > driver.route_code
       const tripRoute = m?.route_override || e?.route_override
                      || tripDriver?.route_code
@@ -1272,12 +1272,12 @@ async function loadDaily() {
 
       const fmtCell = (log) => {
         if (!log) return `<span class="badge b-miss">ยังไม่ส่ง</span>`;
-        const route = log.route_override ? ` <span class="badge b-warn">🛣 ${log.route_override}</span>` : "";
+        const route = log.route_override ? ` <span class="badge b-warn">🛣 ${esc(log.route_override)}</span>` : "";
         const editBtn = `<button class="btn btn-sm btn-gray" style="padding:2px 8px;font-size:11px;margin-left:4px" onclick="openEditMileage(${log.id}, ${log.mileage})" title="แก้ไขเลขไมล์">✏️</button>`;
         const delBtn  = `<button class="btn btn-sm btn-red super-only" style="padding:2px 8px;font-size:11px;margin-left:2px" onclick="deleteMileageLog(${log.id})" title="ลบไมล์นี้ (เฉพาะ superadmin)">🗑</button>`;
         return `
           <div style="line-height:1.6">
-            <b style="font-size:15px">${fmtNum(log.mileage)}</b> กม.${editBtn}${delBtn}${log.anomaly_flag ? ` <span class="badge b-crit" title="${log.anomaly_note}">⚠️</span>` : ""}${route}<br>
+            <b style="font-size:15px">${fmtNum(log.mileage)}</b> กม.${editBtn}${delBtn}${log.anomaly_flag ? ` <span class="badge b-crit" title="${esc(log.anomaly_note)}">⚠️</span>` : ""}${route}<br>
             <small style="color:#666">🕐 ${fmtTime(log.created_at)}</small>
             ${log.latitude ? ` · <a href="https://maps.google.com/?q=${log.latitude},${log.longitude}" target="_blank" style="font-size:11px">📍 GPS</a>` : ""}
             ${log.image_path ? ` · <a href="${log.image_path}" target="_blank" style="font-size:11px">📷 ดูรูป</a>` : ` · <small style='color:#aaa'>ไม่มีรูป</small>`}
@@ -1286,11 +1286,11 @@ async function loadDaily() {
 
       // truck cell — แสดงเฉพาะแถวแรก (rowspan)
       const truckCell = idx === 0
-        ? `<td rowspan="${trips.length}" style="vertical-align:top"><b>${t.plate_number}</b><br><small style="color:#888">${t.warehouse}</small></td>`
+        ? `<td rowspan="${trips.length}" style="vertical-align:top"><b>${esc(t.plate_number)}</b><br><small style="color:#888">${esc(t.warehouse)}</small></td>`
         : "";
 
       // ⭐ driver cell — per trip (ไม่ใช่ per truck แล้ว) → transport drivers ที่หลายคนขับรถคันเดียวจะเห็นใครขับเที่ยวไหน
-      const driverCell = `<td style="vertical-align:top">${tripDriverName}<br><small style="color:#888">${tripRoute || ""}</small></td>`;
+      const driverCell = `<td style="vertical-align:top">${tripDriverName}<br><small style="color:#888">${esc(tripRoute || "")}</small></td>`;
 
       html += `<tr style="${rowBg}">
         ${truckCell}
@@ -1316,14 +1316,14 @@ async function loadDaily() {
           : `<span style="color:#aaa">—</span>`;
         html += `<tr>
           <td>${fmtTime(f.created_at)}</td>
-          <td><b>${t.plate_number}</b></td>
+          <td><b>${esc(t.plate_number)}</b></td>
           <td>${fmtNum(f.mileage)}</td>
           <td>${kmSince}</td>
           <td>${fmtNum(f.liters)} ล.</td>
           <td>${fmtNum(f.price_per_liter)} ฿</td>
           <td><b>${fmtNum(f.total_cost)} ฿</b></td>
           <td>${f.km_per_liter ? f.km_per_liter + " กม./ล." : "-"}${f.anomaly_flag ? ` <span class="badge b-crit">⚠️</span>` : ""}</td>
-          <td>${f.station_name || "-"}</td>
+          <td>${esc(f.station_name) || "-"}</td>
           <td>${f.image_path ? `<a href="${f.image_path}" target="_blank" class="img-link">📷</a>` : ""}
               ${f.bill_image_path ? `<a href="${f.bill_image_path}" target="_blank" class="img-link">🧾</a>` : ""}</td>
         </tr>`;
@@ -1345,6 +1345,7 @@ function showFuelDetail(id) {
   if (!r) { alert("ไม่พบรายการ"); return; }
 
   document.getElementById("fd_title").textContent = `⛽ เติมน้ำมัน — ${r.trucks?.plate_number || "-"}`;
+  // textContent above is safe (no HTML parsing)
 
   const row = (label, value) => `
     <div style="display:flex;padding:8px 0;border-bottom:1px solid #f0f0f0">
@@ -1389,14 +1390,14 @@ function showFuelDetail(id) {
             </div>` : null);
       })()}
       ${row("วิ่งได้จากครั้งก่อน", r.km_since_last_fuel ? `<b style="color:#1a73e8">${fmtNum(r.km_since_last_fuel)}</b> กม.` : null)}
-      ${row("กม./ลิตร", r.km_per_liter ? `${r.km_per_liter} กม./ล.${r.anomaly_flag ? ` <span class="badge b-crit">⚠️ ${r.anomaly_note}</span>` : ""}` : null)}
-      ${row("ปั๊ม", r.station_name)}
+      ${row("กม./ลิตร", r.km_per_liter ? `${r.km_per_liter} กม./ล.${r.anomaly_flag ? ` <span class="badge b-crit">⚠️ ${esc(r.anomaly_note)}</span>` : ""}` : null)}
+      ${row("ปั๊ม", esc(r.station_name))}
       ${row("ตำแหน่ง", gpsLink)}
     </div>
     <div style="background:#f9f9f9;border-radius:8px;padding:12px 14px;margin-top:12px">
       <div style="font-size:12px;color:#1a73e8;font-weight:700;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">👤 คนขับ</div>
-      ${row("ชื่อ", r.drivers?.name)}
-      ${row("โกดัง", r.trucks?.warehouse)}
+      ${row("ชื่อ", esc(r.drivers?.name))}
+      ${row("โกดัง", esc(r.trucks?.warehouse))}
     </div>
   `;
 
@@ -1440,17 +1441,17 @@ async function loadFuel() {
     html += `<tr style="cursor:pointer" onclick="showFuelDetail(${r.id})">
       <td><code style="background:#f5f5f5;padding:2px 6px;border-radius:4px;font-size:11px">#${r.id}</code></td>
       <td>${thaiDateShort(r.log_date)}<br><small style="color:#888">${fmtTime(r.created_at)}</small></td>
-      <td><b>${r.trucks?.plate_number || "-"}</b></td>
-      <td>${r.trucks?.warehouse || "-"}</td>
-      <td>${r.drivers?.name || "-"}</td>
+      <td><b>${esc(r.trucks?.plate_number) || "-"}</b></td>
+      <td>${esc(r.trucks?.warehouse) || "-"}</td>
+      <td>${esc(r.drivers?.name) || "-"}</td>
       <td>${fmtNum(r.mileage)}</td>
       <td>${kmSince}</td>
       <td>${fmtNum(r.liters)} ล.</td>
       <td>${fmtNum(r.price_per_liter)} ฿</td>
       <td style="background:#e3f2fd"><b style="font-size:15px;color:#0d47a1">฿${fmtNum(r.total_cost_entered ?? r.total_cost)}</b>${r.total_cost_entered ? "" : "<br><small style='color:#aaa;font-size:10px'>(เก่า/คำนวณ)</small>"}</td>
       <td><small style="color:#666">฿${r.liters && r.price_per_liter ? fmtNum(Math.round(r.liters * r.price_per_liter * 100) / 100) : "-"}</small></td>
-      <td>${r.km_per_liter ? r.km_per_liter + " กม./ล." : "-"}${r.anomaly_flag ? ` <span class="badge b-crit" title="${r.anomaly_note}">⚠️</span>` : ""}</td>
-      <td>${r.station_name || "-"}</td>
+      <td>${r.km_per_liter ? r.km_per_liter + " กม./ล." : "-"}${r.anomaly_flag ? ` <span class="badge b-crit" title="${esc(r.anomaly_note)}">⚠️</span>` : ""}</td>
+      <td>${esc(r.station_name) || "-"}</td>
       <td>${r.latitude && r.longitude ? `<a onclick="event.stopPropagation()" href="https://maps.google.com/?q=${r.latitude},${r.longitude}" target="_blank" style="font-size:13px">📍</a>` : "<small style='color:#aaa'>-</small>"}</td>
       <td onclick="event.stopPropagation()" style="text-align:center;white-space:nowrap" class="super-only">
         <button class="btn btn-red" style="padding:4px 8px;font-size:11px;width:auto" onclick="event.stopPropagation();deleteFuelLog(${r.id})" title="ลบบิลน้ำมันนี้ (เฉพาะ superadmin)">🗑</button>
@@ -1556,13 +1557,13 @@ const TRUCK_TYPE_LABELS = {
   motorcycle:"🏍 มอไซต์",
   other:"📦 อื่นๆ"
 };
-function truckTypeLabel(t) { return TRUCK_TYPE_LABELS[t] || t || "-"; }
+function truckTypeLabel(t) { return TRUCK_TYPE_LABELS[t] || esc(t) || "-"; }
 
 function populateMaintTruckFilter() {
   const sel = document.getElementById("maintTruckFilter");
   const cur = sel.value;
   sel.innerHTML = `<option value="">ทุกคัน</option>` +
-    allTrucks.map(t => `<option value="${t.id}">${t.plate_number} (${t.warehouse})</option>`).join("");
+    allTrucks.map(t => `<option value="${t.id}">${esc(t.plate_number)} (${esc(t.warehouse)})</option>`).join("");
   if (cur) sel.value = cur;
 }
 
@@ -1575,7 +1576,7 @@ function populateVerifyTruckFilter() {
   if (!sel) return;
   const cur = sel.value;
   sel.innerHTML = `<option value="">ทุกคัน</option>` +
-    (allTrucks || []).map(t => `<option value="${t.id}">${t.plate_number} (${t.warehouse})</option>`).join("");
+    (allTrucks || []).map(t => `<option value="${t.id}">${esc(t.plate_number)} (${esc(t.warehouse)})</option>`).join("");
   if (cur) sel.value = cur;
 }
 
@@ -1692,7 +1693,7 @@ async function loadVerifyQueue() {
             </div>
           </div>`;
       } else if (r.ocr_status === "admin_override") {
-        ocrPanel = `<div style="background:#fff3e0;border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:13px;color:#e65100">🤖 AI ติดเตือน — admin <b>${r.admin_override_by || ""}</b> ตัดสินใจให้ผ่าน</div>`;
+        ocrPanel = `<div style="background:#fff3e0;border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:13px;color:#e65100">🤖 AI ติดเตือน — admin <b>${esc(r.admin_override_by || "")}</b> ตัดสินใจให้ผ่าน</div>`;
       } else if (r.ocr_status === "matched") {
         ocrPanel = `<div style="background:#e8f5e9;border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:13px;color:#2e7d32">🤖 AI ตรวจสอบบิลตรงกับข้อมูลในระบบ</div>`;
       }
@@ -1716,8 +1717,8 @@ async function loadVerifyQueue() {
       <div class="card" style="${cardStyle}">
         <div style="background:${headerBg};color:#fff;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">
           <div>
-            <b>${r.trucks?.plate_number || "-"}</b>
-            <span style="opacity:.85;font-size:13px"> · ${thaiDateShort(dateField)} · ${r.drivers?.name || "-"}</span>
+            <b>${esc(r.trucks?.plate_number) || "-"}</b>
+            <span style="opacity:.85;font-size:13px"> · ${thaiDateShort(dateField)} · ${esc(r.drivers?.name) || "-"}</span>
           </div>
           <div>${verifyTag}${ocrBadge}${supersededTag}</div>
         </div>
@@ -1752,14 +1753,14 @@ async function loadVerifyQueue() {
           <!-- Info row — เพิ่มรายละเอียดสำคัญ -->
           <div style="background:#f5f5f5;border-radius:6px;padding:10px 12px;font-size:13px;color:#444;margin-bottom:10px;line-height:1.7">
             ${isFuel
-              ? `🛢 <b>${fmtNum(r.liters)}</b> ลิตร × ฿${fmtNum(r.price_per_liter)} = <b>฿${fmtNum(Math.round(r.liters * r.price_per_liter * 100) / 100)}</b> (คำนวณ) ${r.km_per_liter ? `· ${r.km_per_liter} กม./ล.` : ""} · ⛽ ปั๊ม: <b>${r.station_name || "-"}</b>`
-              : `🔧 <b>${MAINT_LABELS[r.maintenance_type] || r.maintenance_type}</b> · ร้าน: <b>${r.shop_name || "-"}</b> ${r.notes ? `<br>📝 ${r.notes}` : ""}`
+              ? `🛢 <b>${fmtNum(r.liters)}</b> ลิตร × ฿${fmtNum(r.price_per_liter)} = <b>฿${fmtNum(Math.round(r.liters * r.price_per_liter * 100) / 100)}</b> (คำนวณ) ${r.km_per_liter ? `· ${r.km_per_liter} กม./ล.` : ""} · ⛽ ปั๊ม: <b>${esc(r.station_name) || "-"}</b>`
+              : `🔧 <b>${esc(MAINT_LABELS[r.maintenance_type] || r.maintenance_type)}</b> · ร้าน: <b>${esc(r.shop_name) || "-"}</b> ${r.notes ? `<br>📝 ${esc(r.notes)}` : ""}`
             }
           </div>
 
           <!-- Verify input -->
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-            <input type="text" id="vnote_${type}_${r.id}" placeholder="หมายเหตุ (ถ้ามี)" style="flex:1;min-width:200px;padding:8px 12px;border:1px solid #e0e0e0;border-radius:6px;font-size:13px" value="${r.verification_note || ""}">
+            <input type="text" id="vnote_${type}_${r.id}" placeholder="หมายเหตุ (ถ้ามี)" style="flex:1;min-width:200px;padding:8px 12px;border:1px solid #e0e0e0;border-radius:6px;font-size:13px" value="${esc(r.verification_note || "")}">
             <button class="btn btn-success" style="width:auto;padding:8px 16px;font-size:13px" onclick="verifyBill('${type}', ${r.id}, true)">✅ ตรง</button>
             <button class="btn btn-red" style="width:auto;padding:8px 16px;font-size:13px" onclick="verifyBill('${type}', ${r.id}, false)">❌ ไม่ตรง</button>
           </div>
@@ -1829,7 +1830,7 @@ function populateAccountingFilters() {
   const truckSel = document.getElementById("acctTruck");
   const cur = truckSel.value;
   truckSel.innerHTML = `<option value="">ทุกคัน</option>` +
-    allTrucks.map(t => `<option value="${t.id}">${t.plate_number} (${t.warehouse})</option>`).join("");
+    allTrucks.map(t => `<option value="${t.id}">${esc(t.plate_number)} (${esc(t.warehouse)})</option>`).join("");
   if (cur) truckSel.value = cur;
 }
 
@@ -1869,17 +1870,17 @@ async function loadAccounting() {
       const checked = r.bill_received ? "checked" : "";
       const rowBg = r.bill_received ? "background:#f5fdf5" : "";
       const receivedInfo = r.bill_received
-        ? `<small style="color:#2e7d32">${r.bill_received_by || "-"}<br>${r.bill_received_at ? thaiDateShort(r.bill_received_at.slice(0, 10)) : ""}</small>`
+        ? `<small style="color:#2e7d32">${esc(r.bill_received_by) || "-"}<br>${r.bill_received_at ? thaiDateShort(r.bill_received_at.slice(0, 10)) : ""}</small>`
         : `<small style="color:#aaa">—</small>`;
       html += `<tr style="${rowBg}">
         <td><input type="checkbox" style="transform:scale(1.4);cursor:pointer" ${checked} onchange="toggleBillReceived('fuel', ${r.id}, this.checked)"></td>
         <td>${thaiDateShort(r.log_date)}<br><small style="color:#888">${fmtTime(r.created_at)}</small></td>
-        <td><b>${r.trucks?.plate_number || "-"}</b></td>
-        <td>${r.drivers?.name || "-"}</td>
+        <td><b>${esc(r.trucks?.plate_number) || "-"}</b></td>
+        <td>${esc(r.drivers?.name) || "-"}</td>
         <td>${fmtNum(r.mileage)}</td>
         <td>${fmtNum(r.liters)} ล.</td>
         <td><b>฿${fmtNum(r.total_cost)}</b></td>
-        <td>${r.station_name || "-"}</td>
+        <td>${esc(r.station_name) || "-"}</td>
         <td>${receivedInfo}</td>
         <td>
           ${r.image_path ? `<a href="${r.image_path}" target="_blank" class="img-link">📷</a> ` : ""}
@@ -1908,14 +1909,14 @@ async function loadAccounting() {
       const checked = r.bill_received ? "checked" : "";
       const rowBg = r.bill_received ? "background:#f5fdf5" : "";
       const receivedInfo = r.bill_received
-        ? `<small style="color:#2e7d32">${r.bill_received_by || "-"}<br>${r.bill_received_at ? thaiDateShort(r.bill_received_at.slice(0, 10)) : ""}</small>`
+        ? `<small style="color:#2e7d32">${esc(r.bill_received_by) || "-"}<br>${r.bill_received_at ? thaiDateShort(r.bill_received_at.slice(0, 10)) : ""}</small>`
         : `<small style="color:#aaa">—</small>`;
       html += `<tr style="${rowBg}">
         <td><input type="checkbox" style="transform:scale(1.4);cursor:pointer" ${checked} onchange="toggleBillReceived('maintenance', ${r.id}, this.checked)"></td>
         <td>${thaiDateShort(r.maintenance_date)}<br><small style="color:#888">${fmtTime(r.created_at)}</small></td>
-        <td><b>${r.trucks?.plate_number || "-"}</b></td>
-        <td><span class="badge b-blue">${MAINT_LABELS[r.maintenance_type] || r.maintenance_type}</span></td>
-        <td>${r.shop_name || "-"}</td>
+        <td><b>${esc(r.trucks?.plate_number) || "-"}</b></td>
+        <td><span class="badge b-blue">${esc(MAINT_LABELS[r.maintenance_type] || r.maintenance_type)}</span></td>
+        <td>${esc(r.shop_name) || "-"}</td>
         <td><b>฿${fmtNum(r.cost)}</b></td>
         <td>${receivedInfo}</td>
         <td>
@@ -1974,15 +1975,15 @@ async function loadMaintenance() {
   for (const r of data) {
     html += `<tr style="cursor:pointer" onclick="showMaintDetail(${r.id})">
       <td>${thaiDateShort(r.maintenance_date)}<br><small style="color:#888">${fmtTime(r.created_at)}</small></td>
-      <td><b>${r.trucks?.plate_number || "-"}</b><br><small style="color:#aaa">${r.trucks?.warehouse || ""}</small></td>
-      <td><span class="badge b-blue">${MAINT_LABELS[r.maintenance_type] || r.maintenance_type}</span>
-        ${r.tire_positions?.length ? `<br><small>${r.tire_positions.join(",")}</small>` : ""}</td>
+      <td><b>${esc(r.trucks?.plate_number) || "-"}</b><br><small style="color:#aaa">${esc(r.trucks?.warehouse) || ""}</small></td>
+      <td><span class="badge b-blue">${esc(MAINT_LABELS[r.maintenance_type] || r.maintenance_type)}</span>
+        ${r.tire_positions?.length ? `<br><small>${esc(r.tire_positions.join(","))}</small>` : ""}</td>
       <td>${fmtNum(r.mileage_at_service)}</td>
       <td>${r.cost ? `<b>฿${fmtNum(r.cost)}</b>` : "-"}</td>
-      <td>${r.shop_name || "-"}</td>
+      <td>${esc(r.shop_name) || "-"}</td>
       <td>${r.next_service_mileage ? `${fmtNum(r.next_service_mileage)} กม.` : "-"}${r.next_service_date ? `<br>${thaiDateShort(r.next_service_date)}` : ""}</td>
       <td>${r.verified_by
-        ? `<span class="badge ${r.mileage_match === false ? 'b-exp' : 'b-ok'}">${r.mileage_match === false ? '❌' : '✅'} ${r.verified_by}</span>`
+        ? `<span class="badge ${r.mileage_match === false ? 'b-exp' : 'b-ok'}">${r.mileage_match === false ? '❌' : '✅'} ${esc(r.verified_by)}</span>`
         : `<span class="badge b-warn">⏳ รอตรวจ</span>`}</td>
       <td>
         ${r.mileage_image_path ? "📷" : ""}
@@ -2023,7 +2024,7 @@ function showMaintDetail(id) {
   const verifyTag = r.verified_at
     ? (r.mileage_match === true  ? `<span class="badge b-ok">✅ ตรวจแล้ว: ตรง</span>`
       : r.mileage_match === false ? `<span class="badge b-exp">❌ ตรวจแล้ว: ไม่ตรง</span>`
-      : `<span class="badge b-sent">ตรวจแล้ว</span>`) + ` <small style="color:#666">โดย ${r.verified_by}</small>`
+      : `<span class="badge b-sent">ตรวจแล้ว</span>`) + ` <small style="color:#666">โดย ${esc(r.verified_by)}</small>`
     : `<span class="badge b-warn">⏳ ยังไม่ตรวจ</span>`;
 
   document.getElementById("fd_content").innerHTML = `
@@ -2033,20 +2034,20 @@ function showMaintDetail(id) {
     <div style="background:#f9f9f9;border-radius:8px;padding:12px 14px;margin-top:12px">
       <div style="font-size:12px;color:#1a73e8;font-weight:700;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">🔧 ข้อมูลการซ่อม</div>
       ${row("วันที่/เวลา", `${thaiDateLong(r.maintenance_date)} <small style="color:#888">${fmtTime(r.created_at)}</small>`)}
-      ${row("ประเภท", MAINT_LABELS[r.maintenance_type] || r.maintenance_type)}
+      ${row("ประเภท", esc(MAINT_LABELS[r.maintenance_type] || r.maintenance_type))}
       ${row("เลขไมล์", r.mileage_at_service ? `<b>${fmtNum(r.mileage_at_service)}</b> กม.` : null)}
       ${row("ค่าใช้จ่าย", r.cost ? `<b style="color:#e53935;font-size:18px">฿${fmtNum(r.cost)}</b>` : null)}
-      ${row("ร้าน/อู่", r.shop_name)}
+      ${row("ร้าน/อู่", esc(r.shop_name))}
       ${row("ครั้งถัดไป", r.next_service_mileage ? `${fmtNum(r.next_service_mileage)} กม.` : null)}
-      ${row("ตำแหน่งล้อ", r.tire_positions?.length ? r.tire_positions.join(", ") : null)}
-      ${row("หมายเหตุ", r.notes ? `<div style="white-space:pre-line">${r.notes}</div>` : null)}
+      ${row("ตำแหน่งล้อ", r.tire_positions?.length ? esc(r.tire_positions.join(", ")) : null)}
+      ${row("หมายเหตุ", r.notes ? `<div style="white-space:pre-line">${esc(r.notes)}</div>` : null)}
       ${row("ตำแหน่ง", gpsLink)}
-      ${row("ผลตรวจสอบ", r.verification_note)}
+      ${row("ผลตรวจสอบ", esc(r.verification_note))}
     </div>
     <div style="background:#f9f9f9;border-radius:8px;padding:12px 14px;margin-top:12px">
       <div style="font-size:12px;color:#1a73e8;font-weight:700;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">👤 คนขับ</div>
-      ${row("ชื่อ", r.drivers?.name)}
-      ${row("โกดัง", r.trucks?.warehouse)}
+      ${row("ชื่อ", esc(r.drivers?.name))}
+      ${row("โกดัง", esc(r.trucks?.warehouse))}
     </div>
   `;
   document.getElementById("fuelDetailModal").classList.add("open");
@@ -2073,10 +2074,10 @@ async function loadAnomalies() {
     for (const r of data.mileage_anomalies) {
       html += `<tr style="background:#fff3e0">
         <td>${thaiDateShort(r.log_date)}<br><small style="color:#888">${fmtTime(r.created_at)}</small></td>
-        <td><b>${r.trucks?.plate_number || "-"}</b></td>
+        <td><b>${esc(r.trucks?.plate_number) || "-"}</b></td>
         <td>${r.log_type === "morning" ? "ออกทำงาน" : "กลับโกดัง"}</td>
         <td>${fmtNum(r.mileage)}</td>
-        <td style="color:#e65100">${r.anomaly_note || "-"}</td>
+        <td style="color:#e65100">${esc(r.anomaly_note) || "-"}</td>
         <td>
           <button class="btn btn-sm btn-gray" onclick="openEditMileage(${r.id}, ${r.mileage})">แก้ไข</button>
           <button class="btn btn-sm btn-success" onclick="resolveAnomaly('mileage', ${r.id})">ล้าง</button>
@@ -2092,10 +2093,10 @@ async function loadAnomalies() {
     for (const r of data.fuel_anomalies) {
       html += `<tr style="background:#fff3e0">
         <td>${thaiDateShort(r.log_date)}<br><small style="color:#888">${fmtTime(r.created_at)}</small></td>
-        <td><b>${r.trucks?.plate_number || "-"}</b></td>
+        <td><b>${esc(r.trucks?.plate_number) || "-"}</b></td>
         <td>${fmtNum(r.liters)}</td>
         <td>${r.km_per_liter ? r.km_per_liter + " กม./ล." : "-"}</td>
-        <td style="color:#e65100">${r.anomaly_note || "-"}</td>
+        <td style="color:#e65100">${esc(r.anomaly_note) || "-"}</td>
         <td><button class="btn btn-sm btn-success" onclick="resolveAnomaly('fuel', ${r.id})">ล้าง</button></td>
       </tr>`;
     }
@@ -2149,8 +2150,8 @@ async function loadDocuments() {
     const ins  = t.docs["ประกันภัย"];
     const comp = t.docs["พรบ"];
     html += `<tr>
-      <td><b>${t.plate}</b></td>
-      <td>${t.warehouse}</td>
+      <td><b>${esc(t.plate)}</b></td>
+      <td>${esc(t.warehouse)}</td>
       <td>${tax?.due_date ? `${thaiDateShort(tax.due_date)}<br>${daysLeftLabel(tax.due_date)}` : "<span class='badge b-na'>ไม่มีข้อมูล</span>"}</td>
       <td>${ins?.due_date ? `${thaiDateShort(ins.due_date)}<br>${daysLeftLabel(ins.due_date)}` : "<span class='badge b-na'>ไม่มีข้อมูล</span>"}</td>
       <td>${comp?.due_date ? `${thaiDateShort(comp.due_date)}<br>${daysLeftLabel(comp.due_date)}` : "<span class='badge b-na'>ไม่มีข้อมูล</span>"}</td>
@@ -2218,14 +2219,14 @@ async function loadTrucks() {
       if (t.reserved_for_driver_id) {
         const owner = (allDriversCache || []).find(d => d.id === t.reserved_for_driver_id)
                    || (t.drivers || []).find(d => d.id === t.reserved_for_driver_id);
-        reservedBadge = `<br><span class="badge" style="background:#7c4dff;color:#fff;font-size:10px;margin-top:2px">🔒 รถประจำตัว: ${owner?.name || `#${t.reserved_for_driver_id}`}</span>`;
+        reservedBadge = `<br><span class="badge" style="background:#7c4dff;color:#fff;font-size:10px;margin-top:2px">🔒 รถประจำตัว: ${owner?.name ? esc(owner.name) : `#${t.reserved_for_driver_id}`}</span>`;
       }
       html += `<tr ${t.is_pickable === false ? 'style="opacity:0.55"' : ''}>
-        <td><b>${t.plate_number}</b>${reservedBadge}</td>
-        <td>${t.warehouse}</td>
+        <td><b>${esc(t.plate_number)}</b>${reservedBadge}</td>
+        <td>${esc(t.warehouse)}</td>
         <td>${truckTypeLabel(t.truck_type)}</td>
-        <td>${t.brand || ""} ${t.model || ""}</td>
-        <td>${driver?.name || "<span style='color:#aaa'>-</span>"}</td>
+        <td>${esc(t.brand) || ""} ${esc(t.model) || ""}</td>
+        <td>${driver?.name ? esc(driver.name) : "<span style='color:#aaa'>-</span>"}</td>
         <td>${pickerBadge}</td>
         <td>${daysLeftLabel(t.tax_due_date)}</td>
         <td>${daysLeftLabel(t.insurance_due_date)}</td>
@@ -2305,16 +2306,16 @@ async function loadDrivers() {
     const idCardFmt = fmtIdCard(d.id_card_number);
     html += `<tr>
       <td>
-        <a onclick="showDriverDetail(${d.id})" style="color:#1a73e8;cursor:pointer;text-decoration:underline;font-weight:700">${d.name}</a>
+        <a onclick="showDriverDetail(${d.id})" style="color:#1a73e8;cursor:pointer;text-decoration:underline;font-weight:700">${esc(d.name)}</a>
         <br><small style="font-family:monospace;font-size:10px;color:#888">${esc(lineId.slice(0, 10))}${lineId.length > 10 ? "..." : ""}${lineId !== "-" ? ` <button data-lineid="${esc(lineId)}" onclick="copyLineId(this)" style="border:none;background:none;cursor:pointer;font-size:11px">📋</button>` : ""}</small>
       </td>
       <td><span class="badge ${d.driver_type === 'van' ? 'b-sent' : 'b-warn'}">${d.driver_type === 'van' ? 'VAN' : 'ขนส่ง'}</span></td>
-      <td>${d.route_code || "-"}</td>
-      <td>${d.trucks?.plate_number || "<span style='color:#aaa'>-</span>"}</td>
-      <td>${d.warehouse || d.trucks?.warehouse || "-"}</td>
-      <td>${d.phone || "-"}</td>
-      <td><small style="font-family:monospace;font-size:11px">${idCardFmt || `<span style='color:#aaa'>-</span>`}</small></td>
-      <td>${d.license_number ? `<small>${d.license_number}</small>${d.license_image_path ? ` <a href="${d.license_image_path}" target="_blank" style="font-size:11px">📷</a>` : ""}` : `<span style='color:#aaa'>-</span>`}</td>
+      <td>${esc(d.route_code) || "-"}</td>
+      <td>${d.trucks?.plate_number ? esc(d.trucks.plate_number) : "<span style='color:#aaa'>-</span>"}</td>
+      <td>${esc(d.warehouse || d.trucks?.warehouse) || "-"}</td>
+      <td>${esc(d.phone) || "-"}</td>
+      <td><small style="font-family:monospace;font-size:11px">${idCardFmt ? esc(idCardFmt) : `<span style='color:#aaa'>-</span>`}</small></td>
+      <td>${d.license_number ? `<small>${esc(d.license_number)}</small>${d.license_image_path ? ` <a href="${d.license_image_path}" target="_blank" style="font-size:11px">📷</a>` : ""}` : `<span style='color:#aaa'>-</span>`}</td>
       <td>${licenseStatus(d.license_expiry_date)}</td>
       <td><span class="badge ${d.is_active ? 'b-ok' : 'b-exp'}">${d.is_active ? 'ใช้งาน' : 'ปิด'}</span></td>
       <td style="white-space:nowrap">
@@ -2419,23 +2420,23 @@ function showDriverDetail(id) {
       <span class="badge ${d.is_active ? 'b-ok' : 'b-exp'}" style="font-size:13px">${d.is_active ? '✅ ใช้งานอยู่' : '🚫 ปิดอยู่'}</span>
       ${d.is_owner ? `<span class="badge b-warn" style="font-size:13px;background:#fff8e1;color:#e65100;border:1px solid #ffb300">👑 Owner — เลือกได้ทุกคัน</span>` : ""}
       <span class="badge ${d.driver_type === 'van' ? 'b-sent' : 'b-warn'}" style="font-size:13px">${d.driver_type === 'van' ? '🚐 VAN' : '🚛 ขนส่ง'}</span>
-      ${d.warehouse ? `<span class="badge b-blue" style="font-size:13px">📍 ${d.warehouse}</span>` : ""}
-      ${d.route_code ? `<span class="badge b-blue" style="font-size:13px">🛣 ${d.route_code}</span>` : ""}
+      ${d.warehouse ? `<span class="badge b-blue" style="font-size:13px">📍 ${esc(d.warehouse)}</span>` : ""}
+      ${d.route_code ? `<span class="badge b-blue" style="font-size:13px">🛣 ${esc(d.route_code)}</span>` : ""}
     </div>
 
     <!-- ── ข้อมูลส่วนตัว ── -->
     <div style="background:#f9f9f9;border-radius:8px;padding:12px 14px;margin-bottom:12px">
       <div style="font-size:12px;color:#1a73e8;font-weight:700;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">👤 ข้อมูลส่วนตัว</div>
-      ${row("ชื่อ-นามสกุล", `<b>${d.name}</b>`)}
-      ${row("เบอร์โทร", d.phone ? `<a href="tel:${d.phone}" style="color:#1a73e8">${d.phone}</a>` : null)}
-      ${row("เลขบัตร ปชช.", `<span style="font-family:monospace">${fmtIdCard(d.id_card_number)}</span>`)}
-      ${row("ที่อยู่", d.address || null, { wrap: true })}
+      ${row("ชื่อ-นามสกุล", `<b>${esc(d.name)}</b>`)}
+      ${row("เบอร์โทร", d.phone ? `<a href="tel:${encodeURIComponent(d.phone)}" style="color:#1a73e8">${esc(d.phone)}</a>` : null)}
+      ${row("เลขบัตร ปชช.", `<span style="font-family:monospace">${esc(fmtIdCard(d.id_card_number))}</span>`)}
+      ${row("ที่อยู่", d.address ? esc(d.address) : null, { wrap: true })}
     </div>
 
     <!-- ── ใบขับขี่ ── -->
     <div style="background:#f9f9f9;border-radius:8px;padding:12px 14px;margin-bottom:12px">
       <div style="font-size:12px;color:#1a73e8;font-weight:700;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">🪪 ใบขับขี่</div>
-      ${row("เลขที่ใบขับขี่", d.license_number)}
+      ${row("เลขที่ใบขับขี่", esc(d.license_number))}
       ${row("วันหมดอายุ", licenseStatus(d.license_expiry_date))}
       ${d.license_image_path ? `
         <div style="padding:10px 0;border-top:1px solid #f0f0f0;margin-top:6px">
@@ -2452,15 +2453,15 @@ function showDriverDetail(id) {
     <div style="background:#f9f9f9;border-radius:8px;padding:12px 14px;margin-bottom:12px">
       <div style="font-size:12px;color:#1a73e8;font-weight:700;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">🚛 การทำงาน</div>
       ${row("ประเภท", d.driver_type === "van" ? "VAN — มีรถประจำ" : "ขนส่ง — เลือกรถได้ทุกวัน")}
-      ${row("โกดัง", d.warehouse || d.trucks?.warehouse)}
-      ${row("สายที่ประจำ", d.route_code)}
-      ${row("รถประจำ", d.trucks?.plate_number ? `<b>${d.trucks.plate_number}</b>` : null)}
+      ${row("โกดัง", esc(d.warehouse || d.trucks?.warehouse))}
+      ${row("สายที่ประจำ", esc(d.route_code))}
+      ${row("รถประจำ", d.trucks?.plate_number ? `<b>${esc(d.trucks.plate_number)}</b>` : null)}
     </div>
 
     <!-- ── ระบบ ── -->
     <div style="background:#f9f9f9;border-radius:8px;padding:12px 14px">
       <div style="font-size:12px;color:#1a73e8;font-weight:700;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">⚙️ ระบบ</div>
-      ${row("LINE User ID", `<small style="font-family:monospace;font-size:11px;color:#555">${d.line_user_id || "-"}</small>`)}
+      ${row("LINE User ID", `<small style="font-family:monospace;font-size:11px;color:#555">${esc(d.line_user_id) || "-"}</small>`)}
       ${row("ลงทะเบียนเมื่อ", d.created_at ? thaiDateLong(d.created_at.slice(0, 10)) : null)}
     </div>
   `;
@@ -2499,7 +2500,7 @@ function openEditDriver() {
   // โหลดรายการรถ
   const truckSel = document.getElementById("ed_truck");
   truckSel.innerHTML = `<option value="">-- ไม่ระบุ --</option>` +
-    allTrucks.map(t => `<option value="${t.id}" ${t.id === d.truck_id ? "selected" : ""}>${t.plate_number} (${t.warehouse})</option>`).join("");
+    allTrucks.map(t => `<option value="${t.id}" ${t.id === d.truck_id ? "selected" : ""}>${esc(t.plate_number)} (${esc(t.warehouse)})</option>`).join("");
 
   onEditTypeChange();
   document.getElementById("editDriverErr").textContent = "";
@@ -3140,23 +3141,25 @@ async function exportBillsPDF() {
   tbody tr.subtotal td { background: #fff8e1 !important; font-weight: 700; }
   tbody tr.grand td { background: #c8e6c9 !important; font-weight: 700; font-size: 12.5px; }
 
-  /* ── สรุปยอดรวม (กล่องน้ำเงิน) ── */
+  /* ── สรุปยอดรวม (พื้นอ่อน อ่านง่าย) ── */
   .summary-card {
-    background: linear-gradient(135deg, #1a73e8 0%, #0d47a1 100%);
-    color: #fff;
-    padding: 18px 22px;
+    background: #f5f5f5;
+    color: #1a1a1a;
+    padding: 16px 20px;
     border-radius: 10px;
     margin: 14px 0 18px 0;
+    border: 1px solid #d0d7de;
   }
-  .summary-card .title { font-size: 14px; opacity: 0.85; margin-bottom: 8px; }
-  .summary-card table { background: transparent; font-size: 13px; margin: 0; }
-  .summary-card td { border: none; padding: 6px 0; color: #fff; }
+  .summary-card .title { font-size: 15px; font-weight: 700; color: #0d47a1; margin-bottom: 10px; }
+  .summary-card table { background: transparent; font-size: 14px; margin: 0; }
+  .summary-card td { border: none; padding: 7px 0; color: #1a1a1a; }
   .summary-card .grand-row td {
-    border-top: 2px solid rgba(255,255,255,0.4);
-    font-size: 17px;
+    border-top: 2px solid #1a73e8;
+    background: #c8e6c9 !important;
+    font-size: 16px;
     font-weight: 700;
-    padding-top: 10px;
-    margin-top: 6px;
+    padding: 10px 8px;
+    color: #1b5e20;
   }
 
   /* ── หัวบริษัท/รถ ── */
@@ -3235,7 +3238,7 @@ async function exportBillsPDF() {
     <tbody>
     ${fS.by_company.map(c => `
       <tr>
-        <td><b>${c.company_name}</b>${c.short_name ? ` <span class="lbl">(${c.short_name})</span>` : ""}</td>
+        <td><b>${esc(c.company_name)}</b>${c.short_name ? ` <span class="lbl">(${esc(c.short_name)})</span>` : ""}</td>
         <td class="num">${f(c.truck_count)}</td>
         <td class="num">${f(c.count)}</td>
         <td class="num"><b>${fM(c.total)}</b></td>
@@ -3271,9 +3274,9 @@ async function exportBillsPDF() {
     <tbody>
     ${fS.by_truck.map(t => `
       <tr>
-        <td><b>${t.plate}</b></td>
-        <td class="ctr">${t.warehouse}</td>
-        <td>${t.company_name}</td>
+        <td><b>${esc(t.plate)}</b></td>
+        <td class="ctr">${esc(t.warehouse)}</td>
+        <td>${esc(t.company_name)}</td>
         <td class="num">${f(t.count)}</td>
         <td class="num"><b>${fM(t.total)}</b></td>
       </tr>`).join("")}
@@ -3288,7 +3291,7 @@ async function exportBillsPDF() {
   <!-- ═══ FUEL: รายการแยกตามรถ ═══ -->
   <h2>⛽ น้ำมัน — รายละเอียดทุกรายการ</h2>
   ${fuelGroups.map(g => `
-    <h3>🚛 ${g.plate} <span class="section-info">· ${g.warehouse} · ${g.company_name}</span></h3>
+    <h3>🚛 ${esc(g.plate)} <span class="section-info">· ${esc(g.warehouse)} · ${esc(g.company_name)}</span></h3>
     <table>
       <colgroup>
         <col style="width:14%">
@@ -3312,15 +3315,15 @@ async function exportBillsPDF() {
       ${g.rows.map(r => `
         <tr>
           <td class="ctr">${r.log_date}</td>
-          <td>${r.drivers?.name || "—"}</td>
+          <td>${esc(r.drivers?.name) || "—"}</td>
           <td class="num">${f(r.mileage)}</td>
           <td class="num">${f(r.liters)}</td>
           <td class="num">${f(r.price_per_liter)}</td>
           <td class="num"><b>${fM(r.total_cost)}</b></td>
-          <td>${r.station_name || "—"}</td>
+          <td>${esc(r.station_name) || "—"}</td>
         </tr>`).join("")}
       <tr class="subtotal">
-        <td colspan="5">รวม ${g.plate} (${g.rows.length} ครั้ง)</td>
+        <td colspan="5">รวม ${esc(g.plate)} (${g.rows.length} ครั้ง)</td>
         <td class="num">${fM(g.total)}</td>
         <td></td>
       </tr>
@@ -3348,7 +3351,7 @@ async function exportBillsPDF() {
     <tbody>
     ${mS.by_company.map(c => `
       <tr>
-        <td><b>${c.company_name}</b></td>
+        <td><b>${esc(c.company_name)}</b></td>
         <td class="num">${f(c.truck_count)}</td>
         <td class="num">${f(c.count)}</td>
         <td class="num"><b>${fM(c.total)}</b></td>
@@ -3382,9 +3385,9 @@ async function exportBillsPDF() {
     <tbody>
     ${mS.by_truck.map(t => `
       <tr>
-        <td><b>${t.plate}</b></td>
-        <td class="ctr">${t.warehouse}</td>
-        <td>${t.company_name}</td>
+        <td><b>${esc(t.plate)}</b></td>
+        <td class="ctr">${esc(t.warehouse)}</td>
+        <td>${esc(t.company_name)}</td>
         <td class="num">${f(t.count)}</td>
         <td class="num"><b>${fM(t.total)}</b></td>
       </tr>`).join("")}
@@ -3399,7 +3402,7 @@ async function exportBillsPDF() {
   <!-- ═══ MAINTENANCE: รายการแยกตามรถ ═══ -->
   <h2>🔧 ซ่อมบำรุง — รายละเอียดทุกรายการ</h2>
   ${maintGroups.map(g => `
-    <h3>🚛 ${g.plate} <span class="section-info">· ${g.warehouse} · ${g.company_name}</span></h3>
+    <h3>🚛 ${esc(g.plate)} <span class="section-info">· ${esc(g.warehouse)} · ${esc(g.company_name)}</span></h3>
     <table>
       <colgroup>
         <col style="width:13%">
@@ -3421,14 +3424,14 @@ async function exportBillsPDF() {
       ${g.rows.map(r => `
         <tr>
           <td class="ctr">${r.maintenance_date}</td>
-          <td>${MAINT_LABELS[r.maintenance_type] || r.maintenance_type}</td>
-          <td>${r.shop_name || "—"}</td>
+          <td>${esc(MAINT_LABELS[r.maintenance_type] || r.maintenance_type)}</td>
+          <td>${esc(r.shop_name) || "—"}</td>
           <td class="num">${f(r.mileage_at_service)}</td>
           <td class="num"><b>${fM(r.cost)}</b></td>
-          <td>${(r.notes || "—").slice(0, 60)}</td>
+          <td>${esc((r.notes || "—").slice(0, 60))}</td>
         </tr>`).join("")}
       <tr class="subtotal">
-        <td colspan="4">รวม ${g.plate} (${g.rows.length} ครั้ง)</td>
+        <td colspan="4">รวม ${esc(g.plate)} (${g.rows.length} ครั้ง)</td>
         <td class="num">${fM(g.total)}</td>
         <td></td>
       </tr>
@@ -3509,9 +3512,9 @@ async function loadNotifTargets() {
   for (const t of data) {
     html += `<tr>
       <td><span class="badge ${t.target_type === 'group' ? 'b-blue' : 'b-ok'}">${t.target_type === 'group' ? 'กลุ่ม' : 'แอดมิน'}</span></td>
-      <td>${t.target_name}</td>
-      <td><small style="font-family:monospace">${t.line_id}</small></td>
-      <td>${t.warehouse || "ทุกโกดัง"}</td>
+      <td>${esc(t.target_name)}</td>
+      <td><small style="font-family:monospace">${esc(t.line_id)}</small></td>
+      <td>${esc(t.warehouse) || "ทุกโกดัง"}</td>
       <td>${t.notify_daily ? "✅" : "—"}</td>
       <td>${t.notify_doc ? "✅" : "—"}</td>
       <td>${t.notify_anomaly ? "✅" : "—"}</td>
@@ -3529,10 +3532,10 @@ async function loadSystemSettings() {
   let html = `<div class="tbl-wrap"><table><tr><th>ค่า</th><th>ความหมาย</th><th>ค่าปัจจุบัน</th><th>แก้ไข</th></tr>`;
   for (const s of data) {
     html += `<tr>
-      <td><code>${s.key}</code></td>
-      <td>${s.note || "-"}</td>
-      <td><b>${s.value}</b></td>
-      <td><button class="btn btn-sm btn-gray" onclick="editSetting('${s.key}', '${s.value}')">แก้ไข</button></td>
+      <td><code>${esc(s.key)}</code></td>
+      <td>${esc(s.note) || "-"}</td>
+      <td><b>${esc(s.value)}</b></td>
+      <td><button class="btn btn-sm btn-gray" onclick="editSetting('${esc(s.key)}', '${esc(s.value)}')">แก้ไข</button></td>
     </tr>`;
   }
   html += `</table></div>`;
@@ -3581,7 +3584,7 @@ async function loadCompanyOptions(addSelId, editSelId) {
     if (!sel) return;
     const cur = sel.value;
     sel.innerHTML = `<option value="">— ไม่ระบุ —</option>` +
-      allCompanies.map(c => `<option value="${c.id}">${c.name}${c.short_name ? ` (${c.short_name})` : ""}</option>`).join("");
+      allCompanies.map(c => `<option value="${c.id}">${esc(c.name)}${c.short_name ? ` (${esc(c.short_name)})` : ""}</option>`).join("");
     sel.value = cur;
   });
 }
@@ -3630,7 +3633,7 @@ async function openEditTruck(id) {
   reservedSel.innerHTML = `<option value="">— ไม่ผูก (ใครเลือกก็ได้) —</option>` +
     (Array.isArray(drivers) ? drivers : [])
       .filter(d => d.is_active !== false)
-      .map(d => `<option value="${d.id}">${d.name}${d.line_user_id ? ` 🟢` : ``}${d.driver_type ? ` (${d.driver_type === "transport" ? "ขนส่ง" : "VAN"})` : ""}</option>`)
+      .map(d => `<option value="${d.id}">${esc(d.name)}${d.line_user_id ? ` 🟢` : ``}${d.driver_type ? ` (${d.driver_type === "transport" ? "ขนส่ง" : "VAN"})` : ""}</option>`)
       .join("");
 
   document.getElementById("et_id").value            = truck.id;
@@ -3700,15 +3703,15 @@ async function loadCompanies() {
   for (const c of data) {
     const truckCount = allTrucks.filter(t => t.company_id === c.id).length;
     const taxIdCell = c.tax_id
-      ? `<code style="background:#f5f5f5;padding:2px 6px;border-radius:4px;font-size:12px">${c.tax_id}</code>`
+      ? `<code style="background:#f5f5f5;padding:2px 6px;border-radius:4px;font-size:12px">${esc(c.tax_id)}</code>`
       : `<span style="color:#e53935;font-size:12px">⚠️ ยังไม่กรอก</span>`;
     const addrCell  = c.address
-      ? `<span style="font-size:12px;color:#444">${c.address.length > 60 ? c.address.slice(0,60)+"..." : c.address}</span>`
+      ? `<span style="font-size:12px;color:#444">${esc(c.address.length > 60 ? c.address.slice(0,60)+"..." : c.address)}</span>`
       : `<span style="color:#e53935;font-size:12px">⚠️ ยังไม่กรอก</span>`;
     const safeName = (c.name || "").replace(/'/g, "\\'");
     html += `<tr>
-      <td><b>${c.name}</b></td>
-      <td>${c.short_name || "-"}</td>
+      <td><b>${esc(c.name)}</b></td>
+      <td>${esc(c.short_name) || "-"}</td>
       <td>${taxIdCell}</td>
       <td>${addrCell}</td>
       <td>${truckCount} คัน</td>
@@ -3807,16 +3810,16 @@ async function loadAdminUsers() {
       : `<span style="color:#888;font-size:11px">default</span>`;
 
     html += `<tr style="${u.is_active ? "" : "opacity:0.5"}">
-      <td><b>${u.username}</b></td>
-      <td>${u.display_name || "-"}</td>
-      <td>${roleLabel[u.role] || u.role}<br>${permLabel}</td>
+      <td><b>${esc(u.username)}</b></td>
+      <td>${esc(u.display_name) || "-"}</td>
+      <td>${roleLabel[u.role] || esc(u.role)}<br>${permLabel}</td>
       <td>${u.is_active ? "✅ ใช้งาน" : "⛔ ปิดใช้"}</td>
       <td style="font-size:12px;color:#888">${lastLogin}</td>
       <td style="white-space:nowrap">
         <button class="btn btn-primary" style="padding:4px 8px;font-size:12px;width:auto" onclick='openPermissionModal(${u.id}, ${JSON.stringify(u.username)}, ${JSON.stringify(u.tab_permissions || null)})'>🛡 สิทธิ์</button>
-        <button class="btn btn-gray" style="padding:4px 8px;font-size:12px;width:auto" onclick="openChangePasswordModal(${u.id},'${u.display_name || u.username}')">🔒 Password</button>
+        <button class="btn btn-gray" style="padding:4px 8px;font-size:12px;width:auto" onclick="openChangePasswordModal(${u.id},'${esc(u.display_name || u.username)}')">🔒 Password</button>
         <button class="btn btn-gray" style="padding:4px 8px;font-size:12px;width:auto" onclick="toggleAdminUser(${u.id},${u.is_active})">${u.is_active ? "ปิดใช้" : "เปิดใช้"}</button>
-        <button class="btn btn-red"  style="padding:4px 8px;font-size:12px;width:auto" onclick="deleteAdminUser(${u.id},'${u.username}')">ลบ</button>
+        <button class="btn btn-red"  style="padding:4px 8px;font-size:12px;width:auto" onclick="deleteAdminUser(${u.id},'${esc(u.username)}')">ลบ</button>
       </td>
     </tr>`;
   }
@@ -3947,7 +3950,7 @@ async function submitChangePassword() {
 function openAddMaintModal() {
   // เติมรายการรถ
   const sel = document.getElementById("am_truck");
-  sel.innerHTML = allTrucks.map(t => `<option value="${t.id}">${t.plate_number} (${t.warehouse})</option>`).join("");
+  sel.innerHTML = allTrucks.map(t => `<option value="${t.id}">${esc(t.plate_number)} (${esc(t.warehouse)})</option>`).join("");
   document.getElementById("am_date").value = todayISO();
   openModal("addMaintModal");
 }
@@ -4063,17 +4066,16 @@ function applyRoleVisibility() {
 
   document.querySelectorAll('.tab').forEach(t => {
     const onclick = t.getAttribute("onclick") || "";
-    // ดึง tab key จาก onclick="switchTab('xxx')"
     const m = onclick.match(/switchTab\(['"]([^'"]+)['"]\)/);
     if (m) {
       const tabKey = m[1];
       t.style.display = visibleTabs.has(tabKey) ? "" : "none";
     }
   });
-  // class super-only ภายในเนื้อหา (ไม่ใช่แท็บ)
-  document.querySelectorAll(".super-only").forEach(el => {
-    el.style.display = isSuper ? "" : "none";
-  });
+
+  // ⭐ Toggle body class — CSS ซ่อน .super-only ทันที (รวมถึง DOM ที่ render ใหม่ภายหลัง)
+  document.body.classList.toggle("role-non-super", !isSuper);
+
   // badge role
   const badge = document.getElementById("userRoleBadge");
   if (badge) {
