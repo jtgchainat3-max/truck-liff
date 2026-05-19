@@ -822,12 +822,61 @@ async function apiFetch(path, opts = {}, timeoutMs = 12000) {
   }
 }
 
+// ขอ GPS แบบ 2-tier: high accuracy ก่อน → ถ้าไม่ได้ลอง low accuracy (WiFi/Cell)
 function getGPS() {
   return new Promise((resolve, reject) => {
-    if (!navigator.geolocation) { reject(new Error("ไม่มี GPS")); return; }
-    navigator.geolocation.getCurrentPosition(resolve, reject, {
-      enableHighAccuracy: true, timeout: 15000, maximumAge: 10000,
-    });
+    if (!navigator.geolocation) { reject(new Error("เครื่องไม่รองรับ GPS")); return; }
+
+    // รอบ 1: GPS แม่นยำ (10 วินาที)
+    navigator.geolocation.getCurrentPosition(
+      resolve,
+      (err1) => {
+        console.warn("GPS high accuracy failed:", err1.message);
+        // รอบ 2: ใช้ WiFi/Cell tower (20 วินาที, รับ cache เก่ากว่า)
+        navigator.geolocation.getCurrentPosition(
+          resolve,
+          (err2) => reject(new Error(`${err1.message} → ${err2.message}`)),
+          { enableHighAccuracy: false, timeout: 20000, maximumAge: 60000 }
+        );
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
+    );
+  });
+}
+
+// ════════════════════════════════════════════════════════════
+// IMAGE COMPRESSION — บีบรูปก่อนส่ง (3 MB → ~400 KB)
+// ลด storage 85% + ส่งเร็วขึ้น 5-10x
+// ════════════════════════════════════════════════════════════
+async function compressImage(file, maxDim = 1600, quality = 0.85) {
+  if (!file || !file.type?.startsWith("image/")) return file;
+  if (file.size < 200 * 1024) return file;  // < 200KB แล้ว ไม่บีบ
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      let w = img.naturalWidth, h = img.naturalHeight;
+      // ปรับขนาดให้ด้านยาวสุดไม่เกิน maxDim
+      if (w > maxDim || h > maxDim) {
+        if (w >= h) { h = Math.round((h * maxDim) / w); w = maxDim; }
+        else        { w = Math.round((w * maxDim) / h); h = maxDim; }
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, w, h);
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) { resolve(file); return; }
+          // คืนเป็น File เพื่อ compatible กับ FormData
+          const fname = file.name?.replace(/\.[^.]+$/, "") || "photo";
+          resolve(new File([blob], `${fname}.jpg`, { type: "image/jpeg", lastModified: Date.now() }));
+        },
+        "image/jpeg",
+        quality
+      );
+    };
+    img.onerror = () => resolve(file);  // ถ้าโหลดไม่ได้ คืนของเดิม
+    img.src = URL.createObjectURL(file);
   });
 }
 
@@ -986,9 +1035,11 @@ function formatIdCard(input) {
   input.value = formatted;
 }
 
-function onLicensePhoto(event) {
-  const file = event.target.files[0];
-  if (!file) return;
+async function onLicensePhoto(event) {
+  const rawFile = event.target.files[0];
+  if (!rawFile) return;
+  // ใบขับขี่ใช้ quality สูงกว่า (text ต้องชัด)
+  const file = await compressImage(rawFile, 1800, 0.90);
   licenseBlob = file;
   const preview = document.getElementById("regLicensePreview");
   preview.src = URL.createObjectURL(file);
@@ -1354,10 +1405,12 @@ function switchMileageType(type) {
 }
 
 async function onMileagePhoto(event) {
-  const file = event.target.files[0];
-  if (!file) return;
+  const rawFile = event.target.files[0];
+  if (!rawFile) return;
 
   photoTs = nowBKK();
+  // บีบรูปก่อนเก็บ (3 MB → ~400 KB)
+  const file = await compressImage(rawFile);
   mileageBlob = file;
 
   const preview = document.getElementById("mileagePreview");
@@ -1414,7 +1467,7 @@ async function confirmMileage() {
   if (!photoGPS.mileage) {
     await capturePhotoGPS("mileage", "mileageGpsStatus");
     if (!photoGPS.mileage) {
-      alert("⚠️ ยังไม่ได้ตำแหน่ง GPS\nกรุณาเปิด GPS / ให้สิทธิ์ Location แล้วถ่ายรูปใหม่");
+      alert("❌ ดึงพิกัด GPS ไม่ได้\n\n✅ วิธีแก้:\n1. เช็คว่า GPS เปิดอยู่\n2. Settings → LINE → Location → อนุญาต\n3. ออกจากตึกไปที่โล่ง\n4. ปิด Low Power Mode\n5. รอ 10-15 วิแล้วลองใหม่\n\nต้องมี GPS ทุกครั้ง — ห้ามข้าม");
       return;
     }
   }
@@ -1508,9 +1561,10 @@ function goFuel() {
   showScreen("screenFuel");
 }
 
-function onFuelBillPhoto(event) {
-  const file = event.target.files[0];
-  if (!file) return;
+async function onFuelBillPhoto(event) {
+  const rawFile = event.target.files[0];
+  if (!rawFile) return;
+  const file = await compressImage(rawFile);
   fuelBillBlob = file;
   const prev = document.getElementById("fuelBillPreview");
   prev.src   = URL.createObjectURL(file);
@@ -1545,10 +1599,11 @@ function calcLitersFromTotal() {
   }
 }
 
-function onFuelPhoto(event) {
-  const file = event.target.files[0];
-  if (!file) return;
+async function onFuelPhoto(event) {
+  const rawFile = event.target.files[0];
+  if (!rawFile) return;
   photoTs = nowBKK();
+  const file = await compressImage(rawFile);
   fuelBlob = file;
 
   const prev = document.getElementById("fuelPhotoPreview");
@@ -1600,7 +1655,7 @@ async function submitFuel() {
   if (!photoGPS.fuel) {
     await capturePhotoGPS("fuel", "fuelGpsStatus");
     if (!photoGPS.fuel) {
-      alert("⚠️ ยังไม่ได้ตำแหน่ง GPS ของรูปเลขไมล์\nกรุณาเปิด GPS แล้วถ่ายรูปใหม่");
+      alert("❌ ดึงพิกัด GPS ไม่ได้\n\n✅ วิธีแก้:\n1. เช็คว่า GPS เปิดอยู่\n2. Settings → LINE → Location → อนุญาต\n3. ออกจากตึกไปที่โล่ง\n4. ปิด Low Power Mode\n5. รอ 10-15 วิแล้วลองใหม่\n\nต้องมี GPS ทุกครั้ง — ห้ามข้าม");
       return;
     }
   }
@@ -1729,10 +1784,11 @@ function goMaintenance() {
   showScreen("screenMaintenance");
 }
 
-function onMaintMileagePhoto(event) {
-  const file = event.target.files[0];
-  if (!file) return;
+async function onMaintMileagePhoto(event) {
+  const rawFile = event.target.files[0];
+  if (!rawFile) return;
   photoTs = nowBKK();
+  const file = await compressImage(rawFile);
   maintMileageBlob = file;
   const el = document.getElementById("maintMileagePreview");
   el.src = URL.createObjectURL(file);
@@ -1830,9 +1886,10 @@ function toggleTire(code, el) {
   }
 }
 
-function onMaintBillPhoto(event) {
-  const file = event.target.files[0];
-  if (!file) return;
+async function onMaintBillPhoto(event) {
+  const rawFile = event.target.files[0];
+  if (!rawFile) return;
+  const file = await compressImage(rawFile);
   maintBillBlob = file;
   const el = document.getElementById("maintBillPreview");
   el.src   = URL.createObjectURL(file);
@@ -1881,7 +1938,7 @@ async function submitMaintenance() {
   if (!photoGPS.maintMileage) {
     await capturePhotoGPS("maintMileage", "maintMileageGpsStatus");
     if (!photoGPS.maintMileage) {
-      alert("⚠️ ยังไม่ได้ตำแหน่ง GPS\nกรุณาเปิด GPS / ให้สิทธิ์ Location แล้วถ่ายรูปใหม่");
+      alert("❌ ดึงพิกัด GPS ไม่ได้\n\n✅ วิธีแก้:\n1. เช็คว่า GPS เปิดอยู่\n2. Settings → LINE → Location → อนุญาต\n3. ออกจากตึกไปที่โล่ง\n4. ปิด Low Power Mode\n5. รอ 10-15 วิแล้วลองใหม่\n\nต้องมี GPS ทุกครั้ง — ห้ามข้าม");
       return;
     }
   }
