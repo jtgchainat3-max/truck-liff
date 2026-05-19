@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="referrer" content="no-referrer">
 <title>Admin — Truck Tracker</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -154,6 +155,7 @@ body.role-non-super .super-only { display: none !important; }
   <div class="tab" onclick="switchTab('daily')">📋 ไมล์รายวัน</div>
   <div class="tab" onclick="switchTab('fuel')">⛽ น้ำมัน</div>
   <div class="tab" onclick="switchTab('maintenance')">🔧 ซ่อมบำรุง</div>
+  <div class="tab" onclick="switchTab('maintsched')">🛠 แผนซ่อม</div>
   <div class="tab" onclick="switchTab('verify')">🔍 ตรวจสอบบิล</div>
   <div class="tab" onclick="switchTab('accounting')">📒 ส่งบัญชี</div>
   <div class="tab" onclick="switchTab('anomalies')">⚠️ ผิดปกติ</div>
@@ -220,6 +222,9 @@ body.role-non-super .super-only { display: none !important; }
       <select id="maintFilter" onchange="loadMaintenance()">
         <option value="">ทั้งหมด</option>
         <option value="oil_change">เปลี่ยนน้ำมันเครื่อง</option>
+        <option value="gear_oil">ถ่ายน้ำมันเกียร์</option>
+        <option value="differential_oil">ถ่ายน้ำมันเฟืองท้าย</option>
+        <option value="brake_fluid">เปลี่ยนน้ำมันเบรค</option>
         <option value="tire_rotate">สลับยาง</option>
         <option value="tire_replace">เปลี่ยนยาง</option>
         <option value="brake">เบรก</option>
@@ -233,6 +238,44 @@ body.role-non-super .super-only { display: none !important; }
     </div>
   </div>
   <div id="maintContent"><div class="loader"><div class="spinner"></div>กำลังโหลด...</div></div>
+</div>
+
+<!-- ═══════════════════════════════════ MAINTENANCE SCHEDULE ═══════════════════════════════════ -->
+<div id="sec-maintsched" class="section">
+  <div class="filter-row" style="align-items:flex-end">
+    <div class="form-group" style="flex:0 0 200px">
+      <label>กรอง</label>
+      <select id="maintSchedFilter" onchange="renderMaintSchedule()">
+        <option value="all">ทั้งหมด</option>
+        <option value="due">เฉพาะที่ครบกำหนด/ใกล้ครบ</option>
+        <option value="overdue">เลยกำหนดแล้ว</option>
+      </select>
+    </div>
+    <div style="flex:1;text-align:right">
+      <button class="btn btn-gray" style="width:auto;padding:10px 16px" onclick="loadMaintSchedule()">🔄 รีเฟรช</button>
+      <button class="btn btn-primary super-only" style="width:auto;padding:10px 16px" onclick="openMaintIntervalsModal()">✏️ ตั้งช่วงเปลี่ยน</button>
+    </div>
+  </div>
+  <div style="background:#e8f5e9;border:1px solid #a5d6a7;border-radius:8px;padding:12px;margin-bottom:14px;font-size:13px;line-height:1.6">
+    💡 <b>วิธีใช้:</b> ดูแต่ละรถว่าครบกำหนดต้องเปลี่ยน <b>น้ำมันเครื่อง / น้ำมันเกียร์ / เฟืองท้าย / เบรค / ยาง</b> เมื่อไหร่<br>
+    🔴 = เลยกำหนดแล้ว · 🟡 = ใกล้ครบ · 🟢 = ยังไม่ถึง · ⚪ = ไม่เคยซ่อม
+  </div>
+  <div id="maintSchedContent"><div class="loader"><div class="spinner"></div>กำลังโหลด...</div></div>
+</div>
+
+<!-- ═══ MODAL: ตั้งช่วงเปลี่ยนถ่าย ═══ -->
+<div class="modal-overlay" id="maintIntervalsModal">
+  <div class="modal-box" style="max-width:680px">
+    <h3>✏️ ตั้งระยะเปลี่ยนถ่ายแต่ละประเภท</h3>
+    <div style="font-size:13px;color:#666;margin-bottom:10px">ตั้งค่าระยะ (กม. / เดือน) — รถทุกคันใช้ค่าเดียวกัน</div>
+    <div id="maintIntervalsList" style="max-height:480px;overflow-y:auto">
+      <div class="loader"><div class="spinner"></div>กำลังโหลด...</div>
+    </div>
+    <div id="maintIntervalsMsg" style="color:#e53935;font-size:13px;min-height:18px;margin-top:8px"></div>
+    <div class="modal-actions">
+      <button style="background:#e0e0e0;color:#555" onclick="closeMaintIntervalsModal()">ปิด</button>
+    </div>
+  </div>
 </div>
 
 <!-- ═══════════════════════════════════ VERIFY BILLS ═══════════════════════════════════ -->
@@ -1156,6 +1199,7 @@ const TAB_LOADERS = {
   daily:       () => { document.getElementById("dailyDate").value = todayISO(); loadDaily(); },
   fuel:        () => { document.getElementById("fuelFrom").value = todayISO(); document.getElementById("fuelTo").value = todayISO(); loadFuel(); },
   maintenance: () => { populateMaintTruckFilter(); loadMaintenance(); },
+  maintsched:  loadMaintSchedule,
   verify:      () => { populateVerifyTruckFilter(); loadVerifyQueue(); },
   accounting:  () => { populateAccountingFilters(); populateExportFilters(); loadAccounting(); },
   anomalies:   loadAnomalies,
@@ -1549,7 +1593,18 @@ async function runFuelOcr(id) {
 // ════════════════════════════════════════════════════════════
 // MAINTENANCE
 // ════════════════════════════════════════════════════════════
-const MAINT_LABELS = { oil_change:"เปลี่ยนน้ำมัน", tire_rotate:"สลับยาง", tire_replace:"เปลี่ยนยาง", tire:"ยาง", brake:"เบรก", battery:"แบตเตอรี่", other:"อื่นๆ" };
+const MAINT_LABELS = {
+  oil_change:       "เปลี่ยนน้ำมันเครื่อง",
+  gear_oil:         "ถ่ายน้ำมันเกียร์",
+  differential_oil: "ถ่ายน้ำมันเฟืองท้าย",
+  brake_fluid:      "เปลี่ยนน้ำมันเบรค",
+  tire_rotate:      "สลับยาง",
+  tire_replace:     "เปลี่ยนยาง",
+  tire:             "ยาง",
+  brake:            "เปลี่ยน/ตรวจเบรค",
+  battery:          "เปลี่ยนแบตเตอรี่",
+  other:            "ซ่อมอื่นๆ"
+};
 const TRUCK_TYPE_LABELS = {
   pickup:"🛻 กระบะ", "4wheel":"🛻 กระบะ",
   "6wheel":"🚚 6 ล้อ", "10wheel":"🚛 10 ล้อ",
@@ -1942,6 +1997,177 @@ async function toggleBillReceived(type, id, received) {
   } else {
     // Refresh เพื่ออัปเดต summary tiles + ผู้บันทึก
     loadAccounting();
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// MAINTENANCE SCHEDULE — แผนซ่อม per รถ
+// ════════════════════════════════════════════════════════════
+let maintSchedCache = null;
+
+async function loadMaintSchedule() {
+  const el = document.getElementById("maintSchedContent");
+  el.innerHTML = `<div class="loader"><div class="spinner"></div>กำลังโหลด...</div>`;
+  const data = await api("maintenance-schedule");
+  if (!data || data.error) {
+    el.innerHTML = `<div class="alert alert-err">${data?.error || "โหลดไม่สำเร็จ"}</div>`;
+    return;
+  }
+  maintSchedCache = data;
+  renderMaintSchedule();
+}
+
+function renderMaintSchedule() {
+  const data = maintSchedCache;
+  if (!data) return;
+  const filter = document.getElementById("maintSchedFilter")?.value || "all";
+  const el = document.getElementById("maintSchedContent");
+
+  let trucks = data.trucks || [];
+  if (filter === "due")     trucks = trucks.filter(t => t.overdue_count + t.alert_count > 0);
+  if (filter === "overdue") trucks = trucks.filter(t => t.overdue_count > 0);
+
+  // Summary
+  const totalOverdue = (data.trucks || []).reduce((s, t) => s + t.overdue_count, 0);
+  const totalAlert   = (data.trucks || []).reduce((s, t) => s + t.alert_count, 0);
+  let html = `
+    <div class="summary-grid" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr));margin-bottom:14px">
+      <div class="sbox blue"><div class="num">${data.trucks?.length || 0}</div><div class="lbl">รถทั้งหมด</div></div>
+      <div class="sbox red"><div class="num">${totalOverdue}</div><div class="lbl">🔴 เลยกำหนด</div></div>
+      <div class="sbox orange"><div class="num">${totalAlert}</div><div class="lbl">🟡 ใกล้ครบ</div></div>
+    </div>
+  `;
+
+  if (trucks.length === 0) {
+    html += `<div class="card" style="text-align:center;padding:30px;color:#888">✨ ไม่มีรถที่ตรงเงื่อนไข</div>`;
+    el.innerHTML = html;
+    return;
+  }
+
+  // Render each truck as card
+  for (const t of trucks) {
+    const overdueBadge = t.overdue_count > 0 ? `<span class="badge b-exp" style="background:#ffebee;color:#c62828">🔴 ${t.overdue_count} เลยกำหนด</span>` : "";
+    const alertBadge   = t.alert_count > 0 ? `<span class="badge b-warn">🟡 ${t.alert_count} ใกล้ครบ</span>` : "";
+    const cardBorder = t.overdue_count > 0 ? "border:2px solid #c62828"
+                     : t.alert_count > 0   ? "border:2px solid #ef6c00"
+                     : "border:1px solid #e0e0e0";
+
+    html += `<div class="card" style="${cardBorder};margin-bottom:12px;padding:0;overflow:hidden">
+      <div style="background:#1a73e8;color:#fff;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">
+        <div>
+          <b style="font-size:16px">${esc(t.plate_number)}</b>
+          <span style="opacity:.85;font-size:13px"> · ${esc(t.warehouse)} · ${truckTypeLabel(t.truck_type)}</span>
+        </div>
+        <div>
+          ${overdueBadge} ${alertBadge}
+          <span style="font-size:12px;opacity:.8;margin-left:8px">📊 ไมล์ล่าสุด: <b>${t.current_mileage ? fmtNum(t.current_mileage) : "—"}</b></span>
+        </div>
+      </div>
+      <div style="padding:0">
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead style="background:#f5f5f5">
+            <tr>
+              <th style="padding:8px 10px;text-align:left;border-bottom:1px solid #e0e0e0">ประเภท</th>
+              <th style="padding:8px 10px;text-align:right;border-bottom:1px solid #e0e0e0">ระยะ</th>
+              <th style="padding:8px 10px;text-align:right;border-bottom:1px solid #e0e0e0">ครั้งล่าสุด</th>
+              <th style="padding:8px 10px;text-align:right;border-bottom:1px solid #e0e0e0">ครบกำหนด</th>
+              <th style="padding:8px 10px;text-align:right;border-bottom:1px solid #e0e0e0">เหลือ</th>
+              <th style="padding:8px 10px;text-align:center;border-bottom:1px solid #e0e0e0">สถานะ</th>
+            </tr>
+          </thead>
+          <tbody>`;
+    for (const b of t.by_type) {
+      const statusIcon = b.status === "overdue" ? "🔴"
+                       : b.status === "alert"   ? "🟡"
+                       : b.status === "ok"      ? "🟢"
+                       : "⚪";
+      const statusBg = b.status === "overdue" ? "background:#ffebee"
+                     : b.status === "alert"   ? "background:#fff3e0"
+                     : "";
+      const intervalStr = b.interval_km ? `${fmtNum(b.interval_km)} กม.` : (b.interval_months ? `${b.interval_months} เดือน` : "—");
+      const lastStr = b.last_mileage
+        ? `${fmtNum(b.last_mileage)} กม.<br><small style="color:#888">${b.last_date || ""}</small>`
+        : `<span style="color:#aaa">ไม่เคยซ่อม</span>`;
+      const dueStr = b.next_due_km
+        ? `${fmtNum(b.next_due_km)} กม.${b.next_due_date ? `<br><small style="color:#888">${b.next_due_date}</small>` : ""}`
+        : (b.next_due_date ? b.next_due_date : `<span style="color:#aaa">—</span>`);
+      const remainStr = b.due_in_km != null
+        ? (b.due_in_km < 0 ? `<b style="color:#c62828">เลย ${fmtNum(-b.due_in_km)} กม.</b>` : `<b>${fmtNum(b.due_in_km)} กม.</b>`)
+        : (b.due_in_days != null ? `<b>${b.due_in_days} วัน</b>` : `<span style="color:#aaa">—</span>`);
+
+      html += `<tr style="${statusBg}">
+        <td style="padding:8px 10px;border-bottom:1px solid #f0f0f0">${esc(b.label)}</td>
+        <td style="padding:8px 10px;text-align:right;border-bottom:1px solid #f0f0f0;color:#666">${intervalStr}</td>
+        <td style="padding:8px 10px;text-align:right;border-bottom:1px solid #f0f0f0">${lastStr}</td>
+        <td style="padding:8px 10px;text-align:right;border-bottom:1px solid #f0f0f0">${dueStr}</td>
+        <td style="padding:8px 10px;text-align:right;border-bottom:1px solid #f0f0f0">${remainStr}</td>
+        <td style="padding:8px 10px;text-align:center;border-bottom:1px solid #f0f0f0;font-size:18px">${statusIcon}</td>
+      </tr>`;
+    }
+    html += `</tbody></table></div></div>`;
+  }
+  el.innerHTML = html;
+}
+
+// ── Modal: ตั้งค่าระยะเปลี่ยนถ่าย ──
+async function openMaintIntervalsModal() {
+  const list = document.getElementById("maintIntervalsList");
+  list.innerHTML = `<div class="loader"><div class="spinner"></div>กำลังโหลด...</div>`;
+  document.getElementById("maintIntervalsMsg").textContent = "";
+  document.getElementById("maintIntervalsModal").classList.add("open");
+  const data = await api("maintenance-intervals");
+  if (!Array.isArray(data)) {
+    list.innerHTML = `<div class="alert alert-err">${data?.error || "โหลดไม่สำเร็จ"}</div>`;
+    return;
+  }
+  list.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:13px">
+    <thead><tr style="background:#f5f5f5">
+      <th style="padding:6px 8px;text-align:left">ประเภท</th>
+      <th style="padding:6px 8px;text-align:right">ทุก กม.</th>
+      <th style="padding:6px 8px;text-align:right">ทุก เดือน</th>
+      <th style="padding:6px 8px;text-align:right">แจ้งก่อน(กม.)</th>
+      <th></th>
+    </tr></thead>
+    <tbody>${data.map(i => `
+      <tr data-type="${i.maintenance_type}">
+        <td style="padding:6px 8px"><b>${esc(i.label_th)}</b><br><small style="color:#888">${i.maintenance_type}</small></td>
+        <td style="padding:6px 8px;text-align:right"><input class="mi-km" type="number" value="${i.interval_km ?? ""}" style="width:90px;padding:4px 6px;text-align:right" placeholder="—"></td>
+        <td style="padding:6px 8px;text-align:right"><input class="mi-months" type="number" value="${i.interval_months ?? ""}" style="width:70px;padding:4px 6px;text-align:right" placeholder="—"></td>
+        <td style="padding:6px 8px;text-align:right"><input class="mi-alert-km" type="number" value="${i.alert_km_before ?? ""}" style="width:80px;padding:4px 6px;text-align:right" placeholder="500"></td>
+        <td style="padding:6px 8px;text-align:center"><button class="btn btn-primary" style="padding:4px 10px;font-size:12px;width:auto" onclick="saveMaintInterval('${i.maintenance_type}')">บันทึก</button></td>
+      </tr>`).join("")}
+    </tbody></table>`;
+}
+
+function closeMaintIntervalsModal() {
+  document.getElementById("maintIntervalsModal").classList.remove("open");
+}
+
+async function saveMaintInterval(type) {
+  const row = document.querySelector(`tr[data-type="${type}"]`);
+  if (!row) return;
+  const km     = row.querySelector(".mi-km").value;
+  const months = row.querySelector(".mi-months").value;
+  const alertKm = row.querySelector(".mi-alert-km").value;
+  const msg = document.getElementById("maintIntervalsMsg");
+  msg.style.color = "#888";
+  msg.textContent = `⏳ กำลังบันทึก ${type}...`;
+  const res = await api(`maintenance-intervals/${encodeURIComponent(type)}`, {
+    method: "PUT",
+    body: JSON.stringify({
+      interval_km:      km ? parseInt(km) : null,
+      interval_months:  months ? parseInt(months) : null,
+      alert_km_before:  alertKm ? parseInt(alertKm) : null,
+    })
+  });
+  if (res?.success) {
+    msg.style.color = "#2e7d32";
+    msg.textContent = `✅ บันทึก ${type} เรียบร้อย`;
+    if (maintSchedCache) loadMaintSchedule();  // refresh schedule
+    setTimeout(() => { msg.textContent = ""; }, 3000);
+  } else {
+    msg.style.color = "#e53935";
+    msg.textContent = `❌ ${res?.error || "บันทึกไม่สำเร็จ"}`;
   }
 }
 
@@ -4027,6 +4253,7 @@ const ALL_TABS = [
   { key: "daily",       label: "📋 ไมล์รายวัน" },
   { key: "fuel",        label: "⛽ น้ำมัน" },
   { key: "maintenance", label: "🔧 ซ่อมบำรุง" },
+  { key: "maintsched",  label: "🛠 แผนซ่อม" },
   { key: "verify",      label: "🔍 ตรวจสอบบิล" },
   { key: "accounting",  label: "📒 ส่งบัญชี" },
   { key: "anomalies",   label: "⚠️ ผิดปกติ" },
@@ -4041,7 +4268,7 @@ const ALL_TABS = [
 // Default tabs ของ role (ถ้าไม่ตั้ง custom)
 const DEFAULT_TABS_BY_ROLE = {
   superadmin: ALL_TABS.map(t => t.key),  // ทุกแท็บ
-  admin:      ["summary","daily","fuel","maintenance","verify","accounting","anomalies","documents","trucks","drivers","companies","settings"],
+  admin:      ["summary","daily","fuel","maintenance","maintsched","verify","accounting","anomalies","documents","trucks","drivers","companies","settings"],
 };
 
 async function loadCurrentUserRole() {
