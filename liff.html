@@ -828,23 +828,33 @@ async function apiFetch(path, opts = {}, timeoutMs = 12000) {
 }
 
 // ขอ GPS แบบ 2-tier: high accuracy ก่อน → ถ้าไม่ได้ลอง low accuracy (WiFi/Cell)
+// + manual hard timeout 15 วินาที กันค้าง
 function getGPS() {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) { reject(new Error("เครื่องไม่รองรับ GPS")); return; }
 
-    // รอบ 1: GPS แม่นยำ (10 วินาที)
+    let done = false;
+    const finish = (fn, val) => { if (!done) { done = true; fn(val); } };
+
+    // Hard timeout: ถ้า 15 วินาที ยังไม่ได้ผล → ปิดเลย ไม่ค้าง
+    const hardTimer = setTimeout(() => {
+      finish(reject, new Error("GPS timeout 15 วินาที — กรุณาเปิดให้สิทธิ์ตำแหน่ง หรือออกไปนอกอาคาร"));
+    }, 15000);
+
+    // รอบ 1: GPS แม่นยำ (6 วินาที)
     navigator.geolocation.getCurrentPosition(
-      resolve,
+      (pos) => { clearTimeout(hardTimer); finish(resolve, pos); },
       (err1) => {
         console.warn("GPS high accuracy failed:", err1.message);
-        // รอบ 2: ใช้ WiFi/Cell tower (20 วินาที, รับ cache เก่ากว่า)
+        if (done) return;
+        // รอบ 2: WiFi/Cell tower (8 วินาที, รับ cache เก่ากว่า)
         navigator.geolocation.getCurrentPosition(
-          resolve,
-          (err2) => reject(new Error(`${err1.message} → ${err2.message}`)),
-          { enableHighAccuracy: false, timeout: 20000, maximumAge: 60000 }
+          (pos) => { clearTimeout(hardTimer); finish(resolve, pos); },
+          (err2) => { clearTimeout(hardTimer); finish(reject, new Error(`${err1.message} → ${err2.message}`)); },
+          { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
         );
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
+      { enableHighAccuracy: true, timeout: 6000, maximumAge: 5000 }
     );
   });
 }
@@ -893,12 +903,25 @@ const photoGPS = {};   // key → { latitude, longitude, accuracy }
 async function capturePhotoGPS(key, statusElId) {
   photoGPS[key] = null;
   const ind = document.getElementById(statusElId);
-  if (ind) {
-    ind.innerHTML = '📍 <span style="color:#1a73e8">กำลังขอตำแหน่ง GPS...</span>';
+
+  // แสดง countdown 15 วินาที + ปุ่มลองใหม่
+  let seconds = 0;
+  let countdownTimer = null;
+  const renderProgress = () => {
+    if (!ind) return;
+    ind.innerHTML = `
+      📍 <span style="color:#1a73e8"><b>กำลังขอตำแหน่ง GPS...</b> (${seconds}s)</span>
+      <br><small style="color:#666">รอสักครู่ — ออกไปที่โล่งจะเร็วขึ้น</small>
+    `;
     ind.style.background = "#e3f2fd";
-  }
+    ind.style.color = "#0d47a1";
+  };
+  renderProgress();
+  countdownTimer = setInterval(() => { seconds++; renderProgress(); }, 1000);
+
   try {
     const pos = await getGPS();
+    clearInterval(countdownTimer);
     photoGPS[key] = {
       latitude:  pos.coords.latitude,
       longitude: pos.coords.longitude,
@@ -912,14 +935,35 @@ async function capturePhotoGPS(key, statusElId) {
     }
     return photoGPS[key];
   } catch (e) {
+    clearInterval(countdownTimer);
     if (ind) {
-      ind.innerHTML = `❌ <b>ไม่ได้ตำแหน่ง</b><br><small>กรุณาเปิด GPS / ให้สิทธิ์ Location แล้วถ่ายรูปใหม่</small>`;
+      // แสดงปุ่ม "ลองใหม่" + วิธีแก้
+      ind.innerHTML = `
+        ❌ <b>ไม่ได้ตำแหน่ง GPS</b>
+        <div style="font-size:12px;color:#666;margin:6px 0;line-height:1.5">
+          ${e.message || ""}<br>
+          <b>วิธีแก้:</b><br>
+          1. เปิด GPS ในมือถือ (ตั้งค่า → ตำแหน่ง)<br>
+          2. อนุญาตให้ LINE เข้าถึงตำแหน่ง<br>
+          3. ออกไปที่โล่งสักครู่<br>
+          4. กดปุ่ม "ลองใหม่" ด้านล่าง
+        </div>
+        <button onclick="retryPhotoGPS('${key}','${statusElId}')"
+          style="background:#1a73e8;color:#fff;border:none;border-radius:6px;padding:8px 16px;font-size:14px;font-weight:600;cursor:pointer;margin-top:4px">
+          🔄 ลองขอตำแหน่งใหม่
+        </button>
+      `;
       ind.style.background = "#ffebee";
       ind.style.color = "#c62828";
     }
     return null;
   }
 }
+
+// เรียกจากปุ่ม "ลองใหม่"
+window.retryPhotoGPS = function(key, statusElId) {
+  capturePhotoGPS(key, statusElId);
+};
 
 function appendGPSToFormData(fd, key) {
   const gps = photoGPS[key];
