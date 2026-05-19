@@ -1077,13 +1077,13 @@ async function loadDaily() {
       <div class="sbox ${s.anomalies > 0 ? 'orange' : 'green'}"><div class="num">${s.anomalies}</div><div class="lbl">ผิดปกติ</div></div>
     </div>
     <div class="card">
-      <h3>รายละเอียดรายคัน — ${thaiDateShort(date)} <small style="color:#888;font-weight:400">(แต่ละเที่ยวแสดงคู่ ออก→กลับ)</small></h3>
+      <h3>รายละเอียดรายคัน — ${thaiDateShort(date)} <small style="color:#888;font-weight:400">(แต่ละเที่ยวแสดงคู่ ออก→กลับ · กดแก้ไขตัวเลขถ้าคนขับกรอกผิด)</small></h3>
       <div class="tbl-wrap"><table>
         <tr>
           <th>ทะเบียน</th><th>คนขับ/สาย</th>
           <th>เที่ยว</th>
-          <th>🚀 ออกทำงาน (เวลา/ไมล์/GPS/รูป)</th>
-          <th>🏁 กลับโกดัง (เวลา/ไมล์/GPS/รูป)</th>
+          <th>🚀 ออกทำงาน</th>
+          <th>🏁 กลับโกดัง</th>
           <th>กม.</th>
         </tr>`;
 
@@ -1110,12 +1110,13 @@ async function loadDaily() {
       const fmtCell = (log) => {
         if (!log) return `<span class="badge b-miss">ยังไม่ส่ง</span>`;
         const route = log.route_override ? ` <span class="badge b-warn">🛣 ${log.route_override}</span>` : "";
+        const editBtn = `<button class="btn btn-sm btn-gray" style="padding:2px 8px;font-size:11px;margin-left:4px" onclick="openEditMileage(${log.id}, ${log.mileage})" title="แก้ไขเลขไมล์">✏️</button>`;
         return `
-          <div style="line-height:1.5">
-            <b>${fmtNum(log.mileage)}</b> กม.${log.anomaly_flag ? ` <span class="badge b-crit" title="${log.anomaly_note}">⚠️</span>` : ""}${route}<br>
-            <small style="color:#666">🕐 ${fmtTime(log.created_at)}</small> ·
-            ${log.latitude ? `<a href="https://maps.google.com/?q=${log.latitude},${log.longitude}" target="_blank" style="font-size:11px">📍 GPS</a>` : "<small style='color:#aaa'>ไม่มี GPS</small>"} ·
-            ${log.image_path ? `<a href="${log.image_path}" target="_blank" style="font-size:11px">📷 รูป</a>` : "<small style='color:#aaa'>ไม่มีรูป</small>"}
+          <div style="line-height:1.6">
+            <b style="font-size:15px">${fmtNum(log.mileage)}</b> กม.${editBtn}${log.anomaly_flag ? ` <span class="badge b-crit" title="${log.anomaly_note}">⚠️</span>` : ""}${route}<br>
+            <small style="color:#666">🕐 ${fmtTime(log.created_at)}</small>
+            ${log.latitude ? ` · <a href="https://maps.google.com/?q=${log.latitude},${log.longitude}" target="_blank" style="font-size:11px">📍 GPS</a>` : ""}
+            ${log.image_path ? ` · <a href="${log.image_path}" target="_blank" style="font-size:11px">📷 ดูรูป</a>` : ` · <small style='color:#aaa'>ไม่มีรูป</small>`}
           </div>`;
       };
 
@@ -1248,8 +1249,8 @@ async function loadFuel() {
       <div class="sbox orange"><div class="num">${fmtNum(Math.round(totalLiters))}</div><div class="lbl">ลิตรรวม</div></div>
       <div class="sbox red"><div class="num">฿${fmtNum(Math.round(totalCost))}</div><div class="lbl">ค่าน้ำมันรวม</div></div>
     </div>
-    <div class="card"><h3>ประวัติเติมน้ำมัน <small style="color:#888;font-weight:400">(กดที่แถวเพื่อดูรูป)</small></h3><div class="tbl-wrap"><table>
-      <tr><th>วันที่/เวลา</th><th>ทะเบียน</th><th>โกดัง</th><th>คนขับ</th><th>ไมล์</th><th>วิ่งได้</th><th>ลิตร</th><th>ราคา/ล.</th><th>รวม</th><th>กม./ล.</th><th>ปั๊ม</th></tr>`;
+    <div class="card"><h3>ประวัติเติมน้ำมัน <small style="color:#888;font-weight:400">(กดที่แถวเพื่อดูรูป + รายละเอียด)</small></h3><div class="tbl-wrap"><table>
+      <tr><th>วันที่/เวลา</th><th>ทะเบียน</th><th>โกดัง</th><th>คนขับ</th><th>ไมล์</th><th>วิ่งได้</th><th>ลิตร</th><th>ราคา/ล.</th><th>รวม</th><th>กม./ล.</th><th>ปั๊ม</th><th>GPS</th></tr>`;
 
   for (const r of data) {
     const kmSince = r.km_since_last_fuel
@@ -1267,6 +1268,7 @@ async function loadFuel() {
       <td><b>${fmtNum(r.total_cost)} ฿</b></td>
       <td>${r.km_per_liter ? r.km_per_liter + " กม./ล." : "-"}${r.anomaly_flag ? ` <span class="badge b-crit" title="${r.anomaly_note}">⚠️</span>` : ""}</td>
       <td>${r.station_name || "-"}</td>
+      <td>${r.latitude && r.longitude ? `<a onclick="event.stopPropagation()" href="https://maps.google.com/?q=${r.latitude},${r.longitude}" target="_blank" style="font-size:13px">📍</a>` : "<small style='color:#aaa'>-</small>"}</td>
     </tr>`;
   }
   html += `</table></div></div>`;
