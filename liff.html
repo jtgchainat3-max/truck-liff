@@ -875,15 +875,14 @@ function getGPS() {
     const errors = [];
     const finish = (fn, val) => { if (!done) { done = true; fn(val); } };
 
-    // Hard timeout — 18 วินาที
+    // ⏱ Hard timeout — 15 วินาที ตามที่ออกแบบไว้
     const hardTimer = setTimeout(() => {
-      // ถ้ามี position เก่า (จาก warmup) → ใช้แทน
       if (lastKnownPosition) {
-        finish(resolve, lastKnownPosition);
+        finish(resolve, lastKnownPosition);  // ใช้ของ warmup ถ้ามี
       } else {
-        finish(reject, new Error(`GPS timeout 18s — ลองทุกวิธีแล้ว: ${errors.join(" | ")}`));
+        finish(reject, new Error(`timeout: ${errors.join(",") || "no response"}`));
       }
-    }, 18000);
+    }, 15000);
 
     const onSuccess = (pos) => {
       lastKnownPosition = pos;
@@ -892,41 +891,38 @@ function getGPS() {
       finish(resolve, pos);
     };
 
-    // Strategy 1: High accuracy (GPS chip) — 8 sec
+    // 3 strategies parallel — ตัวที่เร็วสุดชนะ ทั้งหมดต้อง ≤ 15 วิ
+    // Strategy 1: GPS chip high accuracy (7 sec)
     try {
       navigator.geolocation.getCurrentPosition(
         onSuccess,
-        (err) => { errors.push(`HighAcc:${err.code}`); },
-        { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+        (err) => errors.push(`HiAcc:${err.code}`),
+        { enableHighAccuracy: true, timeout: 7000, maximumAge: 0 }
       );
-    } catch (e) { errors.push(`HighAcc:exception`); }
+    } catch (_) { errors.push("HiAcc:exception"); }
 
-    // Strategy 2: Low accuracy (WiFi/Cell) — parallel, 8 sec
+    // Strategy 2: WiFi/Cell low accuracy (7 sec)
     try {
       navigator.geolocation.getCurrentPosition(
         onSuccess,
-        (err) => { errors.push(`LowAcc:${err.code}`); },
-        { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
+        (err) => errors.push(`LoAcc:${err.code}`),
+        { enableHighAccuracy: false, timeout: 7000, maximumAge: 60000 }
       );
-    } catch (e) { errors.push(`LowAcc:exception`); }
+    } catch (_) { errors.push("LoAcc:exception"); }
 
-    // Strategy 3: watchPosition — บางเครื่อง getCurrentPosition พังแต่ watch ใช้ได้
+    // Strategy 3: watchPosition (14 sec) — บางเครื่อง getCurrentPosition พังแต่ watch ใช้ได้
     let wId = null;
     try {
       wId = navigator.geolocation.watchPosition(
         (pos) => {
-          if (wId !== null) {
-            navigator.geolocation.clearWatch(wId);
-            wId = null;
-          }
+          if (wId !== null) { navigator.geolocation.clearWatch(wId); wId = null; }
           onSuccess(pos);
         },
-        (err) => { errors.push(`Watch:${err.code}`); },
-        { enableHighAccuracy: true, timeout: 16000, maximumAge: 0 }
+        (err) => errors.push(`Watch:${err.code}`),
+        { enableHighAccuracy: true, timeout: 14000, maximumAge: 0 }
       );
-      // clear watch ตอน hard timeout
-      setTimeout(() => { if (wId !== null) { try { navigator.geolocation.clearWatch(wId); } catch (_) {} } }, 18000);
-    } catch (e) { errors.push(`Watch:exception`); }
+      setTimeout(() => { if (wId !== null) { try { navigator.geolocation.clearWatch(wId); } catch (_) {} } }, 15000);
+    } catch (_) { errors.push("Watch:exception"); }
   });
 }
 
