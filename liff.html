@@ -1419,11 +1419,11 @@ async function confirmMileage() {
     }
   }
 
-  // เตือนถ้าไมล์ลดลงจากเดิม (น่าจะกรอกผิด)
+  // ห้ามไมล์น้อยกว่าครั้งก่อน (HARD REJECT — backend ก็ check ซ้ำ)
   if (driverInfo?.last_evening_mileage && mileageVal < driverInfo.last_evening_mileage) {
-    if (!confirm(`⚠️ เลขไมล์ที่กรอก (${fmtNum(mileageVal)}) น้อยกว่าไมล์ล่าสุด (${fmtNum(driverInfo.last_evening_mileage)})\n\nกรอกถูกต้องไหม?`)) {
-      return;
-    }
+    alert(`❌ เลขไมล์ที่กรอก (${fmtNum(mileageVal)}) น้อยกว่าไมล์ล่าสุด (${fmtNum(driverInfo.last_evening_mileage)})\n\nกรอกใหม่ให้ถูกต้อง — เลขไมล์ต้องไม่น้อยกว่าครั้งก่อน`);
+    document.getElementById("mileageInputNum").focus();
+    return;
   }
 
   const fd  = new FormData();
