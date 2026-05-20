@@ -193,6 +193,12 @@ body.role-non-super .super-only { display: none !important; }
 <div id="sec-fuel" class="section">
   <div class="filter-row">
     <div class="form-group">
+      <label>🚛 ทะเบียนรถ</label>
+      <select id="fuelTruckFilter" onchange="loadFuel()">
+        <option value="">ทุกคัน</option>
+      </select>
+    </div>
+    <div class="form-group">
       <label>จาก</label>
       <input type="date" id="fuelFrom">
     </div>
@@ -1199,7 +1205,7 @@ function mapLink(lat, lon) {
 const TAB_LOADERS = {
   summary:     loadSummary,
   daily:       () => { document.getElementById("dailyDate").value = todayISO(); loadDaily(); },
-  fuel:        () => { document.getElementById("fuelFrom").value = todayISO(); document.getElementById("fuelTo").value = todayISO(); loadFuel(); },
+  fuel:        () => { document.getElementById("fuelFrom").value = todayISO(); document.getElementById("fuelTo").value = todayISO(); populateFuelTruckFilter(); loadFuel(); },
   maintenance: () => { populateMaintTruckFilter(); loadMaintenance(); },
   maintsched:  loadMaintSchedule,
   verify:      () => { populateVerifyTruckFilter(); loadVerifyQueue(); },
@@ -1453,14 +1459,17 @@ function showFuelDetail(id) {
 }
 
 async function loadFuel() {
-  const from = document.getElementById("fuelFrom").value;
-  const to   = document.getElementById("fuelTo").value;
-  const el   = document.getElementById("fuelContent");
+  const from    = document.getElementById("fuelFrom").value;
+  const to      = document.getElementById("fuelTo").value;
+  const truckId = document.getElementById("fuelTruckFilter")?.value || "";
+  const el      = document.getElementById("fuelContent");
   el.innerHTML = `<div class="loader"><div class="spinner"></div>กำลังโหลด...</div>`;
 
-  let q = "fuel-summary";
-  if (from) q += `?date_from=${from}`;
-  if (to)   q += (q.includes("?") ? "&" : "?") + `date_to=${to}`;
+  const params = [];
+  if (from)    params.push(`date_from=${from}`);
+  if (to)      params.push(`date_to=${to}`);
+  if (truckId) params.push(`truck_id=${truckId}`);
+  const q = "fuel-summary" + (params.length ? `?${params.join("&")}` : "");
 
   const data = await api(q);
   if (!data || data.error) {
@@ -1649,6 +1658,15 @@ function driverTypeText(t) {
 
 function populateMaintTruckFilter() {
   const sel = document.getElementById("maintTruckFilter");
+  const cur = sel.value;
+  sel.innerHTML = `<option value="">ทุกคัน</option>` +
+    allTrucks.map(t => `<option value="${t.id}">${esc(t.plate_number)} (${esc(t.warehouse)})</option>`).join("");
+  if (cur) sel.value = cur;
+}
+
+function populateFuelTruckFilter() {
+  const sel = document.getElementById("fuelTruckFilter");
+  if (!sel) return;
   const cur = sel.value;
   sel.innerHTML = `<option value="">ทุกคัน</option>` +
     allTrucks.map(t => `<option value="${t.id}">${esc(t.plate_number)} (${esc(t.warehouse)})</option>`).join("");
@@ -4368,7 +4386,7 @@ function startApp() {
   loadCurrentUserRole();
   Promise.all([
     loadSummary(),
-    api("trucks").then(d => { if (d) { allTrucks = d; populateMaintTruckFilter(); } }),
+    api("trucks").then(d => { if (d) { allTrucks = d; populateMaintTruckFilter(); populateFuelTruckFilter(); } }),
     api("companies").then(d => { if (d) allCompanies = d; }),
   ]);
 }
