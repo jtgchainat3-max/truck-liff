@@ -531,17 +531,16 @@ body{font-family:'Sarabun',sans-serif;background:#f5f5f5;color:#333;min-height:1
 
     <button class="btn btn-gray" id="addMaintItemBtn" style="margin-bottom:12px" onclick="addMaintItem()">➕ เพิ่มรายการซ่อม</button>
 
-    <!-- สรุปรวม -->
+    <!-- สรุปรวม + ยอดรวมจริงในบิล -->
     <div id="maintSummary" class="card" style="background:#e3f2fd;border:1px solid #90caf9;display:none">
-      <div style="font-size:13px;color:#1565c0;font-weight:700;margin-bottom:6px">💰 สรุปรวม</div>
+      <div style="font-size:13px;color:#1565c0;font-weight:700;margin-bottom:8px">💰 สรุปรวม</div>
       <div style="display:flex;justify-content:space-between;font-size:14px;color:#1565c0;line-height:1.8">
-        <span>ค่าอะไหล่/รายการรวม:</span><span><b id="sumParts">0</b> บาท</span>
+        <span>ผลรวมจากรายการ:</span><span><b id="sumCalc">0</b> บาท</span>
       </div>
-      <div style="display:flex;justify-content:space-between;font-size:14px;color:#1565c0;line-height:1.8">
-        <span>ค่าแรงรวม:</span><span><b id="sumLabor">0</b> บาท</span>
-      </div>
-      <div style="display:flex;justify-content:space-between;font-size:16px;color:#0d47a1;line-height:1.8;border-top:1px solid #90caf9;padding-top:6px;margin-top:6px">
-        <span><b>รวมทั้งหมด:</b></span><span><b id="sumTotal">0</b> บาท</span>
+      <div class="field" style="margin-top:10px;margin-bottom:0">
+        <label style="color:#0d47a1;font-weight:700">💵 ยอดรวมในบิล (จริง) <span style="color:#888;font-weight:400">— กรอกตามบิล</span></label>
+        <input type="number" id="maintTotalEntered" placeholder="ยอดรวมในบิลจริงๆ" inputmode="numeric" oninput="checkTotalMismatch()" style="font-size:18px;text-align:center;font-weight:700">
+        <div id="totalMismatchWarn" style="display:none;margin-top:6px;font-size:12px;color:#e65100"></div>
       </div>
     </div>
 
@@ -2095,21 +2094,15 @@ function addMaintItem() {
         <label>📝 ซ่อมอะไร <span style="color:#e53935">*</span></label>
         <input type="text" class="m-other-desc" placeholder="เช่น เปลี่ยนหม้อน้ำ / ซ่อมไฟหน้า">
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-        <div class="field" style="margin-bottom:0">
-          <label>🔩 ค่าอะไหล่ (บาท)</label>
-          <input type="number" class="m-cost" placeholder="0" inputmode="numeric" oninput="updateMaintSummary()">
-        </div>
-        <div class="field" style="margin-bottom:0">
-          <label>🔧 ค่าแรง (บาท)</label>
-          <input type="number" class="m-labor" placeholder="0" inputmode="numeric" oninput="updateMaintSummary()">
-        </div>
+      <div class="field" style="margin-bottom:0">
+        <label class="m-cost-label">💰 ค่าใช้จ่าย (บาท)</label>
+        <input type="number" class="m-cost" placeholder="0" inputmode="numeric" oninput="updateMaintSummary()" style="font-size:16px;font-weight:700">
       </div>
       <div class="field m-tire-section" style="display:none;margin-top:12px">
         <label class="m-tire-label">เลือกตำแหน่ง (เลือกได้หลายตำแหน่ง)</label>
         <div class="tire-grid m-tire-grid"></div>
       </div>
-      <div class="field" style="margin-top:12px">
+      <div class="field" style="margin-top:12px;margin-bottom:0">
         <label>📝 หมายเหตุ</label>
         <textarea class="m-notes" rows="2" placeholder="รายละเอียดเพิ่มเติม (ถ้ามี)"></textarea>
       </div>
@@ -2138,25 +2131,40 @@ function removeMaintItem(btn) {
   updateMaintSummary();
 }
 
-// ── เปลี่ยนประเภทใน item: แสดง/ซ่อน tire selector + other desc ──
+// ── ประเภทที่ต้องเลือกตำแหน่งล้อ ──
+const WHEEL_TYPES = new Set(["tire_rotate","tire_replace","brake","wheel_bearing","wheel_rim","tire_patch"]);
+
+// ── เปลี่ยนประเภทใน item: แสดง/ซ่อน tire selector + other desc + label ──
 function onMaintItemTypeChange(selectEl) {
   const item = selectEl.closest(".maint-item");
   const type = selectEl.value;
-  const isWheel    = ["tire_rotate","tire_replace","brake"].includes(type);
-  const isOther    = type === "other";
+  const isWheel = WHEEL_TYPES.has(type);
+  const isOther = type === "other";
+  const isLabor = type === "labor";
 
-  item.querySelector(".m-tire-section").style.display    = isWheel ? "" : "none";
+  item.querySelector(".m-tire-section").style.display     = isWheel ? "" : "none";
   item.querySelector(".m-other-desc-field").style.display = isOther ? "" : "none";
 
+  // ปรับ label ของช่อง cost ตามประเภท
+  const costLabel = isLabor ? "💼 ค่าแรง (บาท)"
+                  : isWheel ? "💰 ค่าอะไหล่/รายการ (บาท)"
+                  : "💰 ค่าใช้จ่าย (บาท)";
+  item.querySelector(".m-cost-label").textContent = costLabel;
+
   if (isWheel) {
-    const label = type === "tire_rotate"  ? "🔄 ตำแหน่งยางที่สลับ"
-                : type === "tire_replace" ? "🛞 ตำแหน่งยางที่เปลี่ยน"
-                : "🛑 ตำแหน่งล้อเบรกที่ซ่อม";
-    item.querySelector(".m-tire-label").textContent = label;
+    const labels = {
+      tire_rotate:   "🔄 ตำแหน่งยางที่สลับ",
+      tire_replace:  "🛞 ตำแหน่งยางที่เปลี่ยน",
+      brake:         "🛑 ตำแหน่งล้อเบรกที่ซ่อม",
+      wheel_bearing: "🔩 ตำแหน่งลูกปืนล้อ",
+      wheel_rim:     "🛞 ตำแหน่งกะทะล้อ",
+      tire_patch:    "🔧 ตำแหน่งยางที่ปะ",
+    };
+    item.querySelector(".m-tire-label").textContent = labels[type] || "เลือกตำแหน่ง";
     renderMaintItemTireGrid(item);
   }
 
-  // tire_rotate reminder (เฉพาะ item แรก พอ)
+  // tire_rotate reminder (เฉพาะ item แรกพอ)
   if (type === "tire_rotate" && item.dataset.idx === "0") {
     showTireRotateReminder();
   } else {
@@ -2218,21 +2226,41 @@ function showTireRotateReminder() {
   }
 }
 
-// ── อัพเดทสรุปยอดรวม ──────────────────────────
+// ── อัพเดทสรุปยอดรวม (ผลรวม items) ──────────────────────────
 function updateMaintSummary() {
-  let totalParts = 0, totalLabor = 0;
+  let total = 0;
   document.querySelectorAll(".maint-item").forEach(item => {
-    totalParts += parseFloat(item.querySelector(".m-cost").value) || 0;
-    totalLabor += parseFloat(item.querySelector(".m-labor").value) || 0;
+    total += parseFloat(item.querySelector(".m-cost").value) || 0;
   });
   const summary = document.getElementById("maintSummary");
-  if (totalParts || totalLabor) {
+  if (total > 0) {
     summary.style.display = "";
-    document.getElementById("sumParts").textContent = totalParts.toLocaleString();
-    document.getElementById("sumLabor").textContent = totalLabor.toLocaleString();
-    document.getElementById("sumTotal").textContent = (totalParts + totalLabor).toLocaleString();
+    document.getElementById("sumCalc").textContent = total.toLocaleString();
   } else {
     summary.style.display = "none";
+  }
+  checkTotalMismatch();
+}
+
+// เช็คว่ายอดในบิล vs ผลรวมแตกต่างมั้ย
+function checkTotalMismatch() {
+  const entered = parseFloat(document.getElementById("maintTotalEntered")?.value) || 0;
+  let total = 0;
+  document.querySelectorAll(".maint-item").forEach(item => {
+    total += parseFloat(item.querySelector(".m-cost").value) || 0;
+  });
+  const warn = document.getElementById("totalMismatchWarn");
+  if (!warn) return;
+  if (entered > 0 && total > 0) {
+    const diff = Math.abs(entered - total);
+    if (diff > 1) {
+      warn.style.display = "";
+      warn.innerHTML = `⚠️ ยอดในบิล (${entered.toLocaleString()}) ต่างจากผลรวมรายการ (${total.toLocaleString()}) <b>${diff.toLocaleString()} บาท</b><br><small>กรุณาตรวจสอบรายการ</small>`;
+    } else {
+      warn.style.display = "none";
+    }
+  } else {
+    warn.style.display = "none";
   }
 }
 
@@ -2377,7 +2405,6 @@ async function submitMaintenance() {
   for (const item of itemsEl) {
     const type = item.querySelector(".m-type").value;
     const cost = parseFloat(item.querySelector(".m-cost").value);
-    const labor = parseFloat(item.querySelector(".m-labor").value);
     const otherDesc = item.querySelector(".m-other-desc")?.value.trim() || "";
     const notesInput = item.querySelector(".m-notes").value.trim();
     // tire positions per item
@@ -2397,12 +2424,14 @@ async function submitMaintenance() {
 
     items.push({
       type,
-      cost:       isNaN(cost)  ? null : cost,
-      labor_cost: isNaN(labor) ? null : labor,
+      cost: isNaN(cost) ? null : cost,
       tire_positions: tirePositions.length > 0 ? tirePositions : null,
       notes,
     });
   }
+
+  // ยอดรวมที่กรอกจากบิลจริง (optional)
+  const totalEntered = parseFloat(document.getElementById("maintTotalEntered")?.value);
 
   // บังคับมี GPS (admin ที่กรอกย้อนหลังข้าม)
   if (!isAdminDriver() && !photoGPS.maintMileage) {
@@ -2422,6 +2451,7 @@ async function submitMaintenance() {
   fd.append("mileage_image",      maintMileageBlob, "mileage.jpg");
   if (maintBillBlob) fd.append("bill_image", maintBillBlob, "bill.jpg");
   if (shop) fd.append("shop_name", shop);
+  if (totalEntered && totalEntered > 0) fd.append("total_cost_entered", totalEntered);
   // 🔧 Admin backdate (maintenance_date override)
   if (isAdminDriver()) {
     const bd = document.querySelector("#maintBackdate input[type=date]")?.value;
