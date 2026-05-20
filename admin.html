@@ -211,6 +211,14 @@ body.role-non-super .super-only { display: none !important; }
       <button class="btn btn-primary" onclick="loadFuel()">🔍 ค้นหา</button>
     </div>
   </div>
+  <!-- ปุ่มเลือกช่วงเร็ว -->
+  <div style="display:flex;gap:6px;flex-wrap:wrap;margin:-6px 0 10px 0">
+    <button class="btn btn-gray" style="padding:6px 12px;font-size:13px;width:auto" onclick="setFuelDateRange('today')">📅 วันนี้</button>
+    <button class="btn btn-gray" style="padding:6px 12px;font-size:13px;width:auto" onclick="setFuelDateRange('this_month')">📆 เดือนนี้</button>
+    <button class="btn btn-gray" style="padding:6px 12px;font-size:13px;width:auto" onclick="setFuelDateRange('last_month')">⬅ เดือนที่แล้ว</button>
+    <button class="btn btn-gray" style="padding:6px 12px;font-size:13px;width:auto" onclick="setFuelDateRange('last_3m')">📊 3 เดือนล่าสุด</button>
+    <button class="btn btn-gray" style="padding:6px 12px;font-size:13px;width:auto" onclick="setFuelDateRange('this_year')">🗓 ปีนี้</button>
+  </div>
   <div id="fuelContent"><div class="loader"><div class="spinner"></div>กำลังโหลด...</div></div>
 </div>
 
@@ -1363,10 +1371,15 @@ async function loadDaily() {
     html += `<div class="card"><h3>⛽ น้ำมันวันนี้</h3><div class="tbl-wrap"><table>
       <tr><th>เวลา</th><th>ทะเบียน</th><th>ไมล์</th><th>วิ่งได้</th><th>ลิตร</th><th>ราคา/ล.</th><th>รวม</th><th>กม./ล.</th><th>ปั๊ม</th><th>รูป</th></tr>`;
     for (const t of data.trucks) {
+      const dailyUnit = mileageUnit(t.truck_type);
       for (const f of t.fuel || []) {
         const kmSince = f.km_since_last_fuel
-          ? `<b style="color:#1a73e8">${fmtNum(f.km_since_last_fuel)}</b> กม.`
+          ? `<b style="color:#1a73e8">${fmtNum(f.km_since_last_fuel)}</b> ${dailyUnit}`
           : `<span style="color:#aaa">—</span>`;
+        // 🔄 คำนวณ กม./ล. ใหม่: วิ่งได้ ÷ ลิตรรอบนี้
+        const kpl = (f.km_since_last_fuel && f.liters && f.liters > 0)
+          ? Math.round((f.km_since_last_fuel / f.liters) * 100) / 100
+          : null;
         html += `<tr>
           <td>${fmtTime(f.created_at)}</td>
           <td><b>${esc(t.plate_number)}</b></td>
@@ -1375,7 +1388,7 @@ async function loadDaily() {
           <td>${fmtNum(f.liters)} ล.</td>
           <td>${fmtNum(f.price_per_liter)} ฿</td>
           <td><b>${fmtNum(f.total_cost)} ฿</b></td>
-          <td>${f.km_per_liter ? f.km_per_liter + " กม./ล." : "-"}${f.anomaly_flag ? ` <span class="badge b-crit">⚠️</span>` : ""}</td>
+          <td>${kpl ? `${kpl} ${dailyUnit}/ล.` : "-"}${f.anomaly_flag ? ` <span class="badge b-crit">⚠️</span>` : ""}</td>
           <td>${esc(f.station_name) || "-"}</td>
           <td>${f.image_path ? `<a href="${f.image_path}" target="_blank" class="img-link">📷</a>` : ""}
               ${f.bill_image_path ? `<a href="${f.bill_image_path}" target="_blank" class="img-link">🧾</a>` : ""}</td>
@@ -1444,7 +1457,15 @@ function showFuelDetail(id) {
             </div>` : null);
       })()}
       ${row("วิ่งได้จากครั้งก่อน", r.km_since_last_fuel ? `<b style="color:#1a73e8">${fmtNum(r.km_since_last_fuel)}</b> ${fdUnit}` : null)}
-      ${row(`${fdUnit}/ลิตร`, r.km_per_liter ? `${r.km_per_liter} ${fdUnit}/ล.${r.anomaly_flag ? ` <span class="badge b-crit">⚠️ ${esc(r.anomaly_note)}</span>` : ""}` : null)}
+      ${(() => {
+        // 🔄 คำนวณ กม./ล. ใหม่ จากตัวเลขในแถว: วิ่งได้ ÷ ลิตรรอบนี้
+        const calc = (r.km_since_last_fuel && r.liters && r.liters > 0)
+          ? Math.round((r.km_since_last_fuel / r.liters) * 100) / 100
+          : null;
+        return row(`${fdUnit}/ลิตร`, calc
+          ? `${calc} ${fdUnit}/ล. <small style="color:#888">(${fmtNum(r.km_since_last_fuel)} ÷ ${fmtNum(Math.round(r.liters * 100) / 100)})</small>${r.anomaly_flag ? ` <span class="badge b-crit">⚠️ ${esc(r.anomaly_note)}</span>` : ""}`
+          : null);
+      })()}
       ${row("ปั๊ม", esc(r.station_name))}
       ${row("ตำแหน่ง", gpsLink)}
     </div>
@@ -1456,6 +1477,45 @@ function showFuelDetail(id) {
   `;
 
   document.getElementById("fuelDetailModal").classList.add("open");
+}
+
+// 📅 ตั้งช่วงวันที่หน้าน้ำมัน ตาม preset
+function setFuelDateRange(preset) {
+  // ใช้ BKK timezone (todayBKK) เป็น anchor
+  const todayStr = todayBKK();           // YYYY-MM-DD
+  const [yy, mm, dd] = todayStr.split("-").map(Number);
+  const fmt = (y, m, d) => `${y}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+
+  // last day of (y,m) — m เป็น 1-12
+  const lastDay = (y, m) => new Date(y, m, 0).getDate();
+
+  let from, to;
+  if (preset === "today") {
+    from = to = todayStr;
+  } else if (preset === "this_month") {
+    from = fmt(yy, mm, 1);
+    to   = fmt(yy, mm, lastDay(yy, mm));
+  } else if (preset === "last_month") {
+    const lm = mm === 1 ? 12 : mm - 1;
+    const ly = mm === 1 ? yy - 1 : yy;
+    from = fmt(ly, lm, 1);
+    to   = fmt(ly, lm, lastDay(ly, lm));
+  } else if (preset === "last_3m") {
+    // 3 เดือนย้อนหลัง รวมเดือนนี้
+    let startM = mm - 2;
+    let startY = yy;
+    while (startM <= 0) { startM += 12; startY -= 1; }
+    from = fmt(startY, startM, 1);
+    to   = todayStr;
+  } else if (preset === "this_year") {
+    from = fmt(yy, 1, 1);
+    to   = fmt(yy, 12, 31);
+  } else {
+    return;
+  }
+  document.getElementById("fuelFrom").value = from;
+  document.getElementById("fuelTo").value   = to;
+  loadFuel();
 }
 
 async function loadFuel() {
@@ -1496,6 +1556,10 @@ async function loadFuel() {
     const kmSince = r.km_since_last_fuel
       ? `<b style="color:#1a73e8">${fmtNum(r.km_since_last_fuel)}</b> ${unit}<br><small style="color:#888">จากครั้งก่อน</small>`
       : `<span style="color:#aaa">—</span>`;
+    // 🔄 คำนวณ กม./ล. ใหม่ทุกแถว: วิ่งได้ ÷ ลิตรรอบนี้ (ให้ตัวเลขในแถวตรง ไม่ใช้ค่าเก่าใน DB ที่อาจใช้สูตรเก่า)
+    const kmPerLiterCalc = (r.km_since_last_fuel && r.liters && r.liters > 0)
+      ? Math.round((r.km_since_last_fuel / r.liters) * 100) / 100
+      : null;
 
     html += `<tr style="cursor:pointer" onclick="showFuelDetail(${r.id})">
       <td><code style="background:#f5f5f5;padding:2px 6px;border-radius:4px;font-size:11px">#${r.id}</code></td>
@@ -1509,7 +1573,7 @@ async function loadFuel() {
       <td>${fmtNum(r.price_per_liter)} ฿</td>
       <td style="background:#e3f2fd"><b style="font-size:15px;color:#0d47a1">฿${fmtNum(Math.round(r.total_cost_entered ?? r.total_cost ?? 0))}</b>${r.total_cost_entered ? "" : "<br><small style='color:#aaa;font-size:10px'>(เก่า/คำนวณ)</small>"}</td>
       <td><small style="color:#666">฿${r.liters && r.price_per_liter ? fmtNum(Math.round(r.liters * r.price_per_liter)) : "-"}</small></td>
-      <td>${r.km_per_liter ? (Math.round(r.km_per_liter * 100) / 100) + ` ${unit}/ล.` : "-"}${r.anomaly_flag ? ` <span class="badge b-crit" title="${esc(r.anomaly_note)}">⚠️</span>` : ""}</td>
+      <td>${kmPerLiterCalc ? `${kmPerLiterCalc} ${unit}/ล.` : "-"}${r.anomaly_flag ? ` <span class="badge b-crit" title="${esc(r.anomaly_note)}">⚠️</span>` : ""}</td>
       <td>${esc(r.station_name) || "-"}</td>
       <td>${r.latitude && r.longitude ? `<a onclick="event.stopPropagation()" href="https://maps.google.com/?q=${r.latitude},${r.longitude}" target="_blank" style="font-size:13px">📍</a>` : "<small style='color:#aaa'>-</small>"}</td>
       <td onclick="event.stopPropagation()" style="text-align:center;white-space:nowrap" class="super-only">
@@ -1859,7 +1923,13 @@ async function loadVerifyQueue() {
           <!-- Info row — เพิ่มรายละเอียดสำคัญ -->
           <div style="background:#f5f5f5;border-radius:6px;padding:10px 12px;font-size:13px;color:#444;margin-bottom:10px;line-height:1.7">
             ${isFuel
-              ? `🛢 <b>${fmtNum(Math.round((r.liters || 0) * 100) / 100)}</b> ลิตร × ฿${fmtNum(r.price_per_liter)} = <b>฿${fmtNum(Math.round((r.liters || 0) * (r.price_per_liter || 0)))}</b> (คำนวณ) ${r.km_per_liter ? `· ${Math.round(r.km_per_liter * 100) / 100} ${mileageUnit(r.trucks?.truck_type)}/ล.` : ""} · ⛽ ปั๊ม: <b>${esc(r.station_name) || "-"}</b>`
+              ? (() => {
+                  const acUnit = mileageUnit(r.trucks?.truck_type);
+                  const kpl = (r.km_since_last_fuel && r.liters && r.liters > 0)
+                    ? Math.round((r.km_since_last_fuel / r.liters) * 100) / 100
+                    : null;
+                  return `🛢 <b>${fmtNum(Math.round((r.liters || 0) * 100) / 100)}</b> ลิตร × ฿${fmtNum(r.price_per_liter)} = <b>฿${fmtNum(Math.round((r.liters || 0) * (r.price_per_liter || 0)))}</b> (คำนวณ) ${kpl ? `· ${kpl} ${acUnit}/ล.` : ""} · ⛽ ปั๊ม: <b>${esc(r.station_name) || "-"}</b>`;
+                })()
               : `🔧 <b>${esc(MAINT_LABELS[r.maintenance_type] || r.maintenance_type)}</b> · ร้าน: <b>${esc(r.shop_name) || "-"}</b> ${r.notes ? `<br>📝 ${esc(r.notes)}` : ""}`
             }
           </div>
@@ -2371,11 +2441,15 @@ async function loadAnomalies() {
     html += `<div class="card"><h3>⚠️ น้ำมันผิดปกติ</h3><div class="tbl-wrap"><table>
       <tr><th>วันที่</th><th>ทะเบียน</th><th>ลิตร</th><th>กม./ล.</th><th>หมายเหตุ</th><th>จัดการ</th></tr>`;
     for (const r of data.fuel_anomalies) {
+      const aUnit = mileageUnit(r.trucks?.truck_type);
+      const aKpl = (r.km_since_last_fuel && r.liters && r.liters > 0)
+        ? Math.round((r.km_since_last_fuel / r.liters) * 100) / 100
+        : null;
       html += `<tr style="background:#fff3e0">
         <td>${thaiDateShort(r.log_date)}<br><small style="color:#888">${fmtTime(r.created_at)}</small></td>
         <td><b>${esc(r.trucks?.plate_number) || "-"}</b></td>
         <td>${fmtNum(r.liters)}</td>
-        <td>${r.km_per_liter ? r.km_per_liter + " กม./ล." : "-"}</td>
+        <td>${aKpl ? `${aKpl} ${aUnit}/ล.` : "-"}</td>
         <td style="color:#e65100">${esc(r.anomaly_note) || "-"}</td>
         <td><button class="btn btn-sm btn-success" onclick="resolveAnomaly('fuel', ${r.id})">ล้าง</button></td>
       </tr>`;
