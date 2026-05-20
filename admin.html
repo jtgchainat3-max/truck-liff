@@ -837,7 +837,8 @@ body.role-non-super .super-only { display: none !important; }
       <div class="form-group"><label>จังหวัดทะเบียน</label><input id="at_province" placeholder="เช่น ลพบุรี"></div>
     </div>
     <div class="form-row">
-      <div class="form-group" style="flex:2"><label>ชื่อทะเบียน (ชื่อในทะเบียนรถ)</label><input id="at_regname" placeholder="เช่น บริษัท เจทีจี จำกัด"></div>
+      <div class="form-group" style="flex:1"><label>ชื่อทะเบียน (ในเล่ม)</label><input id="at_regname" placeholder="เช่น บริษัท เจทีจี จำกัด"></div>
+      <div class="form-group" style="flex:1"><label>👤 ชื่อผู้ครอบครอง</label><input id="at_ownername" placeholder="เช่น สมชาย ใจดี"></div>
     </div>
     <div class="form-row">
       <div class="form-group"><label>โกดัง *</label>
@@ -909,7 +910,8 @@ body.role-non-super .super-only { display: none !important; }
       <div class="form-group"><label>จังหวัดทะเบียน</label><input id="et_province" placeholder="เช่น ลพบุรี"></div>
     </div>
     <div class="form-row">
-      <div class="form-group" style="flex:2"><label>ชื่อทะเบียน</label><input id="et_regname"></div>
+      <div class="form-group" style="flex:1"><label>ชื่อทะเบียน (ในเล่ม)</label><input id="et_regname"></div>
+      <div class="form-group" style="flex:1"><label>👤 ชื่อผู้ครอบครอง</label><input id="et_ownername" placeholder="เช่น สมชาย ใจดี"></div>
     </div>
     <div class="form-row">
       <div class="form-group"><label>โกดัง</label>
@@ -1684,11 +1686,13 @@ async function runFuelOcr(id) {
 // ════════════════════════════════════════════════════════════
 // MAINTENANCE
 // ════════════════════════════════════════════════════════════
+// MAINT_LABELS — defaults; เพิ่มเติมจาก API (เพื่อรองรับประเภทที่ admin เพิ่มเอง)
 const MAINT_LABELS = {
   oil_change:       "เปลี่ยนน้ำมันเครื่อง",
   gear_oil:         "ถ่ายน้ำมันเกียร์",
   differential_oil: "ถ่ายน้ำมันเฟืองท้าย",
   brake_fluid:      "เปลี่ยนน้ำมันเบรค",
+  coolant:          "เปลี่ยน/เติมน้ำหม้อน้ำ",
   tire_rotate:      "สลับยาง",
   tire_replace:     "เปลี่ยนยาง",
   tire:             "ยาง",
@@ -1696,6 +1700,20 @@ const MAINT_LABELS = {
   battery:          "เปลี่ยนแบตเตอรี่",
   other:            "ซ่อมอื่นๆ"
 };
+
+// โหลด maintenance types จาก API (สำหรับ admin label + dropdown)
+async function loadMaintLabels() {
+  try {
+    const res = await api("maintenance-intervals");
+    if (Array.isArray(res)) {
+      for (const r of res) {
+        MAINT_LABELS[r.maintenance_type] = r.label_th;
+      }
+    }
+  } catch (e) {
+    console.warn("Failed to load maintenance labels:", e);
+  }
+}
 const TRUCK_TYPE_LABELS = {
   pickup:"🛻 กระบะ", "4wheel":"🛻 กระบะ",
   "6wheel":"🚚 6 ล้อ", "10wheel":"🚛 10 ล้อ",
@@ -2254,6 +2272,7 @@ async function openMaintIntervalsModal() {
     list.innerHTML = `<div class="alert alert-err">${data?.error || "โหลดไม่สำเร็จ"}</div>`;
     return;
   }
+  const PROTECTED = ["oil_change","gear_oil","differential_oil","brake_fluid","tire_rotate","tire_replace","brake","battery","coolant","other"];
   list.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:13px">
     <thead><tr style="background:#f5f5f5">
       <th style="padding:6px 8px;text-align:left">ประเภท</th>
@@ -2263,14 +2282,81 @@ async function openMaintIntervalsModal() {
       <th></th>
     </tr></thead>
     <tbody>${data.map(i => `
-      <tr data-type="${i.maintenance_type}">
-        <td style="padding:6px 8px"><b>${esc(i.label_th)}</b><br><small style="color:#888">${i.maintenance_type}</small></td>
+      <tr data-type="${esc(i.maintenance_type)}">
+        <td style="padding:6px 8px">${esc(i.icon || "🔧")} <b>${esc(i.label_th)}</b><br><small style="color:#888">${esc(i.maintenance_type)}</small></td>
         <td style="padding:6px 8px;text-align:right"><input class="mi-km" type="number" value="${i.interval_km ?? ""}" style="width:90px;padding:4px 6px;text-align:right" placeholder="—"></td>
         <td style="padding:6px 8px;text-align:right"><input class="mi-months" type="number" value="${i.interval_months ?? ""}" style="width:70px;padding:4px 6px;text-align:right" placeholder="—"></td>
         <td style="padding:6px 8px;text-align:right"><input class="mi-alert-km" type="number" value="${i.alert_km_before ?? ""}" style="width:80px;padding:4px 6px;text-align:right" placeholder="500"></td>
-        <td style="padding:6px 8px;text-align:center"><button class="btn btn-primary" style="padding:4px 10px;font-size:12px;width:auto" onclick="saveMaintInterval('${i.maintenance_type}')">บันทึก</button></td>
+        <td style="padding:6px 8px;text-align:center;white-space:nowrap">
+          <button class="btn btn-primary" style="padding:4px 10px;font-size:12px;width:auto" onclick="saveMaintInterval('${esc(i.maintenance_type)}')">บันทึก</button>
+          ${PROTECTED.includes(i.maintenance_type) ? "" : `<button class="btn btn-red" style="padding:4px 8px;font-size:12px;width:auto;margin-left:4px" onclick="deleteMaintInterval('${esc(i.maintenance_type)}')">🗑</button>`}
+        </td>
       </tr>`).join("")}
-    </tbody></table>`;
+    </tbody></table>
+    <div style="margin-top:14px;padding:12px;background:#e8f5e9;border:1px solid #a5d6a7;border-radius:8px">
+      <div style="font-size:13px;font-weight:700;color:#2e7d32;margin-bottom:8px">➕ เพิ่มประเภทซ่อมใหม่</div>
+      <div style="display:grid;grid-template-columns:1fr 2fr 80px 80px 80px;gap:6px;font-size:13px;align-items:end">
+        <div>
+          <label style="font-size:11px;color:#666">รหัส (eng)</label>
+          <input id="ni_code" type="text" placeholder="เช่น ac_filter" style="width:100%;padding:6px 8px;border:1px solid #c8e6c9;border-radius:6px">
+        </div>
+        <div>
+          <label style="font-size:11px;color:#666">ชื่อภาษาไทย *</label>
+          <input id="ni_label" type="text" placeholder="เช่น เปลี่ยนกรองแอร์" style="width:100%;padding:6px 8px;border:1px solid #c8e6c9;border-radius:6px">
+        </div>
+        <div>
+          <label style="font-size:11px;color:#666">ทุก กม.</label>
+          <input id="ni_km" type="number" placeholder="—" style="width:100%;padding:6px 8px;border:1px solid #c8e6c9;border-radius:6px;text-align:right">
+        </div>
+        <div>
+          <label style="font-size:11px;color:#666">ทุก เดือน</label>
+          <input id="ni_months" type="number" placeholder="—" style="width:100%;padding:6px 8px;border:1px solid #c8e6c9;border-radius:6px;text-align:right">
+        </div>
+        <button class="btn btn-primary" style="padding:8px 12px;font-size:13px;width:auto" onclick="addMaintInterval()">➕ เพิ่ม</button>
+      </div>
+      <div style="font-size:11px;color:#666;margin-top:6px">รหัสใช้เฉพาะ a-z, 0-9, _ (ตัวเล็ก) เช่น <code>ac_filter</code>, <code>fuel_filter</code></div>
+    </div>`;
+}
+
+// เพิ่มประเภทซ่อมใหม่
+async function addMaintInterval() {
+  const code   = document.getElementById("ni_code").value.trim().toLowerCase();
+  const label  = document.getElementById("ni_label").value.trim();
+  const km     = document.getElementById("ni_km").value;
+  const months = document.getElementById("ni_months").value;
+  const msg = document.getElementById("maintIntervalsMsg");
+  if (!code || !label) { msg.style.color = "#e53935"; msg.textContent = "❌ กรุณากรอกรหัสและชื่อภาษาไทย"; return; }
+  if (!/^[a-z0-9_]+$/.test(code)) { msg.style.color = "#e53935"; msg.textContent = "❌ รหัสต้องเป็น a-z, 0-9, _ เท่านั้น"; return; }
+  msg.style.color = "#888"; msg.textContent = "⏳ กำลังเพิ่ม...";
+  const res = await api("maintenance-intervals", {
+    method: "POST",
+    body: JSON.stringify({
+      maintenance_type:  code,
+      label_th:          label,
+      interval_km:       km ? parseInt(km) : null,
+      interval_months:   months ? parseInt(months) : null,
+    })
+  });
+  if (res?.success) {
+    msg.style.color = "#2e7d32"; msg.textContent = `✅ ${res.message}`;
+    openMaintIntervalsModal();  // reload list
+  } else {
+    msg.style.color = "#e53935"; msg.textContent = `❌ ${res?.error || "เพิ่มไม่สำเร็จ"}`;
+  }
+}
+
+// ลบประเภทซ่อม
+async function deleteMaintInterval(type) {
+  if (!confirm(`ลบประเภท "${type}" ?\n(จะลบไม่ได้ถ้ามีบันทึกซ่อมใช้อยู่)`)) return;
+  const msg = document.getElementById("maintIntervalsMsg");
+  msg.style.color = "#888"; msg.textContent = `⏳ กำลังลบ ${type}...`;
+  const res = await api(`maintenance-intervals/${encodeURIComponent(type)}`, { method: "DELETE" });
+  if (res?.success) {
+    msg.style.color = "#2e7d32"; msg.textContent = `✅ ${res.message}`;
+    openMaintIntervalsModal();
+  } else {
+    msg.style.color = "#e53935"; msg.textContent = `❌ ${res?.error || "ลบไม่สำเร็จ"}`;
+  }
 }
 
 function closeMaintIntervalsModal() {
@@ -3987,6 +4073,7 @@ async function doAddTruck() {
     plate_number:                  document.getElementById("at_plate").value.trim(),
     province:                      document.getElementById("at_province").value.trim() || null,
     registration_name:             document.getElementById("at_regname").value.trim() || null,
+    owner_name:                    document.getElementById("at_ownername").value.trim() || null,
     warehouse:                     document.getElementById("at_warehouse").value,
     brand:                         document.getElementById("at_brand").value.trim() || null,
     model:                         document.getElementById("at_model").value.trim() || null,
@@ -4029,6 +4116,7 @@ async function openEditTruck(id) {
   document.getElementById("et_plate").value         = truck.plate_number || "";
   document.getElementById("et_province").value      = truck.province || "";
   document.getElementById("et_regname").value       = truck.registration_name || "";
+  document.getElementById("et_ownername").value     = truck.owner_name || "";
   document.getElementById("et_warehouse").value     = truck.warehouse || "ชัยนาท";
   document.getElementById("et_company").value       = truck.company_id || "";
   document.getElementById("et_brand").value         = truck.brand || "";
@@ -4052,6 +4140,7 @@ async function doEditTruck() {
     plate_number:                  document.getElementById("et_plate").value.trim(),
     province:                      document.getElementById("et_province").value.trim() || null,
     registration_name:             document.getElementById("et_regname").value.trim() || null,
+    owner_name:                    document.getElementById("et_ownername").value.trim() || null,
     warehouse:                     document.getElementById("et_warehouse").value,
     company_id:                    compVal ? parseInt(compVal) : null,
     brand:                         document.getElementById("et_brand").value || null,
@@ -4490,6 +4579,7 @@ function startApp() {
     loadSummary(),
     api("trucks").then(d => { if (d) { allTrucks = d; populateMaintTruckFilter(); populateFuelTruckFilter(); } }),
     api("companies").then(d => { if (d) allCompanies = d; }),
+    loadMaintLabels(),   // ⭐ โหลดประเภทซ่อม (สำหรับ label ของประเภทที่ admin เพิ่มเอง)
   ]);
 }
 

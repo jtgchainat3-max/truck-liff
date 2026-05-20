@@ -508,55 +508,40 @@ body{font-family:'Sarabun',sans-serif;background:#f5f5f5;color:#333;min-height:1
       <div style="font-size:11px;color:#888;margin-top:4px">เว้นว่าง = วันนี้ · แอดมินเท่านั้นที่ใช้ฟิลด์นี้ได้</div>
     </div>
 
+    <!-- ── ข้อมูลร่วม (เลขไมล์ + ชื่ออู่) ── -->
     <div class="card">
-      <div class="field">
-        <label>ประเภทงาน <span style="color:#e53935">*</span></label>
-        <select id="maintType" onchange="onMaintTypeChange()">
-          <option value="oil_change">🛢 เปลี่ยนน้ำมันเครื่อง</option>
-          <option value="gear_oil">⚙️ ถ่ายน้ำมันเกียร์</option>
-          <option value="differential_oil">🔩 ถ่ายน้ำมันเฟืองท้าย</option>
-          <option value="brake_fluid">💧 เปลี่ยนน้ำมันเบรค</option>
-          <option value="tire_rotate">🔄 สลับยาง</option>
-          <option value="tire_replace">🛞 เปลี่ยนยาง</option>
-          <option value="brake">🛑 เปลี่ยน/ตรวจเบรก</option>
-          <option value="battery">🔋 แบตเตอรี่</option>
-          <option value="other">🔧 ซ่อมอื่นๆ</option>
-        </select>
-      </div>
       <div class="field">
         <label data-mileage-unit data-mileage-unit-template="เลขไมล์ตอนซ่อม ({unit}) <span style='color:#e53935'>*</span>">เลขไมล์ตอนซ่อม (กม.) <span style="color:#e53935">*</span></label>
         <input type="number" id="maintMileage" placeholder="เช่น 125000" inputmode="numeric" style="font-size:20px;text-align:center;font-weight:700">
       </div>
       <div class="field">
-        <label>ร้านที่ซ่อม</label>
-        <input type="text" id="maintShop" placeholder="ชื่อร้าน/อู่">
-      </div>
-      <!-- "ซ่อมอะไร" — แสดงเฉพาะตอนเลือก "อื่นๆ" -->
-      <div class="field" id="maintOtherDescField" style="display:none">
-        <label>📝 ซ่อมอะไร <span style="color:#e53935">*</span></label>
-        <input type="text" id="maintOtherDesc" placeholder="เช่น เปลี่ยนหม้อน้ำ / ซ่อมไฟหน้า / เปลี่ยนคลัตช์">
-      </div>
-      <div class="field">
-        <label>ค่าใช้จ่าย (บาท)</label>
-        <input type="number" id="maintCost" placeholder="0" inputmode="numeric">
-      </div>
-      <div class="field" id="maintNextMileField">
-        <label id="maintNextMileLabel" data-mileage-unit data-mileage-unit-template="ครั้งถัดไปที่ไมล์ ({unit}) <span style='color:#e53935;font-weight:400'>*จำเป็น</span>">ครั้งถัดไปที่ไมล์ (กม.) <span style="color:#e53935;font-weight:400">*จำเป็น</span></label>
-        <input type="number" id="maintNextMile" placeholder="เช่น 130000" inputmode="numeric">
+        <label>🏪 ร้าน/อู่ที่ซ่อม</label>
+        <input type="text" id="maintShop" placeholder="ชื่อร้าน/อู่ (อู่เดียวกันสำหรับทุกรายการ)">
       </div>
       <!-- แจ้งเตือนสลับยาง -->
       <div id="tireRotateReminder" style="display:none;margin-bottom:4px">
         <div id="tireRotateAlert" class="alert"></div>
       </div>
+    </div>
 
-      <!-- ตำแหน่งยาง / ล้อเบรก -->
-      <div class="field" id="tireSection" style="display:none">
-        <label id="tireSectionLabel">เลือกตำแหน่ง (เลือกได้หลายตำแหน่ง)</label>
-        <div id="tireGrid" class="tire-grid"></div>
+    <!-- ── รายการซ่อม (multi-item) ── -->
+    <div id="maintItemsContainer">
+      <!-- Items added dynamically — first item created on screen open -->
+    </div>
+
+    <button class="btn btn-gray" id="addMaintItemBtn" style="margin-bottom:12px" onclick="addMaintItem()">➕ เพิ่มรายการซ่อม</button>
+
+    <!-- สรุปรวม -->
+    <div id="maintSummary" class="card" style="background:#e3f2fd;border:1px solid #90caf9;display:none">
+      <div style="font-size:13px;color:#1565c0;font-weight:700;margin-bottom:6px">💰 สรุปรวม</div>
+      <div style="display:flex;justify-content:space-between;font-size:14px;color:#1565c0;line-height:1.8">
+        <span>ค่าอะไหล่/รายการรวม:</span><span><b id="sumParts">0</b> บาท</span>
       </div>
-      <div class="field">
-        <label>หมายเหตุ</label>
-        <textarea id="maintNotes" placeholder="รายละเอียดเพิ่มเติม"></textarea>
+      <div style="display:flex;justify-content:space-between;font-size:14px;color:#1565c0;line-height:1.8">
+        <span>ค่าแรงรวม:</span><span><b id="sumLabor">0</b> บาท</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:16px;color:#0d47a1;line-height:1.8;border-top:1px solid #90caf9;padding-top:6px;margin-top:6px">
+        <span><b>รวมทั้งหมด:</b></span><span><b id="sumTotal">0</b> บาท</span>
       </div>
     </div>
 
@@ -2025,10 +2010,13 @@ function todayBKKLocal() {
   return `${y}-${m}-${d}`;
 }
 
-function goMaintenance() {
+// ── Multi-item maintenance state ────────────────────────────────────────
+let maintTypesCache = null;  // ดึงจาก API ครั้งแรก แล้ว cache
+let maintItemCount = 0;       // นับจำนวน item ทั้งหมด
+
+async function goMaintenance() {
   maintBillBlob       = null;
   maintMileageBlob    = null;
-  selectedTirePositions = new Set();
   selectedTruckId     = driverInfo?.truck_id || null;
   document.getElementById("maintTruckSub").textContent =
     (driverInfo?.truck_plate || "-") + (driverInfo?.route_code ? ` · ${driverInfo.route_code}` : "");
@@ -2038,11 +2026,11 @@ function goMaintenance() {
   document.getElementById("maintMileageInput").value = "";
   document.getElementById("maintMileage").value = "";
   document.getElementById("maintShop").value = "";
-  document.getElementById("maintOtherDesc").value = "";
-  document.getElementById("maintCost").value = "";
-  document.getElementById("maintNextMile").value = "";
-  document.getElementById("maintNotes").value = "";
   document.getElementById("maintMsg").textContent = "";
+
+  // Reset items container + add first item
+  document.getElementById("maintItemsContainer").innerHTML = "";
+  maintItemCount = 0;
 
   // Transport + Admin: picker | VAN: รถปัจจุบัน + ปุ่มเปลี่ยน
   if (driverInfo?.driver_type === "transport" || driverInfo?.driver_type === "admin") {
@@ -2053,11 +2041,199 @@ function goMaintenance() {
     renderCurrentTruck("maintenance");
   }
 
-  onMaintTypeChange();
+  // ดึงรายการประเภทซ่อมจาก API (ถ้ายังไม่ cache)
+  if (!maintTypesCache) {
+    try {
+      const r = await fetch(`${API_BASE}/maintenance-types`);
+      const d = await r.json();
+      maintTypesCache = d.types || [];
+    } catch (e) {
+      // fallback ถ้า API ขัดข้อง — ใช้ default types
+      maintTypesCache = [
+        { maintenance_type: "oil_change",       label_th: "เปลี่ยนน้ำมันเครื่อง",   icon: "🛢" },
+        { maintenance_type: "gear_oil",         label_th: "ถ่ายน้ำมันเกียร์",       icon: "⚙️" },
+        { maintenance_type: "differential_oil", label_th: "ถ่ายน้ำมันเฟืองท้าย",    icon: "🔩" },
+        { maintenance_type: "brake_fluid",      label_th: "เปลี่ยนน้ำมันเบรค",      icon: "💧" },
+        { maintenance_type: "coolant",          label_th: "เปลี่ยน/เติมน้ำหม้อน้ำ", icon: "🌡" },
+        { maintenance_type: "tire_rotate",      label_th: "สลับยาง",                icon: "🔄" },
+        { maintenance_type: "tire_replace",     label_th: "เปลี่ยนยาง",             icon: "🛞" },
+        { maintenance_type: "brake",            label_th: "เปลี่ยน/ตรวจเบรก",       icon: "🛑" },
+        { maintenance_type: "battery",          label_th: "แบตเตอรี่",              icon: "🔋" },
+        { maintenance_type: "other",            label_th: "ซ่อมอื่นๆ",              icon: "🔧" },
+      ];
+    }
+  }
+
+  // เพิ่ม item แรก
+  addMaintItem();
+
   // อัปเดตหน่วย (กม./ชม.) และช่อง backdate
   updateMileageUnitLabels();
   updateBackdateField("maintenance");
   showScreen("screenMaintenance");
+}
+
+// ── เพิ่มรายการซ่อม ──────────────────────────────────────────────
+function addMaintItem() {
+  const idx = maintItemCount++;
+  const types = maintTypesCache || [];
+  const optionsHtml = types.map(t =>
+    `<option value="${t.maintenance_type}">${t.icon || "🔧"} ${t.label_th}</option>`
+  ).join("");
+
+  const itemHtml = `
+    <div class="card maint-item" data-idx="${idx}" style="border-left:4px solid #1a73e8">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="font-size:13px;color:#1565c0;font-weight:700">🔧 รายการที่ <span class="item-num">${idx + 1}</span></div>
+        ${idx > 0 ? `<button class="m-remove" style="border:1px solid #e53935;background:#ffebee;color:#c62828;padding:4px 10px;border-radius:6px;font-size:12px;cursor:pointer" onclick="removeMaintItem(this)">🗑 ลบรายการนี้</button>` : ""}
+      </div>
+      <div class="field">
+        <label>ประเภทงาน <span style="color:#e53935">*</span></label>
+        <select class="m-type" onchange="onMaintItemTypeChange(this)">${optionsHtml}</select>
+      </div>
+      <div class="field m-other-desc-field" style="display:none">
+        <label>📝 ซ่อมอะไร <span style="color:#e53935">*</span></label>
+        <input type="text" class="m-other-desc" placeholder="เช่น เปลี่ยนหม้อน้ำ / ซ่อมไฟหน้า">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div class="field" style="margin-bottom:0">
+          <label>🔩 ค่าอะไหล่ (บาท)</label>
+          <input type="number" class="m-cost" placeholder="0" inputmode="numeric" oninput="updateMaintSummary()">
+        </div>
+        <div class="field" style="margin-bottom:0">
+          <label>🔧 ค่าแรง (บาท)</label>
+          <input type="number" class="m-labor" placeholder="0" inputmode="numeric" oninput="updateMaintSummary()">
+        </div>
+      </div>
+      <div class="field m-tire-section" style="display:none;margin-top:12px">
+        <label class="m-tire-label">เลือกตำแหน่ง (เลือกได้หลายตำแหน่ง)</label>
+        <div class="tire-grid m-tire-grid"></div>
+      </div>
+      <div class="field" style="margin-top:12px">
+        <label>📝 หมายเหตุ</label>
+        <textarea class="m-notes" rows="2" placeholder="รายละเอียดเพิ่มเติม (ถ้ามี)"></textarea>
+      </div>
+    </div>`;
+
+  document.getElementById("maintItemsContainer").insertAdjacentHTML("beforeend", itemHtml);
+  // initialize: trigger type change handler
+  const newItem = document.querySelector(`.maint-item[data-idx="${idx}"]`);
+  onMaintItemTypeChange(newItem.querySelector(".m-type"));
+  updateMaintSummary();
+}
+
+// ── ลบรายการ ──────────────────────────────────────────────
+function removeMaintItem(btn) {
+  const item = btn.closest(".maint-item");
+  if (!item) return;
+  if (document.querySelectorAll(".maint-item").length <= 1) {
+    alert("ต้องมีรายการอย่างน้อย 1 รายการ");
+    return;
+  }
+  item.remove();
+  // renumber visible items
+  document.querySelectorAll(".maint-item").forEach((el, i) => {
+    el.querySelector(".item-num").textContent = i + 1;
+  });
+  updateMaintSummary();
+}
+
+// ── เปลี่ยนประเภทใน item: แสดง/ซ่อน tire selector + other desc ──
+function onMaintItemTypeChange(selectEl) {
+  const item = selectEl.closest(".maint-item");
+  const type = selectEl.value;
+  const isWheel    = ["tire_rotate","tire_replace","brake"].includes(type);
+  const isOther    = type === "other";
+
+  item.querySelector(".m-tire-section").style.display    = isWheel ? "" : "none";
+  item.querySelector(".m-other-desc-field").style.display = isOther ? "" : "none";
+
+  if (isWheel) {
+    const label = type === "tire_rotate"  ? "🔄 ตำแหน่งยางที่สลับ"
+                : type === "tire_replace" ? "🛞 ตำแหน่งยางที่เปลี่ยน"
+                : "🛑 ตำแหน่งล้อเบรกที่ซ่อม";
+    item.querySelector(".m-tire-label").textContent = label;
+    renderMaintItemTireGrid(item);
+  }
+
+  // tire_rotate reminder (เฉพาะ item แรก พอ)
+  if (type === "tire_rotate" && item.dataset.idx === "0") {
+    showTireRotateReminder();
+  } else {
+    document.getElementById("tireRotateReminder").style.display = "none";
+  }
+}
+
+// ── render tire grid per item ──
+function renderMaintItemTireGrid(item) {
+  const truckType = driverInfo?.truck_type || "pickup";
+  // หาประเภทรถจาก selected truck (ถ้าเปลี่ยนรถ)
+  let tt = truckType;
+  if (selectedTruckId && allTrucksCache) {
+    const t = allTrucksCache.find(t => t.id === selectedTruckId);
+    if (t) tt = t.truck_type;
+  }
+  const positions = TIRE_POSITIONS[tt] || TIRE_POSITIONS["pickup"];
+  const cols = (tt === "pickup" || tt === "4wheel" || tt === "forklift" || tt === "motorcycle") ? 2
+             : tt === "6wheel" ? 3 : 4;
+  const grid = item.querySelector(".m-tire-grid");
+  grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+  grid.innerHTML = positions.map(p =>
+    `<button class="tire-btn" data-code="${p.code}" onclick="toggleMaintItemTire(this)">${p.label}</button>`
+  ).join("");
+}
+
+function toggleMaintItemTire(btn) {
+  btn.classList.toggle("selected");
+}
+
+function showTireRotateReminder() {
+  const reminderEl = document.getElementById("tireRotateReminder");
+  const alertEl    = document.getElementById("tireRotateAlert");
+  reminderEl.style.display = "";
+  const lastMile    = driverInfo?.last_tire_rotate_mileage ?? null;
+  const currentMile = driverInfo?.last_evening_mileage ?? null;
+  if (lastMile) {
+    const diff = currentMile ? currentMile - lastMile : null;
+    const lastDateStr = driverInfo?.last_tire_rotate_date ? `  (${driverInfo.last_tire_rotate_date})` : "";
+    if (diff && diff >= TIRE_ROTATE_INTERVAL) {
+      alertEl.className = "alert alert-err";
+      alertEl.textContent =
+        `⚠️ ครบกำหนดสลับยางแล้ว!\n` +
+        `ครั้งล่าสุด: ${lastMile.toLocaleString("th-TH")} กม.${lastDateStr}\n` +
+        `ผ่านมาแล้ว: ${diff.toLocaleString("th-TH")} กม. (เกิน ${(diff-TIRE_ROTATE_INTERVAL).toLocaleString("th-TH")} กม.)`;
+    } else if (diff) {
+      const remaining = TIRE_ROTATE_INTERVAL - diff;
+      alertEl.className = "alert alert-warn";
+      alertEl.textContent =
+        `ℹ️ ครั้งล่าสุดสลับยางที่: ${lastMile.toLocaleString("th-TH")} กม.${lastDateStr}\n` +
+        `เหลืออีก: ~${remaining.toLocaleString("th-TH")} กม.`;
+    } else {
+      alertEl.className = "alert alert-warn";
+      alertEl.textContent = `ℹ️ ครั้งล่าสุดสลับยางที่: ${lastMile.toLocaleString("th-TH")} กม.${lastDateStr}\n(ควรสลับทุก ${TIRE_ROTATE_INTERVAL.toLocaleString("th-TH")} กม.)`;
+    }
+  } else {
+    alertEl.className = "alert alert-warn";
+    alertEl.textContent = `ℹ️ ยังไม่มีประวัติการสลับยาง\nควรสลับยางทุก ${TIRE_ROTATE_INTERVAL.toLocaleString("th-TH")} กม.`;
+  }
+}
+
+// ── อัพเดทสรุปยอดรวม ──────────────────────────
+function updateMaintSummary() {
+  let totalParts = 0, totalLabor = 0;
+  document.querySelectorAll(".maint-item").forEach(item => {
+    totalParts += parseFloat(item.querySelector(".m-cost").value) || 0;
+    totalLabor += parseFloat(item.querySelector(".m-labor").value) || 0;
+  });
+  const summary = document.getElementById("maintSummary");
+  if (totalParts || totalLabor) {
+    summary.style.display = "";
+    document.getElementById("sumParts").textContent = totalParts.toLocaleString();
+    document.getElementById("sumLabor").textContent = totalLabor.toLocaleString();
+    document.getElementById("sumTotal").textContent = (totalParts + totalLabor).toLocaleString();
+  } else {
+    summary.style.display = "none";
+  }
 }
 
 async function onMaintMileagePhoto(event) {
@@ -2077,8 +2253,11 @@ async function onMaintMileagePhoto(event) {
 
 const TIRE_ROTATE_INTERVAL = 10000; // กม. ระยะสลับยาง
 
-function onMaintTypeChange() {
-  const type = document.getElementById("maintType").value;
+// LEGACY: ไม่ใช้แล้ว — ของเดิมเรียกใช้ (เก็บไว้กัน error)
+function onMaintTypeChange() { /* deprecated — multi-item ใช้ onMaintItemTypeChange แทน */ }
+
+function _legacy_onMaintTypeChange_unused() {
+  const type = "oil_change";  // unused
 
   // ── ตำแหน่งยาง/ล้อ ──────────────────────────────────────────────────────────
   const showWheel = ["tire_rotate","tire_replace","brake"].includes(type);
@@ -2174,11 +2353,9 @@ async function onMaintBillPhoto(event) {
 
 async function submitMaintenance() {
   if (isSubmitting) return;
-  // ── Validate ────────────────────────────────
-  if (!maintMileageBlob) {
-    alert("กรุณาถ่ายรูปเลขไมล์ก่อน");
-    return;
-  }
+
+  // ── Validate shared ────────────────────────────────
+  if (!maintMileageBlob) { alert("กรุณาถ่ายรูปเลขไมล์ก่อน"); return; }
 
   const mile = parseInt(document.getElementById("maintMileage").value);
   if (!mile) {
@@ -2190,26 +2367,43 @@ async function submitMaintenance() {
   const truckId = selectedTruckId || driverInfo?.truck_id;
   if (!truckId) { alert("กรุณาเลือกรถก่อน"); return; }
 
-  const type      = document.getElementById("maintType").value;
-  const shop      = document.getElementById("maintShop").value.trim() || null;
-  const otherDesc = document.getElementById("maintOtherDesc").value.trim();
-  const cost      = parseFloat(document.getElementById("maintCost").value) || null;
-  const nextMile  = parseInt(document.getElementById("maintNextMile").value) || null;
+  const shop = document.getElementById("maintShop").value.trim() || null;
 
-  // type=other → บังคับระบุงานซ่อม
-  if (type === "other" && !otherDesc) {
-    alert("กรุณาระบุว่าซ่อมอะไร");
-    document.getElementById("maintOtherDesc").focus();
-    return;
+  // ── เก็บข้อมูล items ทุกรายการ ──
+  const itemsEl = document.querySelectorAll(".maint-item");
+  if (itemsEl.length === 0) { alert("กรุณาเพิ่มรายการซ่อมอย่างน้อย 1 รายการ"); return; }
+
+  const items = [];
+  for (const item of itemsEl) {
+    const type = item.querySelector(".m-type").value;
+    const cost = parseFloat(item.querySelector(".m-cost").value);
+    const labor = parseFloat(item.querySelector(".m-labor").value);
+    const otherDesc = item.querySelector(".m-other-desc")?.value.trim() || "";
+    const notesInput = item.querySelector(".m-notes").value.trim();
+    // tire positions per item
+    const tirePositions = [...item.querySelectorAll(".m-tire-grid .tire-btn.selected")]
+      .map(b => b.dataset.code);
+
+    // type=other → บังคับระบุงานซ่อม
+    if (type === "other" && !otherDesc) {
+      alert(`รายการที่ ${item.querySelector(".item-num").textContent}: กรุณาระบุว่าซ่อมอะไร`);
+      item.querySelector(".m-other-desc").focus();
+      return;
+    }
+    // รวม "ซ่อมอะไร" เข้า notes ถ้าเป็น type=other
+    const notes = type === "other"
+      ? `[ซ่อม: ${otherDesc}]` + (notesInput ? `\n${notesInput}` : "")
+      : (notesInput || null);
+
+    items.push({
+      type,
+      cost:       isNaN(cost)  ? null : cost,
+      labor_cost: isNaN(labor) ? null : labor,
+      tire_positions: tirePositions.length > 0 ? tirePositions : null,
+      notes,
+    });
   }
 
-  // oil_change + tire_rotate: next mileage is required (ประเภทอื่นไม่ใช้)
-  if (["oil_change","tire_rotate"].includes(type) && !nextMile) {
-    const label = type === "oil_change" ? "การเปลี่ยนน้ำมันเครื่อง" : "การสลับยาง";
-    alert(`กรุณาระบุเลขไมล์ครั้งถัดไป (จำเป็นสำหรับ${label})`);
-    document.getElementById("maintNextMile").focus();
-    return;
-  }
   // บังคับมี GPS (admin ที่กรอกย้อนหลังข้าม)
   if (!isAdminDriver() && !photoGPS.maintMileage) {
     await capturePhotoGPS("maintMileage", "maintMileageGpsStatus");
@@ -2219,29 +2413,15 @@ async function submitMaintenance() {
     }
   }
 
-  // รวม "ซ่อมอะไร" เข้า notes ถ้าเป็น type=other
-  const notesInput = document.getElementById("maintNotes").value.trim();
-  let notes = null;
-  if (type === "other") {
-    notes = `[ซ่อม: ${otherDesc}]` + (notesInput ? `\n${notesInput}` : "");
-  } else {
-    notes = notesInput || null;
-  }
-
   const fd = new FormData();
   fd.append("line_user_id",       lineUserId);
   if (lineIdToken) fd.append("id_token", lineIdToken);
   fd.append("truck_id",           truckId);
-  fd.append("maintenance_type",   type);
   fd.append("mileage_at_service", mile);
+  fd.append("items",              JSON.stringify(items));
   fd.append("mileage_image",      maintMileageBlob, "mileage.jpg");
   if (maintBillBlob) fd.append("bill_image", maintBillBlob, "bill.jpg");
-  if (shop)     fd.append("shop_name", shop);
-  if (cost)     fd.append("cost", cost);
-  if (nextMile) fd.append("next_service_mileage", nextMile);
-  if (notes)    fd.append("notes", notes);
-  if (selectedTirePositions.size > 0)
-    fd.append("tire_positions", [...selectedTirePositions].join(","));
+  if (shop) fd.append("shop_name", shop);
   // 🔧 Admin backdate (maintenance_date override)
   if (isAdminDriver()) {
     const bd = document.querySelector("#maintBackdate input[type=date]")?.value;
