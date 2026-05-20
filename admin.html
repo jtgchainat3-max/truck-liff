@@ -1458,14 +1458,18 @@ function showFuelDetail(id) {
               ${mismatch ? `<br><b>⚠️ ต่างกัน ฿${fmtNum(diff)} — ตรวจสอบกับบิลจริง!</b>` : ' ✓'}
             </div>` : null);
       })()}
-      ${row("วิ่งได้จากครั้งก่อน", r.km_since_last_fuel ? `<b style="color:#1a73e8">${fmtNum(r.km_since_last_fuel)}</b> ${fdUnit}` : null)}
       ${(() => {
-        // 🔄 คำนวณ กม./ล. ใหม่ จากตัวเลขในแถว: วิ่งได้ ÷ ลิตรรอบนี้
-        const calc = (r.km_since_last_fuel && r.liters && r.liters > 0)
-          ? Math.round((r.km_since_last_fuel / r.liters) * 100) / 100
+        // 🔄 ใช้ค่า computed จาก loadFuel (re-calculated จากข้อมูลในชุด) แทน DB ที่อาจผิด
+        const km = r._kmSinceComputed ?? r.km_since_last_fuel;
+        return row("วิ่งได้จากครั้งก่อน", km ? `<b style="color:#1a73e8">${fmtNum(km)}</b> ${fdUnit}` : null);
+      })()}
+      ${(() => {
+        const km = r._kmSinceComputed ?? r.km_since_last_fuel;
+        const calc = (km && r.liters && r.liters > 0)
+          ? Math.round((km / r.liters) * 100) / 100
           : null;
         return row(`${fdUnit}/ลิตร`, calc
-          ? `${calc} ${fdUnit}/ล. <small style="color:#888">(${fmtNum(r.km_since_last_fuel)} ÷ ${fmtNum(Math.round(r.liters * 100) / 100)})</small>${r.anomaly_flag ? ` <span class="badge b-crit">⚠️ ${esc(r.anomaly_note)}</span>` : ""}`
+          ? `${calc} ${fdUnit}/ล. <small style="color:#888">(${fmtNum(km)} ÷ ${fmtNum(Math.round(r.liters * 100) / 100)})</small>${r.anomaly_flag ? ` <span class="badge b-crit">⚠️ ${esc(r.anomaly_note)}</span>` : ""}`
           : null);
       })()}
       ${row("ปั๊ม", esc(r.station_name))}
@@ -1540,6 +1544,44 @@ async function loadFuel() {
   }
   allFuelCache = data;
 
+  // 🔄 คำนวณ "วิ่งได้" ใหม่ on-the-fly: ใช้ไมล์ของบิลก่อนหน้าของรถคันเดียวกัน
+  // ป้องกันค่าเก่าใน DB ที่อาจผิดจากการ insert/edit/delete สลับกัน
+  // — ถ้า date_from filter ตัดข้อมูลไป ต้องดึงไมล์ก่อนหน้าจาก DB เพิ่ม
+  //   (โหลด fuel logs ทั้งหมด ของ truck_id ที่อยู่ใน data ที่ mileage น้อยกว่า min ของ data)
+  const truckIdsInData = [...new Set(data.map(r => r.truck_id).filter(Boolean))];
+  const dataMileagesByTruck = {};
+  for (const r of data) {
+    if (!r.truck_id || !r.mileage) continue;
+    (dataMileagesByTruck[r.truck_id] = dataMileagesByTruck[r.truck_id] || []).push(r.mileage);
+  }
+  // คำนวณ km_since_last_fuel ใหม่ — เปรียบเทียบกับไมล์ก่อนหน้าของรถเดียวกัน
+  // หาไมล์ก่อนหน้าจาก data set โดยเรียง mileage asc → กระจายไปแต่ละ truck
+  const prevMileageByTruck = {};
+  // เรียงโดย truck_id, mileage asc เพื่อหาคู่ก่อนหน้า
+  const sorted = [...data].filter(r => r.mileage).sort((a, b) => {
+    if (a.truck_id !== b.truck_id) return (a.truck_id || 0) - (b.truck_id || 0);
+    return a.mileage - b.mileage;
+  });
+  // First pass: ตั้งค่า prevMileage ของแต่ละ row
+  const computedKmSince = {};
+  for (const r of sorted) {
+    const prev = prevMileageByTruck[r.truck_id];
+    if (prev != null && r.mileage > prev) {
+      computedKmSince[r.id] = r.mileage - prev;
+    }
+    prevMileageByTruck[r.truck_id] = r.mileage;
+  }
+  // กรณีไม่มี previous in data set (เช่น record แรกสุดในช่วง date filter)
+  // — ใช้ค่าจาก r.km_since_last_fuel ใน DB ที่ insert ตอนแรก เป็น fallback
+  // — หรือถ้าผู้ใช้กรอง date_from ตัดข้อมูลก่อนหน้าออก
+  for (const r of data) {
+    if (computedKmSince[r.id] == null && r.km_since_last_fuel) {
+      computedKmSince[r.id] = r.km_since_last_fuel;
+    }
+  }
+  // attach to records for downstream use
+  for (const r of data) r._kmSinceComputed = computedKmSince[r.id] || null;
+
   const totalCost  = data.reduce((s, r) => s + (r.total_cost || 0), 0);
   const totalLiters = data.reduce((s, r) => s + (r.liters || 0), 0);
 
@@ -1555,12 +1597,14 @@ async function loadFuel() {
   for (const r of data) {
     const unit = mileageUnit(r.trucks?.truck_type);
     const isForklift = r.trucks?.truck_type === "forklift";
-    const kmSince = r.km_since_last_fuel
-      ? `<b style="color:#1a73e8">${fmtNum(r.km_since_last_fuel)}</b> ${unit}<br><small style="color:#888">จากครั้งก่อน</small>`
+    // 🔄 ใช้ค่า computed (จากการเรียง mileage ในชุดข้อมูล) แทน DB เพื่อแก้ค่าเก่าที่ผิด
+    const kmSinceVal = r._kmSinceComputed;
+    const kmSince = kmSinceVal
+      ? `<b style="color:#1a73e8">${fmtNum(kmSinceVal)}</b> ${unit}<br><small style="color:#888">จากครั้งก่อน</small>`
       : `<span style="color:#aaa">—</span>`;
-    // 🔄 คำนวณ กม./ล. ใหม่ทุกแถว: วิ่งได้ ÷ ลิตรรอบนี้ (ให้ตัวเลขในแถวตรง ไม่ใช้ค่าเก่าใน DB ที่อาจใช้สูตรเก่า)
-    const kmPerLiterCalc = (r.km_since_last_fuel && r.liters && r.liters > 0)
-      ? Math.round((r.km_since_last_fuel / r.liters) * 100) / 100
+    // 🔄 คำนวณ กม./ล.: วิ่งได้ ÷ ลิตรรอบนี้
+    const kmPerLiterCalc = (kmSinceVal && r.liters && r.liters > 0)
+      ? Math.round((kmSinceVal / r.liters) * 100) / 100
       : null;
 
     html += `<tr style="cursor:pointer" onclick="showFuelDetail(${r.id})">
