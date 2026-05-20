@@ -1609,6 +1609,18 @@ async function deleteMileageLog(id) {
   }
 }
 
+// ── ลบบันทึกซ่อม (พร้อม cleanup รูปเลขไมล์ + บิล) — superadmin only ──
+async function deleteMaintLog(id) {
+  if (!confirm(`⚠️ ลบบันทึกซ่อม #${id}?\n\n• ลบ row จากฐานข้อมูล\n• ลบรูปเลขไมล์ + รูปบิลจาก storage ด้วย\n• ย้อนกลับไม่ได้\n\nกด OK เพื่อยืนยัน`)) return;
+  const res = await api(`maintenance-logs/${id}`, { method: "DELETE" });
+  if (res?.success) {
+    alert(`✅ ${res.message}`);
+    loadMaintenance();
+  } else {
+    alert(`❌ ${res?.error || "ลบไม่สำเร็จ"}`);
+  }
+}
+
 // รัน OCR กับ fuel_log id ที่ระบุ — เรียกจากปุ่ม 🔍 AI ในตาราง
 async function runFuelOcr(id) {
   const confirmed = confirm(`ให้ Claude AI ตรวจบิล #${id}?\n\nใช้เวลา 5-15 วินาที + เสียค่า API ~0.04 บาท`);
@@ -2318,7 +2330,7 @@ async function loadMaintenance() {
       <div class="sbox red"><div class="num">฿${fmtNum(Math.round(totalCost))}</div><div class="lbl">ค่าใช้จ่ายรวม</div></div>
     </div>
     <div class="card"><h3>ประวัติซ่อมบำรุง <small style="color:#888;font-weight:400">(กดที่แถวเพื่อดูรูป)</small></h3><div class="tbl-wrap"><table>
-      <tr><th>วันที่</th><th>ทะเบียน</th><th>ประเภท</th><th>ไมล์</th><th>ค่าใช้จ่าย</th><th>ร้าน</th><th>ครั้งถัดไป</th><th>ตรวจแล้ว</th><th>รูป</th></tr>`;
+      <tr><th>วันที่</th><th>ทะเบียน</th><th>ประเภท</th><th>ไมล์</th><th>ค่าใช้จ่าย</th><th>ร้าน</th><th>ครั้งถัดไป</th><th>ตรวจแล้ว</th><th>รูป</th><th class="super-only"></th></tr>`;
 
   for (const r of data) {
     const unit = mileageUnit(r.trucks?.truck_type);
@@ -2338,6 +2350,9 @@ async function loadMaintenance() {
         ${r.mileage_image_path ? "📷" : ""}
         ${r.bill_image_path ? "🧾" : ""}
         ${!r.mileage_image_path && !r.bill_image_path ? "<span style='color:#aaa'>-</span>" : ""}
+      </td>
+      <td onclick="event.stopPropagation()" style="text-align:center;white-space:nowrap" class="super-only">
+        <button class="btn btn-red" style="padding:4px 8px;font-size:11px;width:auto" onclick="event.stopPropagation();deleteMaintLog(${r.id})" title="ลบบันทึกซ่อมนี้ (เฉพาะ superadmin)">🗑</button>
       </td>
     </tr>`;
   }
