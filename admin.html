@@ -2404,40 +2404,100 @@ function renderMaintSchedule() {
   el.innerHTML = html;
 }
 
+// ── ประเภทรถ → กลุ่ม (สำหรับ filter intervals) ──
+const TRUCK_TYPE_GROUPS = [
+  { key: "all",        label: "📋 ค่าเริ่มต้น (ใช้กับทุกประเภท)" },
+  { key: "pickup",     label: "🛻 กระบะ" },
+  { key: "truck",      label: "🚚 รถบรรทุก (6/10 ล้อ)" },
+  { key: "forklift",   label: "🏗 Forklift (ชั่วโมง)" },
+  { key: "motorcycle", label: "🏍 มอไซต์" },
+  { key: "other",      label: "📦 อื่นๆ" },
+];
+let currentIntervalGroup = "all";
+
 // ── Modal: ตั้งค่าระยะเปลี่ยนถ่าย ──
 async function openMaintIntervalsModal() {
-  const list = document.getElementById("maintIntervalsList");
-  list.innerHTML = `<div class="loader"><div class="spinner"></div>กำลังโหลด...</div>`;
+  currentIntervalGroup = "all";
+  await reloadMaintIntervalsModal();
   document.getElementById("maintIntervalsMsg").textContent = "";
   document.getElementById("maintIntervalsModal").classList.add("open");
-  const data = await api("maintenance-intervals");
+}
+
+async function reloadMaintIntervalsModal() {
+  const list = document.getElementById("maintIntervalsList");
+  list.innerHTML = `<div class="loader"><div class="spinner"></div>กำลังโหลด...</div>`;
+  const group = currentIntervalGroup;
+  const isForklift = group === "forklift";
+  const unit = isForklift ? "ชม." : "กม.";
+
+  // โหลดทั้ง group ที่เลือก + base 'all' (สำหรับ fallback display)
+  const [data, baseData] = await Promise.all([
+    api(`maintenance-intervals?group=${group}`),
+    group !== "all" ? api(`maintenance-intervals?group=all`) : Promise.resolve(null),
+  ]);
   if (!Array.isArray(data)) {
     list.innerHTML = `<div class="alert alert-err">${data?.error || "โหลดไม่สำเร็จ"}</div>`;
     return;
   }
-  const PROTECTED = ["oil_change","gear_oil","differential_oil","brake_fluid","tire_rotate","tire_replace","brake","battery","coolant","other"];
-  list.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:13px">
+  // Map base 'all' rows → สำหรับแสดง fallback ใน group อื่น
+  const baseMap = {};
+  if (Array.isArray(baseData)) for (const b of baseData) baseMap[b.maintenance_type] = b;
+
+  // ใน group ที่ไม่ใช่ 'all': แสดงทุก type ใน base 'all' + override ถ้ามี
+  let displayRows;
+  if (group === "all") {
+    displayRows = data;
+  } else {
+    const overrideMap = {};
+    for (const d of data) overrideMap[d.maintenance_type] = d;
+    displayRows = Object.values(baseMap).map((b) => {
+      const o = overrideMap[b.maintenance_type];
+      return o ? { ...b, ...o, _overridden: true } : { ...b, interval_km: null, interval_months: null, alert_km_before: null, _overridden: false };
+    });
+  }
+
+  const PROTECTED = ["oil_change","gear_oil","differential_oil","brake_fluid","tire_rotate","tire_replace","brake","battery","coolant","other","labor","wheel_bearing","wheel_rim","tire_patch"];
+  const groupSelector = `
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px;padding:10px;background:#e3f2fd;border-radius:8px">
+      <label style="font-size:13px;font-weight:700;color:#0d47a1">🚛 ประเภทรถ:</label>
+      <select onchange="switchIntervalGroup(this.value)" style="padding:6px 10px;border:1px solid #90caf9;border-radius:6px;font-size:13px;background:#fff">
+        ${TRUCK_TYPE_GROUPS.map(g => `<option value="${g.key}" ${g.key === group ? "selected" : ""}>${g.label}</option>`).join("")}
+      </select>
+      ${group !== "all" ? `<span style="font-size:12px;color:#666">💡 ค่าว่าง = ใช้ค่าจาก "ค่าเริ่มต้น"</span>` : ""}
+    </div>`;
+
+  list.innerHTML = groupSelector + `<table style="width:100%;border-collapse:collapse;font-size:13px">
     <thead><tr style="background:#f5f5f5">
       <th style="padding:6px 8px;text-align:left">ประเภท</th>
-      <th style="padding:6px 8px;text-align:right">ทุก กม.</th>
+      <th style="padding:6px 8px;text-align:right">ทุก ${unit}</th>
       <th style="padding:6px 8px;text-align:right">ทุก เดือน</th>
-      <th style="padding:6px 8px;text-align:right">แจ้งก่อน(กม.)</th>
+      <th style="padding:6px 8px;text-align:right">แจ้งก่อน(${unit})</th>
       <th></th>
     </tr></thead>
-    <tbody>${data.map(i => `
-      <tr data-type="${esc(i.maintenance_type)}">
-        <td style="padding:6px 8px">${esc(i.icon || "🔧")} <b>${esc(i.label_th)}</b><br><small style="color:#888">${esc(i.maintenance_type)}</small></td>
-        <td style="padding:6px 8px;text-align:right"><input class="mi-km" type="number" value="${i.interval_km ?? ""}" style="width:90px;padding:4px 6px;text-align:right" placeholder="—"></td>
-        <td style="padding:6px 8px;text-align:right"><input class="mi-months" type="number" value="${i.interval_months ?? ""}" style="width:70px;padding:4px 6px;text-align:right" placeholder="—"></td>
-        <td style="padding:6px 8px;text-align:right"><input class="mi-alert-km" type="number" value="${i.alert_km_before ?? ""}" style="width:80px;padding:4px 6px;text-align:right" placeholder="500"></td>
+    <tbody>${displayRows.map(i => {
+      const fallback = group !== "all" && !i._overridden;
+      const baseI = baseMap[i.maintenance_type];
+      const fallbackText = fallback && baseI
+        ? `<small style="color:#888;font-size:10px">เริ่มต้น: ${baseI.interval_km ?? "—"} กม. / ${baseI.interval_months ?? "—"} เดือน</small>`
+        : "";
+      return `
+      <tr data-type="${esc(i.maintenance_type)}" ${fallback ? `style="opacity:.7"` : ""}>
+        <td style="padding:6px 8px">${esc(i.icon || "🔧")} <b>${esc(i.label_th)}</b><br><small style="color:#888">${esc(i.maintenance_type)}</small>${fallbackText ? `<br>${fallbackText}` : ""}</td>
+        <td style="padding:6px 8px;text-align:right"><input class="mi-km" type="number" value="${i._overridden ? (i.interval_km ?? "") : ""}" style="width:90px;padding:4px 6px;text-align:right" placeholder="—"></td>
+        <td style="padding:6px 8px;text-align:right"><input class="mi-months" type="number" value="${i._overridden ? (i.interval_months ?? "") : ""}" style="width:70px;padding:4px 6px;text-align:right" placeholder="—"></td>
+        <td style="padding:6px 8px;text-align:right"><input class="mi-alert-km" type="number" value="${i._overridden ? (i.alert_km_before ?? "") : ""}" style="width:80px;padding:4px 6px;text-align:right" placeholder="${isForklift ? "50" : "500"}"></td>
         <td style="padding:6px 8px;text-align:center;white-space:nowrap">
           <button class="btn btn-primary" style="padding:4px 10px;font-size:12px;width:auto" onclick="saveMaintInterval('${esc(i.maintenance_type)}')">บันทึก</button>
-          ${PROTECTED.includes(i.maintenance_type) ? "" : `<button class="btn btn-red" style="padding:4px 8px;font-size:12px;width:auto;margin-left:4px" onclick="deleteMaintInterval('${esc(i.maintenance_type)}')">🗑</button>`}
+          ${group === "all" && PROTECTED.includes(i.maintenance_type)
+            ? ""
+            : `<button class="btn btn-red" style="padding:4px 8px;font-size:12px;width:auto;margin-left:4px" onclick="deleteMaintInterval('${esc(i.maintenance_type)}')" title="${group !== "all" ? "ลบ override (กลับใช้ค่าเริ่มต้น)" : "ลบประเภท"}">${group !== "all" ? "↺" : "🗑"}</button>`}
         </td>
-      </tr>`).join("")}
+      </tr>`;
+    }).join("")}
     </tbody></table>
+    ${group === "all" ? `
     <div style="margin-top:14px;padding:12px;background:#e8f5e9;border:1px solid #a5d6a7;border-radius:8px">
-      <div style="font-size:13px;font-weight:700;color:#2e7d32;margin-bottom:8px">➕ เพิ่มประเภทซ่อมใหม่</div>
+      <div style="font-size:13px;font-weight:700;color:#2e7d32;margin-bottom:8px">➕ เพิ่มประเภทซ่อมใหม่ (group: ค่าเริ่มต้น)</div>
       <div style="display:grid;grid-template-columns:1fr 2fr 80px 80px 80px;gap:6px;font-size:13px;align-items:end">
         <div>
           <label style="font-size:11px;color:#666">รหัส (eng)</label>
@@ -2457,8 +2517,14 @@ async function openMaintIntervalsModal() {
         </div>
         <button class="btn btn-primary" style="padding:8px 12px;font-size:13px;width:auto" onclick="addMaintInterval()">➕ เพิ่ม</button>
       </div>
-      <div style="font-size:11px;color:#666;margin-top:6px">รหัสใช้เฉพาะ a-z, 0-9, _ (ตัวเล็ก) เช่น <code>ac_filter</code>, <code>fuel_filter</code></div>
-    </div>`;
+      <div style="font-size:11px;color:#666;margin-top:6px">รหัสใช้เฉพาะ a-z, 0-9, _ (ตัวเล็ก) — ประเภทใหม่จะใช้ได้กับทุกประเภทรถ</div>
+    </div>` : ""}`;
+}
+
+// เปลี่ยน group ที่กำลังดู
+function switchIntervalGroup(g) {
+  currentIntervalGroup = g;
+  reloadMaintIntervalsModal();
 }
 
 // เพิ่มประเภทซ่อมใหม่
@@ -2488,15 +2554,17 @@ async function addMaintInterval() {
   }
 }
 
-// ลบประเภทซ่อม
+// ลบประเภทซ่อม (group=all ลบทั้งประเภท; group อื่นๆ ลบเฉพาะ override)
 async function deleteMaintInterval(type) {
-  if (!confirm(`ลบประเภท "${type}" ?\n(จะลบไม่ได้ถ้ามีบันทึกซ่อมใช้อยู่)`)) return;
+  const group = currentIntervalGroup;
+  const actionLabel = group === "all" ? "ลบประเภท" : "ลบ override (กลับใช้ค่าเริ่มต้น)";
+  if (!confirm(`${actionLabel} "${type}" ?`)) return;
   const msg = document.getElementById("maintIntervalsMsg");
   msg.style.color = "#888"; msg.textContent = `⏳ กำลังลบ ${type}...`;
-  const res = await api(`maintenance-intervals/${encodeURIComponent(type)}`, { method: "DELETE" });
+  const res = await api(`maintenance-intervals/${encodeURIComponent(type)}?group=${group}`, { method: "DELETE" });
   if (res?.success) {
     msg.style.color = "#2e7d32"; msg.textContent = `✅ ${res.message}`;
-    openMaintIntervalsModal();
+    reloadMaintIntervalsModal();
   } else {
     msg.style.color = "#e53935"; msg.textContent = `❌ ${res?.error || "ลบไม่สำเร็จ"}`;
   }
@@ -2512,10 +2580,11 @@ async function saveMaintInterval(type) {
   const km     = row.querySelector(".mi-km").value;
   const months = row.querySelector(".mi-months").value;
   const alertKm = row.querySelector(".mi-alert-km").value;
+  const group = currentIntervalGroup;
   const msg = document.getElementById("maintIntervalsMsg");
   msg.style.color = "#888";
-  msg.textContent = `⏳ กำลังบันทึก ${type}...`;
-  const res = await api(`maintenance-intervals/${encodeURIComponent(type)}`, {
+  msg.textContent = `⏳ กำลังบันทึก ${type} (${group})...`;
+  const res = await api(`maintenance-intervals/${encodeURIComponent(type)}?group=${group}`, {
     method: "PUT",
     body: JSON.stringify({
       interval_km:      km ? parseInt(km) : null,
@@ -2525,7 +2594,8 @@ async function saveMaintInterval(type) {
   });
   if (res?.success) {
     msg.style.color = "#2e7d32";
-    msg.textContent = `✅ บันทึก ${type} เรียบร้อย`;
+    msg.textContent = `✅ บันทึก ${type} (${group}) เรียบร้อย`;
+    reloadMaintIntervalsModal();
     if (maintSchedCache) loadMaintSchedule();  // refresh schedule
     setTimeout(() => { msg.textContent = ""; }, 3000);
   } else {
