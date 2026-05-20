@@ -2534,6 +2534,9 @@ async function saveMaintInterval(type) {
   }
 }
 
+let allMaintCache = [];
+let allMaintSessions = [];  // grouped by session_id สำหรับ display
+
 async function loadMaintenance() {
   const typeFilter  = document.getElementById("maintFilter").value;
   const truckFilter = document.getElementById("maintTruckFilter").value;
@@ -2551,17 +2554,52 @@ async function loadMaintenance() {
   }
   allMaintCache = data;
 
-  const totalCost = data.reduce((s, r) => s + (r.cost || 0), 0);
+  // ── Group by service_session_id ──
+  // Single records (no session_id) → 1 session per row
+  const sessions = [];
+  const sessionMap = {};
+  for (const r of data) {
+    const sid = r.service_session_id || `single_${r.id}`;
+    if (!sessionMap[sid]) {
+      sessionMap[sid] = {
+        session_id: r.service_session_id,
+        key: sid,
+        items: [],
+        head: null,
+        total_cost: 0,
+      };
+      sessions.push(sessionMap[sid]);
+    }
+    const s = sessionMap[sid];
+    s.items.push(r);
+    s.total_cost += r.cost || 0;
+    // head = row with is_session_head=true (or first if none)
+    if (r.is_session_head || !s.head) s.head = r;
+  }
+  allMaintSessions = sessions;
+
+  // ถ้า type filter ถูกตั้ง → กรอง sessions ที่ "มี item ตรง type" เท่านั้น
+  // (เพราะ session อาจมีหลายประเภทผสมกัน — ถ้ามีอันที่ filter ตรง → แสดงทั้ง session)
+  const displaySessions = typeFilter
+    ? sessions.filter(s => s.items.some(it => it.maintenance_type === typeFilter))
+    : sessions;
+
+  // คำนวณยอดรวมแสดง summary
+  const totalAcrossAll = displaySessions.reduce((s, sess) =>
+    s + (sess.head?.total_cost_entered || sess.total_cost), 0);
+  const totalItems = displaySessions.reduce((s, sess) => s + sess.items.length, 0);
 
   let html = `
     <div class="summary-grid" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr))">
-      <div class="sbox blue"><div class="num">${data.length}</div><div class="lbl">รายการ</div></div>
-      <div class="sbox red"><div class="num">฿${fmtNum(Math.round(totalCost))}</div><div class="lbl">ค่าใช้จ่ายรวม</div></div>
+      <div class="sbox blue"><div class="num">${displaySessions.length}</div><div class="lbl">ครั้งซ่อม</div></div>
+      <div class="sbox orange"><div class="num">${totalItems}</div><div class="lbl">รายการรวม</div></div>
+      <div class="sbox red"><div class="num">฿${fmtNum(Math.round(totalAcrossAll))}</div><div class="lbl">ค่าใช้จ่ายรวม</div></div>
     </div>
-    <div class="card"><h3>ประวัติซ่อมบำรุง <small style="color:#888;font-weight:400">(กดที่แถวเพื่อดูรูป)</small></h3><div class="tbl-wrap"><table>
-      <tr><th>วันที่</th><th>ทะเบียน</th><th>คนขับ</th><th>ประเภท</th><th>ไมล์</th><th>ค่าใช้จ่าย</th><th>ร้าน</th><th>ครั้งถัดไป</th><th>ตรวจแล้ว</th><th>รูป</th><th class="super-only"></th></tr>`;
+    <div class="card"><h3>ประวัติซ่อมบำรุง <small style="color:#888;font-weight:400">(กดที่แถวเพื่อดูรูป + รายการทั้งหมด)</small></h3><div class="tbl-wrap"><table>
+      <tr><th>วันที่</th><th>ทะเบียน</th><th>คนขับ</th><th>รายการซ่อม</th><th>ไมล์</th><th>รวม</th><th>ร้าน</th><th>ตรวจแล้ว</th><th>รูป</th><th class="super-only"></th></tr>`;
 
-  for (const r of data) {
+  for (const sess of displaySessions) {
+    const r = sess.head;
     const unit = mileageUnit(r.trucks?.truck_type);
     const drvName = r.drivers?.name ? esc(r.drivers.name) : "<span style='color:#aaa'>-</span>";
     const drvBadge = r.drivers?.driver_type
@@ -2575,16 +2613,32 @@ async function loadMaintenance() {
           "🚐 VAN"
         }</span>`
       : "";
-    html += `<tr style="cursor:pointer" onclick="showMaintDetail(${r.id})">
+
+    // รวม types ทุก item แสดงเป็น list
+    const itemsList = sess.items.map(it => {
+      const label = MAINT_LABELS[it.maintenance_type] || it.maintenance_type;
+      const tireBits = it.tire_positions?.length ? ` <small style="color:#888">[${esc(it.tire_positions.join(","))}]</small>` : "";
+      const costBits = it.cost ? ` <small style="color:#0d47a1">฿${fmtNum(it.cost)}</small>` : "";
+      return `<div style="font-size:13px;line-height:1.5">• ${esc(label)}${tireBits}${costBits}</div>`;
+    }).join("");
+
+    const sessionBadge = sess.items.length > 1
+      ? `<span class="badge" style="background:#e8f5e9;color:#1b5e20;font-size:10px;margin-right:4px">📦 ${sess.items.length} รายการ</span>`
+      : "";
+
+    // total: ใช้ total_cost_entered (จากบิลจริง) ถ้ามี ไม่งั้นใช้ผลรวม items
+    const totalDisplay = r.total_cost_entered != null
+      ? `<b style="color:#0d47a1">฿${fmtNum(r.total_cost_entered)}</b>${sess.total_cost !== r.total_cost_entered ? `<br><small style="color:#888">(items ฿${fmtNum(sess.total_cost)})</small>` : ""}`
+      : (sess.total_cost ? `<b>฿${fmtNum(sess.total_cost)}</b>` : "-");
+
+    html += `<tr style="cursor:pointer" onclick="showMaintDetail('${sess.key}')">
       <td>${thaiDateShort(r.maintenance_date)}<br><small style="color:#888">${fmtTime(r.created_at)}</small></td>
       <td><b>${esc(r.trucks?.plate_number) || "-"}</b><br><small style="color:#aaa">${esc(r.trucks?.warehouse) || ""}</small></td>
       <td>${drvName}${drvBadge}</td>
-      <td><span class="badge b-blue">${esc(MAINT_LABELS[r.maintenance_type] || r.maintenance_type)}</span>
-        ${r.tire_positions?.length ? `<br><small>${esc(r.tire_positions.join(","))}</small>` : ""}</td>
+      <td>${sessionBadge}${itemsList}</td>
       <td>${fmtNum(r.mileage_at_service)} ${unit}</td>
-      <td>${r.cost ? `<b>฿${fmtNum(r.cost)}</b>` : "-"}</td>
+      <td>${totalDisplay}</td>
       <td>${esc(r.shop_name) || "-"}</td>
-      <td>${r.next_service_mileage ? `${fmtNum(r.next_service_mileage)} ${unit}` : "-"}${r.next_service_date ? `<br>${thaiDateShort(r.next_service_date)}` : ""}</td>
       <td>${r.verified_by
         ? `<span class="badge ${r.mileage_match === false ? 'b-exp' : 'b-ok'}">${r.mileage_match === false ? '❌' : '✅'} ${esc(r.verified_by)}</span>`
         : `<span class="badge b-warn">⏳ รอตรวจ</span>`}</td>
@@ -2594,7 +2648,7 @@ async function loadMaintenance() {
         ${!r.mileage_image_path && !r.bill_image_path ? "<span style='color:#aaa'>-</span>" : ""}
       </td>
       <td onclick="event.stopPropagation()" style="text-align:center;white-space:nowrap" class="super-only">
-        <button class="btn btn-red" style="padding:4px 8px;font-size:11px;width:auto" onclick="event.stopPropagation();deleteMaintLog(${r.id})" title="ลบบันทึกซ่อมนี้ (เฉพาะ superadmin)">🗑</button>
+        <button class="btn btn-red" style="padding:4px 8px;font-size:11px;width:auto" onclick="event.stopPropagation();deleteMaintSession('${sess.key}')" title="ลบครั้งซ่อมนี้ทั้งหมด (เฉพาะ superadmin)">🗑</button>
       </td>
     </tr>`;
   }
@@ -2602,13 +2656,47 @@ async function loadMaintenance() {
   el.innerHTML = html;
 }
 
-let allMaintCache = [];
+// ── ลบทั้ง session (ทุก items) — superadmin only ──
+async function deleteMaintSession(key) {
+  const sess = allMaintSessions.find(s => s.key === key);
+  if (!sess) return;
+  const itemCount = sess.items.length;
+  if (!confirm(`⚠️ ลบครั้งซ่อมนี้ (${itemCount} รายการ)?\n\n• ลบ rows ทั้งหมดจากฐานข้อมูล\n• ลบรูปเลขไมล์ + รูปบิลจาก storage ด้วย\n• ย้อนกลับไม่ได้\n\nกด OK เพื่อยืนยัน`)) return;
+  // ลบทุก item ใน session (loop)
+  let okCount = 0, errors = [];
+  for (const it of sess.items) {
+    const res = await api(`maintenance-logs/${it.id}`, { method: "DELETE" });
+    if (res?.success) okCount++;
+    else errors.push(res?.error || `id ${it.id}: failed`);
+  }
+  if (errors.length) {
+    alert(`✅ ลบสำเร็จ ${okCount}/${itemCount} รายการ\n\nข้อผิดพลาด:\n${errors.join("\n")}`);
+  } else {
+    alert(`✅ ลบครั้งซ่อมนี้ (${okCount} รายการ) เรียบร้อย`);
+  }
+  loadMaintenance();
+}
 
-function showMaintDetail(id) {
-  const r = allMaintCache.find(x => x.id === id);
-  if (!r) { alert("ไม่พบรายการ"); return; }
+// ── showMaintDetail รับได้ทั้ง id (legacy) และ session_key (session-aware) ──
+function showMaintDetail(idOrKey) {
+  // หา session จาก key หรือจาก row id
+  let sess = null;
+  if (typeof idOrKey === "string" && (idOrKey.startsWith("single_") || allMaintSessions.find(s => s.key === idOrKey))) {
+    sess = allMaintSessions.find(s => s.key === idOrKey);
+  } else {
+    // fallback: หา row → ดึง session
+    const r = allMaintCache.find(x => x.id === idOrKey || x.id === parseInt(idOrKey));
+    if (r) {
+      const sid = r.service_session_id || `single_${r.id}`;
+      sess = allMaintSessions.find(s => s.key === sid);
+    }
+  }
+  if (!sess) { alert("ไม่พบรายการ"); return; }
+  const r = sess.head;
+  const items = sess.items;
 
-  document.getElementById("fd_title").textContent = `🔧 ${MAINT_LABELS[r.maintenance_type] || r.maintenance_type} — ${r.trucks?.plate_number || "-"}`;
+  document.getElementById("fd_title").textContent =
+    `🔧 ${items.length > 1 ? `${items.length} รายการซ่อม` : (MAINT_LABELS[r.maintenance_type] || r.maintenance_type)} — ${r.trucks?.plate_number || "-"}`;
 
   const row = (label, value) => `
     <div style="display:flex;padding:8px 0;border-bottom:1px solid #f0f0f0">
@@ -2634,23 +2722,65 @@ function showMaintDetail(id) {
     : `<span class="badge b-warn">⏳ ยังไม่ตรวจ</span>`;
 
   const mdUnit = mileageUnit(r.trucks?.truck_type);
+
+  // ── รายการ items ทั้งหมดใน session ──
+  const itemsHtml = items.map((it, idx) => {
+    const label = MAINT_LABELS[it.maintenance_type] || it.maintenance_type;
+    const tireBits = it.tire_positions?.length ? `<br><small>📍 ตำแหน่ง: ${esc(it.tire_positions.join(", "))}</small>` : "";
+    const notesBits = it.notes ? `<br><small style="color:#666;white-space:pre-line">📝 ${esc(it.notes)}</small>` : "";
+    const costBits = it.cost ? `<b style="color:#e53935">฿${fmtNum(it.cost)}</b>` : `<span style="color:#aaa">-</span>`;
+    return `
+      <div style="padding:10px 12px;border-bottom:1px solid #f0f0f0;display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+        <div style="flex:1">
+          <b style="color:#1565c0">${idx + 1}. ${esc(label)}</b>
+          ${tireBits}
+          ${notesBits}
+        </div>
+        <div style="text-align:right;font-size:14px">${costBits}</div>
+      </div>`;
+  }).join("");
+
+  // ยอดรวม
+  const calcTotal = items.reduce((s, it) => s + (it.cost || 0), 0);
+  const totalRow = r.total_cost_entered != null
+    ? `
+      <div style="padding:12px;background:#e3f2fd;border-top:2px solid #90caf9;display:flex;justify-content:space-between;font-size:15px">
+        <b style="color:#0d47a1">💰 ยอดในบิล (จริง):</b>
+        <b style="color:#0d47a1;font-size:18px">฿${fmtNum(r.total_cost_entered)}</b>
+      </div>
+      <div style="padding:8px 12px;background:#f5f5f5;display:flex;justify-content:space-between;font-size:13px;color:#666">
+        <span>ผลรวมจากรายการ:</span>
+        <span>฿${fmtNum(calcTotal)}${calcTotal !== r.total_cost_entered ? ` <span style="color:#e65100">(ต่าง ฿${fmtNum(Math.abs(calcTotal - r.total_cost_entered))})</span>` : " ✓"}</span>
+      </div>`
+    : `
+      <div style="padding:12px;background:#e3f2fd;border-top:2px solid #90caf9;display:flex;justify-content:space-between;font-size:15px">
+        <b style="color:#0d47a1">💰 รวมทั้งหมด:</b>
+        <b style="color:#0d47a1;font-size:18px">฿${fmtNum(calcTotal)}</b>
+      </div>`;
+
   document.getElementById("fd_content").innerHTML = `
     <div style="margin-bottom:12px">${verifyTag}</div>
     ${photoBox("📷 รูปเลขไมล์", r.mileage_image_path)}
     ${photoBox("🧾 รูปบิลซ่อม", r.bill_image_path)}
+
+    <!-- ── รายการซ่อม ── -->
+    <div style="background:#fff;border-radius:8px;border:1px solid #e0e0e0;margin-top:12px;overflow:hidden">
+      <div style="background:#1565c0;color:#fff;padding:10px 14px;font-size:14px;font-weight:700">📋 รายการซ่อม (${items.length} รายการ)</div>
+      ${itemsHtml}
+      ${totalRow}
+    </div>
+
+    <!-- ── ข้อมูลทั่วไป ── -->
     <div style="background:#f9f9f9;border-radius:8px;padding:12px 14px;margin-top:12px">
       <div style="font-size:12px;color:#1a73e8;font-weight:700;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">🔧 ข้อมูลการซ่อม</div>
       ${row("วันที่/เวลา", `${thaiDateLong(r.maintenance_date)} <small style="color:#888">${fmtTime(r.created_at)}</small>`)}
-      ${row("ประเภท", esc(MAINT_LABELS[r.maintenance_type] || r.maintenance_type))}
       ${row("เลขไมล์", r.mileage_at_service ? `<b>${fmtNum(r.mileage_at_service)}</b> ${mdUnit}` : null)}
-      ${row("ค่าใช้จ่าย", r.cost ? `<b style="color:#e53935;font-size:18px">฿${fmtNum(r.cost)}</b>` : null)}
       ${row("ร้าน/อู่", esc(r.shop_name))}
-      ${row("ครั้งถัดไป", r.next_service_mileage ? `${fmtNum(r.next_service_mileage)} ${mdUnit}` : null)}
-      ${row("ตำแหน่งล้อ", r.tire_positions?.length ? esc(r.tire_positions.join(", ")) : null)}
-      ${row("หมายเหตุ", r.notes ? `<div style="white-space:pre-line">${esc(r.notes)}</div>` : null)}
-      ${row("ตำแหน่ง", gpsLink)}
+      ${row("ตำแหน่ง GPS", gpsLink)}
       ${row("ผลตรวจสอบ", esc(r.verification_note))}
     </div>
+
+    <!-- ── คนขับ ── -->
     <div style="background:#f9f9f9;border-radius:8px;padding:12px 14px;margin-top:12px">
       <div style="font-size:12px;color:#1a73e8;font-weight:700;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">👤 คนขับ</div>
       ${row("ชื่อ", esc(r.drivers?.name))}
