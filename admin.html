@@ -1566,7 +1566,7 @@ async function loadFuel() {
       <td>${thaiDateShort(r.log_date)}<br><small style="color:#888">${fmtTime(r.created_at)}</small></td>
       <td><b>${esc(r.trucks?.plate_number) || "-"}</b></td>
       <td>${esc(r.trucks?.warehouse) || "-"}</td>
-      <td>${esc(r.drivers?.name) || "-"}</td>
+      <td>${esc(r.drivers?.name) || "-"}${r.drivers?.driver_type ? `<br><span style="font-size:10px;display:inline-block;padding:1px 6px;border-radius:8px;background:${r.drivers.driver_type === "admin" ? "#f3e5f5;color:#6a1b9a" : r.drivers.driver_type === "transport" ? "#fff3e0;color:#e65100" : "#e3f2fd;color:#0d47a1"};font-weight:600">${r.drivers.driver_type === "admin" ? "👤 แอดมิน" : r.drivers.driver_type === "transport" ? "🚛 ขนส่ง" : "🚐 VAN"}</span>` : ""}</td>
       <td>${fmtNum(r.mileage)}</td>
       <td>${kmSince}</td>
       <td>${fmtNum(r.liters != null ? Math.round(r.liters * 100) / 100 : null)} ล.</td>
@@ -2330,13 +2330,26 @@ async function loadMaintenance() {
       <div class="sbox red"><div class="num">฿${fmtNum(Math.round(totalCost))}</div><div class="lbl">ค่าใช้จ่ายรวม</div></div>
     </div>
     <div class="card"><h3>ประวัติซ่อมบำรุง <small style="color:#888;font-weight:400">(กดที่แถวเพื่อดูรูป)</small></h3><div class="tbl-wrap"><table>
-      <tr><th>วันที่</th><th>ทะเบียน</th><th>ประเภท</th><th>ไมล์</th><th>ค่าใช้จ่าย</th><th>ร้าน</th><th>ครั้งถัดไป</th><th>ตรวจแล้ว</th><th>รูป</th><th class="super-only"></th></tr>`;
+      <tr><th>วันที่</th><th>ทะเบียน</th><th>คนขับ</th><th>ประเภท</th><th>ไมล์</th><th>ค่าใช้จ่าย</th><th>ร้าน</th><th>ครั้งถัดไป</th><th>ตรวจแล้ว</th><th>รูป</th><th class="super-only"></th></tr>`;
 
   for (const r of data) {
     const unit = mileageUnit(r.trucks?.truck_type);
+    const drvName = r.drivers?.name ? esc(r.drivers.name) : "<span style='color:#aaa'>-</span>";
+    const drvBadge = r.drivers?.driver_type
+      ? `<br><span style="font-size:10px;display:inline-block;padding:1px 6px;border-radius:8px;background:${
+          r.drivers.driver_type === "admin" ? "#f3e5f5;color:#6a1b9a" :
+          r.drivers.driver_type === "transport" ? "#fff3e0;color:#e65100" :
+          "#e3f2fd;color:#0d47a1"
+        };font-weight:600">${
+          r.drivers.driver_type === "admin" ? "👤 แอดมิน" :
+          r.drivers.driver_type === "transport" ? "🚛 ขนส่ง" :
+          "🚐 VAN"
+        }</span>`
+      : "";
     html += `<tr style="cursor:pointer" onclick="showMaintDetail(${r.id})">
       <td>${thaiDateShort(r.maintenance_date)}<br><small style="color:#888">${fmtTime(r.created_at)}</small></td>
       <td><b>${esc(r.trucks?.plate_number) || "-"}</b><br><small style="color:#aaa">${esc(r.trucks?.warehouse) || ""}</small></td>
+      <td>${drvName}${drvBadge}</td>
       <td><span class="badge b-blue">${esc(MAINT_LABELS[r.maintenance_type] || r.maintenance_type)}</span>
         ${r.tire_positions?.length ? `<br><small>${esc(r.tire_positions.join(","))}</small>` : ""}</td>
       <td>${fmtNum(r.mileage_at_service)} ${unit}</td>
