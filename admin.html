@@ -14,9 +14,20 @@ body{font-family:'Sarabun',sans-serif;background:#f0f2f5;color:#333;font-size:14
 .topbar .sub{font-size:13px;opacity:.8}
 /* Tabs */
 .tabs{background:#fff;display:flex;overflow-x:auto;border-bottom:2px solid #e0e0e0;position:sticky;top:56px;z-index:99;box-shadow:0 2px 4px rgba(0,0,0,.06)}
-.tab{padding:12px 18px;cursor:pointer;white-space:nowrap;font-size:14px;font-weight:600;color:#777;border-bottom:3px solid transparent;transition:.15s;flex-shrink:0}
+.tab{padding:12px 18px;cursor:pointer;white-space:nowrap;font-size:14px;font-weight:600;color:#777;border-bottom:3px solid transparent;transition:.15s;flex-shrink:0;background:#fff}
 .tab:hover{color:#1a73e8;background:#f5f5f5}
 .tab.active{color:#1a73e8;border-bottom-color:#1a73e8}
+/* Tab dropdown group */
+.tab-group{position:relative;flex-shrink:0}
+.tab-group .tab-parent{display:flex;align-items:center;gap:4px}
+.tab-group .caret{font-size:10px;opacity:.7}
+.tab-submenu{display:none;position:absolute;top:100%;left:0;background:#fff;box-shadow:0 4px 16px rgba(0,0,0,.15);border-radius:0 0 10px 10px;min-width:200px;z-index:200;padding:4px 0;border:1px solid #e0e0e0;border-top:none}
+.tab-group:hover .tab-submenu,
+.tab-group.open .tab-submenu{display:block}
+.tab-sub{padding:10px 18px;cursor:pointer;font-size:14px;color:#555;white-space:nowrap;border-left:3px solid transparent;transition:.15s;font-weight:500}
+.tab-sub:hover{background:#f5f5f5;color:#1a73e8;border-left-color:#1a73e8}
+.tab-sub.active{background:#e3f2fd;color:#1a73e8;border-left-color:#1a73e8;font-weight:700}
+.tab.parent-active{color:#1a73e8;border-bottom-color:#1a73e8}
 /* Main */
 .main{max-width:1200px;margin:0 auto;padding:20px}
 /* Section */
@@ -149,22 +160,51 @@ body.role-non-super .super-only { display: none !important; }
   <button class="btn btn-gray btn-sm" onclick="doLogout()" style="margin-left:10px">ออกจากระบบ</button>
 </div>
 
-<!-- TABS -->
+<!-- TABS — main menu with submenus -->
 <div class="tabs">
-  <div class="tab active" onclick="switchTab('summary')">📊 ภาพรวม</div>
-  <div class="tab" onclick="switchTab('daily')">📋 ไมล์รายวัน</div>
-  <div class="tab" onclick="switchTab('fuel')">⛽ น้ำมัน</div>
-  <div class="tab" onclick="switchTab('maintenance')">🔧 ซ่อมบำรุง</div>
-  <div class="tab" onclick="switchTab('maintsched')">🛠 แผนซ่อม</div>
-  <div class="tab" onclick="switchTab('verify')">🔍 ตรวจสอบบิล</div>
-  <div class="tab" onclick="switchTab('accounting')">📒 ส่งบัญชี</div>
-  <div class="tab" onclick="switchTab('anomalies')">⚠️ ผิดปกติ</div>
-  <div class="tab" onclick="switchTab('documents')">📋 ภาษี/ประกัน</div>
-  <div class="tab" onclick="switchTab('trucks')">🚛 รถ</div>
-  <div class="tab" onclick="switchTab('drivers')">👤 คนขับ</div>
-  <div class="tab" onclick="switchTab('companies')">🏢 บริษัท</div>
-  <div class="tab" onclick="switchTab('adminusers')">🔑 ผู้ใช้ระบบ</div>
-  <div class="tab" onclick="switchTab('settings')">⚙️ ตั้งค่า</div>
+  <div class="tab active" data-tab="summary" onclick="switchTab('summary')">📊 ภาพรวม</div>
+  <div class="tab" data-tab="daily" onclick="switchTab('daily')">📋 ไมล์รายวัน</div>
+  <div class="tab" data-tab="fuel" onclick="switchTab('fuel')">⛽ น้ำมัน</div>
+
+  <!-- ซ่อมบำรุง > แผนซ่อม -->
+  <div class="tab-group" data-group="maintenance">
+    <div class="tab tab-parent" onclick="switchTab('maintenance')">🔧 ซ่อมบำรุง <span class="caret">▾</span></div>
+    <div class="tab-submenu">
+      <div class="tab-sub" data-tab="maintenance" onclick="switchTab('maintenance')">🔧 ประวัติซ่อม</div>
+      <div class="tab-sub" data-tab="maintsched"  onclick="switchTab('maintsched')">🛠 แผนซ่อม</div>
+    </div>
+  </div>
+
+  <!-- ตรวจสอบบิล > ส่งบัญชี -->
+  <div class="tab-group" data-group="verify">
+    <div class="tab tab-parent" onclick="switchTab('verify')">🔍 ตรวจสอบบิล <span class="caret">▾</span></div>
+    <div class="tab-submenu">
+      <div class="tab-sub" data-tab="verify"     onclick="switchTab('verify')">🔍 ตรวจสอบบิล</div>
+      <div class="tab-sub" data-tab="accounting" onclick="switchTab('accounting')">📒 ส่งบัญชี</div>
+    </div>
+  </div>
+
+  <div class="tab" data-tab="anomalies" onclick="switchTab('anomalies')">⚠️ ผิดปกติ</div>
+  <div class="tab" data-tab="documents" onclick="switchTab('documents')">📋 ภาษี/ประกัน</div>
+
+  <!-- ข้อมูล > รถ / คนขับ -->
+  <div class="tab-group" data-group="data">
+    <div class="tab tab-parent" onclick="switchTab('trucks')">📁 ข้อมูล <span class="caret">▾</span></div>
+    <div class="tab-submenu">
+      <div class="tab-sub" data-tab="trucks"  onclick="switchTab('trucks')">🚛 รถ</div>
+      <div class="tab-sub" data-tab="drivers" onclick="switchTab('drivers')">👤 คนขับ</div>
+    </div>
+  </div>
+
+  <!-- ตั้งค่า > ผู้ใช้ระบบ / บริษัท / ตั้งค่าทั่วไป -->
+  <div class="tab-group" data-group="settings">
+    <div class="tab tab-parent" onclick="switchTab('adminusers')">⚙️ ตั้งค่า <span class="caret">▾</span></div>
+    <div class="tab-submenu">
+      <div class="tab-sub" data-tab="adminusers" onclick="switchTab('adminusers')">🔑 ผู้ใช้ระบบ</div>
+      <div class="tab-sub" data-tab="companies"  onclick="switchTab('companies')">🏢 บริษัท</div>
+      <div class="tab-sub" data-tab="settings"   onclick="switchTab('settings')">⚙️ ตั้งค่าทั่วไป</div>
+    </div>
+  </div>
 </div>
 
 <div class="main">
@@ -1229,12 +1269,50 @@ const TAB_LOADERS = {
   settings:    loadSettings,
 };
 
+// ── Mapping submenu tab → parent group ──
+const TAB_GROUP_MAP = {
+  maintenance: "maintenance",
+  maintsched:  "maintenance",
+  verify:      "verify",
+  accounting:  "verify",
+  trucks:      "data",
+  drivers:     "data",
+  adminusers:  "settings",
+  companies:   "settings",
+  settings:    "settings",
+};
+
 function switchTab(tab) {
-  document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+  // Clear all active states
+  document.querySelectorAll(".tab").forEach(t => t.classList.remove("active", "parent-active"));
+  document.querySelectorAll(".tab-sub").forEach(s => s.classList.remove("active"));
   document.querySelectorAll(".section").forEach(s => s.classList.remove("active"));
-  const idx = Object.keys(TAB_LOADERS).indexOf(tab);
-  document.querySelectorAll(".tab")[idx].classList.add("active");
-  document.getElementById(`sec-${tab}`).classList.add("active");
+
+  // Activate the section
+  const sec = document.getElementById(`sec-${tab}`);
+  if (sec) sec.classList.add("active");
+
+  // Activate the tab — สำหรับ top-level (มี data-tab ตรง)
+  const directTab = document.querySelector(`.tab[data-tab="${tab}"]:not(.tab-sub)`);
+  if (directTab) {
+    directTab.classList.add("active");
+  } else {
+    // submenu — highlight parent group + sub item
+    const groupKey = TAB_GROUP_MAP[tab];
+    if (groupKey) {
+      const group = document.querySelector(`.tab-group[data-group="${groupKey}"]`);
+      if (group) {
+        group.querySelector(".tab-parent").classList.add("parent-active");
+        const sub = group.querySelector(`.tab-sub[data-tab="${tab}"]`);
+        if (sub) sub.classList.add("active");
+      }
+    }
+  }
+
+  // ปิด dropdown ที่ค้างไว้
+  document.querySelectorAll(".tab-group.open").forEach(g => g.classList.remove("open"));
+
+  // Run loader
   if (TAB_LOADERS[tab]) TAB_LOADERS[tab]();
 }
 
@@ -4587,13 +4665,23 @@ function applyRoleVisibility() {
   const isSuper = currentUserRole === "superadmin";
   const visibleTabs = new Set(getVisibleTabs());
 
-  document.querySelectorAll('.tab').forEach(t => {
-    const onclick = t.getAttribute("onclick") || "";
-    const m = onclick.match(/switchTab\(['"]([^'"]+)['"]\)/);
-    if (m) {
-      const tabKey = m[1];
-      t.style.display = visibleTabs.has(tabKey) ? "" : "none";
-    }
+  // 1) ซ่อน top-level tab ที่มี data-tab (ไม่ใช่ tab-parent)
+  document.querySelectorAll('.tab[data-tab]:not(.tab-parent)').forEach(t => {
+    const key = t.getAttribute("data-tab");
+    t.style.display = visibleTabs.has(key) ? "" : "none";
+  });
+
+  // 2) ซ่อน submenu items + ซ่อน parent ถ้า submenu ทั้งหมดถูกซ่อน
+  document.querySelectorAll('.tab-group').forEach(group => {
+    let visibleCount = 0;
+    group.querySelectorAll('.tab-sub[data-tab]').forEach(s => {
+      const key = s.getAttribute("data-tab");
+      const show = visibleTabs.has(key);
+      s.style.display = show ? "" : "none";
+      if (show) visibleCount++;
+    });
+    // ซ่อน parent ถ้าไม่มี submenu visible เลย
+    group.style.display = visibleCount > 0 ? "" : "none";
   });
 
   // ⭐ Toggle body class — CSS ซ่อน .super-only ทันที (รวมถึง DOM ที่ render ใหม่ภายหลัง)
