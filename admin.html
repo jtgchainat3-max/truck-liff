@@ -565,6 +565,7 @@ body.role-non-super .super-only { display: none !important; }
         <select id="ed_type" onchange="onEditTypeChange()">
           <option value="van">🚐 VAN — มีรถประจำ</option>
           <option value="transport">🚛 ขนส่ง — เลือกได้ทุกคัน</option>
+          <option value="admin">👤 แอดมิน — กรอกย้อนหลังได้</option>
         </select>
       </div>
       <div class="field">
@@ -624,6 +625,7 @@ body.role-non-super .super-only { display: none !important; }
       <select id="newDriverType">
         <option value="van">VAN (เงินสด)</option>
         <option value="transport">ขนส่ง</option>
+        <option value="admin">แอดมิน (กรอกย้อนหลังได้)</option>
       </select>
     </div>
     <div class="field">
@@ -1314,6 +1316,7 @@ async function loadDaily() {
                      || tripDriver?.route_code
                      || "";
 
+      const unit = mileageUnit(t.truck_type);
       const fmtCell = (log) => {
         if (!log) return `<span class="badge b-miss">ยังไม่ส่ง</span>`;
         const route = log.route_override ? ` <span class="badge b-warn">🛣 ${esc(log.route_override)}</span>` : "";
@@ -1321,7 +1324,7 @@ async function loadDaily() {
         const delBtn  = `<button class="btn btn-sm btn-red super-only" style="padding:2px 8px;font-size:11px;margin-left:2px" onclick="deleteMileageLog(${log.id})" title="ลบไมล์นี้ (เฉพาะ superadmin)">🗑</button>`;
         return `
           <div style="line-height:1.6">
-            <b style="font-size:15px">${fmtNum(log.mileage)}</b> กม.${editBtn}${delBtn}${log.anomaly_flag ? ` <span class="badge b-crit" title="${esc(log.anomaly_note)}">⚠️</span>` : ""}${route}<br>
+            <b style="font-size:15px">${fmtNum(log.mileage)}</b> ${unit}${editBtn}${delBtn}${log.anomaly_flag ? ` <span class="badge b-crit" title="${esc(log.anomaly_note)}">⚠️</span>` : ""}${route}<br>
             <small style="color:#666">🕐 ${fmtTime(log.created_at)}</small>
             ${log.latitude ? ` · <a href="https://maps.google.com/?q=${log.latitude},${log.longitude}" target="_blank" style="font-size:11px">📍 GPS</a>` : ""}
             ${log.image_path ? ` · <a href="${log.image_path}" target="_blank" style="font-size:11px">📷 ดูรูป</a>` : ` · <small style='color:#aaa'>ไม่มีรูป</small>`}
@@ -1342,7 +1345,7 @@ async function loadDaily() {
         <td><b style="color:#1a73e8">เที่ยว ${idx + 1}</b></td>
         <td>${fmtCell(m)}</td>
         <td>${fmtCell(e)}</td>
-        <td>${km !== null ? `<b>${fmtNum(km)}</b><br><small>กม.</small>` : "<small style='color:#aaa'>-</small>"}</td>
+        <td>${km !== null ? `<b>${fmtNum(km)}</b><br><small>${unit}</small>` : "<small style='color:#aaa'>-</small>"}</td>
       </tr>`;
     });
   }
@@ -1410,13 +1413,14 @@ function showFuelDetail(id) {
     ? `<a href="https://www.google.com/maps?q=${r.latitude},${r.longitude}" target="_blank" style="color:#1a73e8">📍 ดูบนแผนที่</a>`
     : null;
 
+  const fdUnit = mileageUnit(r.trucks?.truck_type);
   document.getElementById("fd_content").innerHTML = `
     ${photoBox("📷 รูปเลขไมล์", r.image_path)}
     ${photoBox("🧾 รูปบิลน้ำมัน", r.bill_image_path)}
     <div style="background:#f9f9f9;border-radius:8px;padding:12px 14px;margin-top:12px">
       <div style="font-size:12px;color:#1a73e8;font-weight:700;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">💰 ข้อมูลการเติม</div>
       ${row("วันที่/เวลา", `${thaiDateLong(r.log_date)} <small style="color:#888">${fmtTime(r.created_at)}</small>`)}
-      ${row("เลขไมล์", r.mileage ? `<b>${fmtNum(r.mileage)}</b> กม.` : null)}
+      ${row("เลขไมล์", r.mileage ? `<b>${fmtNum(r.mileage)}</b> ${fdUnit}` : null)}
       ${row("จำนวนลิตร", r.liters ? `<b>${fmtNum(r.liters)}</b> ลิตร` : null)}
       ${row("ราคา/ลิตร", r.price_per_liter ? `฿${fmtNum(r.price_per_liter)}` : null)}
       ${(() => {
@@ -1433,8 +1437,8 @@ function showFuelDetail(id) {
               ${mismatch ? `<br><b>⚠️ ต่างกัน ฿${fmtNum(diff)} — ตรวจสอบกับบิลจริง!</b>` : ' ✓'}
             </div>` : null);
       })()}
-      ${row("วิ่งได้จากครั้งก่อน", r.km_since_last_fuel ? `<b style="color:#1a73e8">${fmtNum(r.km_since_last_fuel)}</b> กม.` : null)}
-      ${row("กม./ลิตร", r.km_per_liter ? `${r.km_per_liter} กม./ล.${r.anomaly_flag ? ` <span class="badge b-crit">⚠️ ${esc(r.anomaly_note)}</span>` : ""}` : null)}
+      ${row("วิ่งได้จากครั้งก่อน", r.km_since_last_fuel ? `<b style="color:#1a73e8">${fmtNum(r.km_since_last_fuel)}</b> ${fdUnit}` : null)}
+      ${row(`${fdUnit}/ลิตร`, r.km_per_liter ? `${r.km_per_liter} ${fdUnit}/ล.${r.anomaly_flag ? ` <span class="badge b-crit">⚠️ ${esc(r.anomaly_note)}</span>` : ""}` : null)}
       ${row("ปั๊ม", esc(r.station_name))}
       ${row("ตำแหน่ง", gpsLink)}
     </div>
@@ -1478,8 +1482,10 @@ async function loadFuel() {
       <tr><th>#ID</th><th>วันที่/เวลา</th><th>ทะเบียน</th><th>โกดัง</th><th>คนขับ</th><th>ไมล์</th><th>วิ่งได้</th><th>ลิตร</th><th>ราคา/ล.</th><th style="background:#e3f2fd">💰 ยอดที่กรอก</th><th>คำนวณ</th><th>กม./ล.</th><th>ปั๊ม</th><th>GPS</th><th></th></tr>`;
 
   for (const r of data) {
+    const unit = mileageUnit(r.trucks?.truck_type);
+    const isForklift = r.trucks?.truck_type === "forklift";
     const kmSince = r.km_since_last_fuel
-      ? `<b style="color:#1a73e8">${fmtNum(r.km_since_last_fuel)}</b> กม.<br><small style="color:#888">จากครั้งก่อน</small>`
+      ? `<b style="color:#1a73e8">${fmtNum(r.km_since_last_fuel)}</b> ${unit}<br><small style="color:#888">จากครั้งก่อน</small>`
       : `<span style="color:#aaa">—</span>`;
 
     html += `<tr style="cursor:pointer" onclick="showFuelDetail(${r.id})">
@@ -1494,7 +1500,7 @@ async function loadFuel() {
       <td>${fmtNum(r.price_per_liter)} ฿</td>
       <td style="background:#e3f2fd"><b style="font-size:15px;color:#0d47a1">฿${fmtNum(Math.round(r.total_cost_entered ?? r.total_cost ?? 0))}</b>${r.total_cost_entered ? "" : "<br><small style='color:#aaa;font-size:10px'>(เก่า/คำนวณ)</small>"}</td>
       <td><small style="color:#666">฿${r.liters && r.price_per_liter ? fmtNum(Math.round(r.liters * r.price_per_liter)) : "-"}</small></td>
-      <td>${r.km_per_liter ? (Math.round(r.km_per_liter * 100) / 100) + " กม./ล." : "-"}${r.anomaly_flag ? ` <span class="badge b-crit" title="${esc(r.anomaly_note)}">⚠️</span>` : ""}</td>
+      <td>${r.km_per_liter ? (Math.round(r.km_per_liter * 100) / 100) + ` ${unit}/ล.` : "-"}${r.anomaly_flag ? ` <span class="badge b-crit" title="${esc(r.anomaly_note)}">⚠️</span>` : ""}</td>
       <td>${esc(r.station_name) || "-"}</td>
       <td>${r.latitude && r.longitude ? `<a onclick="event.stopPropagation()" href="https://maps.google.com/?q=${r.latitude},${r.longitude}" target="_blank" style="font-size:13px">📍</a>` : "<small style='color:#aaa'>-</small>"}</td>
       <td onclick="event.stopPropagation()" style="text-align:center;white-space:nowrap" class="super-only">
@@ -1613,6 +1619,33 @@ const TRUCK_TYPE_LABELS = {
   other:"📦 อื่นๆ"
 };
 function truckTypeLabel(t) { return TRUCK_TYPE_LABELS[t] || esc(t) || "-"; }
+
+// ⭐ Forklift ใช้หน่วยชั่วโมง (ชม.) ไม่ใช่กิโลเมตร (กม.)
+function mileageUnit(truckType) {
+  return truckType === "forklift" ? "ชม." : "กม.";
+}
+// หาประเภทรถจาก truck_id
+function truckTypeOf(truckId) {
+  const t = allTrucks.find(x => x.id === truckId || x.id === Number(truckId));
+  return t?.truck_type || null;
+}
+function mileageUnitByTruckId(truckId) {
+  return mileageUnit(truckTypeOf(truckId));
+}
+
+// ⭐ driver_type → label + badge class
+const DRIVER_TYPE_INFO = {
+  van:       { label: "🚐 VAN",      badge: "b-sent" },
+  transport: { label: "🚛 ขนส่ง",    badge: "b-warn" },
+  admin:     { label: "👤 แอดมิน",   badge: "b-ok"   },
+};
+function driverTypeBadge(t) {
+  const info = DRIVER_TYPE_INFO[t] || { label: esc(t) || "-", badge: "b-warn" };
+  return `<span class="badge ${info.badge}">${info.label}</span>`;
+}
+function driverTypeText(t) {
+  return (DRIVER_TYPE_INFO[t]?.label) || esc(t) || "-";
+}
 
 function populateMaintTruckFilter() {
   const sel = document.getElementById("maintTruckFilter");
@@ -1808,7 +1841,7 @@ async function loadVerifyQueue() {
           <!-- Info row — เพิ่มรายละเอียดสำคัญ -->
           <div style="background:#f5f5f5;border-radius:6px;padding:10px 12px;font-size:13px;color:#444;margin-bottom:10px;line-height:1.7">
             ${isFuel
-              ? `🛢 <b>${fmtNum(Math.round((r.liters || 0) * 100) / 100)}</b> ลิตร × ฿${fmtNum(r.price_per_liter)} = <b>฿${fmtNum(Math.round((r.liters || 0) * (r.price_per_liter || 0)))}</b> (คำนวณ) ${r.km_per_liter ? `· ${Math.round(r.km_per_liter * 100) / 100} กม./ล.` : ""} · ⛽ ปั๊ม: <b>${esc(r.station_name) || "-"}</b>`
+              ? `🛢 <b>${fmtNum(Math.round((r.liters || 0) * 100) / 100)}</b> ลิตร × ฿${fmtNum(r.price_per_liter)} = <b>฿${fmtNum(Math.round((r.liters || 0) * (r.price_per_liter || 0)))}</b> (คำนวณ) ${r.km_per_liter ? `· ${Math.round(r.km_per_liter * 100) / 100} ${mileageUnit(r.trucks?.truck_type)}/ล.` : ""} · ⛽ ปั๊ม: <b>${esc(r.station_name) || "-"}</b>`
               : `🔧 <b>${esc(MAINT_LABELS[r.maintenance_type] || r.maintenance_type)}</b> · ร้าน: <b>${esc(r.shop_name) || "-"}</b> ${r.notes ? `<br>📝 ${esc(r.notes)}` : ""}`
             }
           </div>
@@ -2076,6 +2109,7 @@ function renderMaintSchedule() {
             </tr>
           </thead>
           <tbody>`;
+    const unit = mileageUnit(t.truck_type);
     for (const b of t.by_type) {
       const statusIcon = b.status === "overdue" ? "🔴"
                        : b.status === "alert"   ? "🟡"
@@ -2084,15 +2118,15 @@ function renderMaintSchedule() {
       const statusBg = b.status === "overdue" ? "background:#ffebee"
                      : b.status === "alert"   ? "background:#fff3e0"
                      : "";
-      const intervalStr = b.interval_km ? `${fmtNum(b.interval_km)} กม.` : (b.interval_months ? `${b.interval_months} เดือน` : "—");
+      const intervalStr = b.interval_km ? `${fmtNum(b.interval_km)} ${unit}` : (b.interval_months ? `${b.interval_months} เดือน` : "—");
       const lastStr = b.last_mileage
-        ? `${fmtNum(b.last_mileage)} กม.<br><small style="color:#888">${b.last_date || ""}</small>`
+        ? `${fmtNum(b.last_mileage)} ${unit}<br><small style="color:#888">${b.last_date || ""}</small>`
         : `<span style="color:#aaa">ไม่เคยซ่อม</span>`;
       const dueStr = b.next_due_km
-        ? `${fmtNum(b.next_due_km)} กม.${b.next_due_date ? `<br><small style="color:#888">${b.next_due_date}</small>` : ""}`
+        ? `${fmtNum(b.next_due_km)} ${unit}${b.next_due_date ? `<br><small style="color:#888">${b.next_due_date}</small>` : ""}`
         : (b.next_due_date ? b.next_due_date : `<span style="color:#aaa">—</span>`);
       const remainStr = b.due_in_km != null
-        ? (b.due_in_km < 0 ? `<b style="color:#c62828">เลย ${fmtNum(-b.due_in_km)} กม.</b>` : `<b>${fmtNum(b.due_in_km)} กม.</b>`)
+        ? (b.due_in_km < 0 ? `<b style="color:#c62828">เลย ${fmtNum(-b.due_in_km)} ${unit}</b>` : `<b>${fmtNum(b.due_in_km)} ${unit}</b>`)
         : (b.due_in_days != null ? `<b>${b.due_in_days} วัน</b>` : `<span style="color:#aaa">—</span>`);
 
       html += `<tr style="${statusBg}">
@@ -2199,15 +2233,16 @@ async function loadMaintenance() {
       <tr><th>วันที่</th><th>ทะเบียน</th><th>ประเภท</th><th>ไมล์</th><th>ค่าใช้จ่าย</th><th>ร้าน</th><th>ครั้งถัดไป</th><th>ตรวจแล้ว</th><th>รูป</th></tr>`;
 
   for (const r of data) {
+    const unit = mileageUnit(r.trucks?.truck_type);
     html += `<tr style="cursor:pointer" onclick="showMaintDetail(${r.id})">
       <td>${thaiDateShort(r.maintenance_date)}<br><small style="color:#888">${fmtTime(r.created_at)}</small></td>
       <td><b>${esc(r.trucks?.plate_number) || "-"}</b><br><small style="color:#aaa">${esc(r.trucks?.warehouse) || ""}</small></td>
       <td><span class="badge b-blue">${esc(MAINT_LABELS[r.maintenance_type] || r.maintenance_type)}</span>
         ${r.tire_positions?.length ? `<br><small>${esc(r.tire_positions.join(","))}</small>` : ""}</td>
-      <td>${fmtNum(r.mileage_at_service)}</td>
+      <td>${fmtNum(r.mileage_at_service)} ${unit}</td>
       <td>${r.cost ? `<b>฿${fmtNum(r.cost)}</b>` : "-"}</td>
       <td>${esc(r.shop_name) || "-"}</td>
-      <td>${r.next_service_mileage ? `${fmtNum(r.next_service_mileage)} กม.` : "-"}${r.next_service_date ? `<br>${thaiDateShort(r.next_service_date)}` : ""}</td>
+      <td>${r.next_service_mileage ? `${fmtNum(r.next_service_mileage)} ${unit}` : "-"}${r.next_service_date ? `<br>${thaiDateShort(r.next_service_date)}` : ""}</td>
       <td>${r.verified_by
         ? `<span class="badge ${r.mileage_match === false ? 'b-exp' : 'b-ok'}">${r.mileage_match === false ? '❌' : '✅'} ${esc(r.verified_by)}</span>`
         : `<span class="badge b-warn">⏳ รอตรวจ</span>`}</td>
@@ -2253,6 +2288,7 @@ function showMaintDetail(id) {
       : `<span class="badge b-sent">ตรวจแล้ว</span>`) + ` <small style="color:#666">โดย ${esc(r.verified_by)}</small>`
     : `<span class="badge b-warn">⏳ ยังไม่ตรวจ</span>`;
 
+  const mdUnit = mileageUnit(r.trucks?.truck_type);
   document.getElementById("fd_content").innerHTML = `
     <div style="margin-bottom:12px">${verifyTag}</div>
     ${photoBox("📷 รูปเลขไมล์", r.mileage_image_path)}
@@ -2261,10 +2297,10 @@ function showMaintDetail(id) {
       <div style="font-size:12px;color:#1a73e8;font-weight:700;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">🔧 ข้อมูลการซ่อม</div>
       ${row("วันที่/เวลา", `${thaiDateLong(r.maintenance_date)} <small style="color:#888">${fmtTime(r.created_at)}</small>`)}
       ${row("ประเภท", esc(MAINT_LABELS[r.maintenance_type] || r.maintenance_type))}
-      ${row("เลขไมล์", r.mileage_at_service ? `<b>${fmtNum(r.mileage_at_service)}</b> กม.` : null)}
+      ${row("เลขไมล์", r.mileage_at_service ? `<b>${fmtNum(r.mileage_at_service)}</b> ${mdUnit}` : null)}
       ${row("ค่าใช้จ่าย", r.cost ? `<b style="color:#e53935;font-size:18px">฿${fmtNum(r.cost)}</b>` : null)}
       ${row("ร้าน/อู่", esc(r.shop_name))}
-      ${row("ครั้งถัดไป", r.next_service_mileage ? `${fmtNum(r.next_service_mileage)} กม.` : null)}
+      ${row("ครั้งถัดไป", r.next_service_mileage ? `${fmtNum(r.next_service_mileage)} ${mdUnit}` : null)}
       ${row("ตำแหน่งล้อ", r.tire_positions?.length ? esc(r.tire_positions.join(", ")) : null)}
       ${row("หมายเหตุ", r.notes ? `<div style="white-space:pre-line">${esc(r.notes)}</div>` : null)}
       ${row("ตำแหน่ง", gpsLink)}
@@ -2535,7 +2571,7 @@ async function loadDrivers() {
         <a onclick="showDriverDetail(${d.id})" style="color:#1a73e8;cursor:pointer;text-decoration:underline;font-weight:700">${esc(d.name)}</a>
         <br><small style="font-family:monospace;font-size:10px;color:#888">${esc(lineId.slice(0, 10))}${lineId.length > 10 ? "..." : ""}${lineId !== "-" ? ` <button data-lineid="${esc(lineId)}" onclick="copyLineId(this)" style="border:none;background:none;cursor:pointer;font-size:11px">📋</button>` : ""}</small>
       </td>
-      <td><span class="badge ${d.driver_type === 'van' ? 'b-sent' : 'b-warn'}">${d.driver_type === 'van' ? 'VAN' : 'ขนส่ง'}</span></td>
+      <td>${driverTypeBadge(d.driver_type)}</td>
       <td>${esc(d.route_code) || "-"}</td>
       <td>${d.trucks?.plate_number ? esc(d.trucks.plate_number) : "<span style='color:#aaa'>-</span>"}</td>
       <td>${esc(d.warehouse || d.trucks?.warehouse) || "-"}</td>
@@ -2645,7 +2681,7 @@ function showDriverDetail(id) {
     <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
       <span class="badge ${d.is_active ? 'b-ok' : 'b-exp'}" style="font-size:13px">${d.is_active ? '✅ ใช้งานอยู่' : '🚫 ปิดอยู่'}</span>
       ${d.is_owner ? `<span class="badge b-warn" style="font-size:13px;background:#fff8e1;color:#e65100;border:1px solid #ffb300">👑 Owner — เลือกได้ทุกคัน</span>` : ""}
-      <span class="badge ${d.driver_type === 'van' ? 'b-sent' : 'b-warn'}" style="font-size:13px">${d.driver_type === 'van' ? '🚐 VAN' : '🚛 ขนส่ง'}</span>
+      ${driverTypeBadge(d.driver_type)}
       ${d.warehouse ? `<span class="badge b-blue" style="font-size:13px">📍 ${esc(d.warehouse)}</span>` : ""}
       ${d.route_code ? `<span class="badge b-blue" style="font-size:13px">🛣 ${esc(d.route_code)}</span>` : ""}
     </div>
@@ -2678,7 +2714,9 @@ function showDriverDetail(id) {
     <!-- ── การทำงาน ── -->
     <div style="background:#f9f9f9;border-radius:8px;padding:12px 14px;margin-bottom:12px">
       <div style="font-size:12px;color:#1a73e8;font-weight:700;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">🚛 การทำงาน</div>
-      ${row("ประเภท", d.driver_type === "van" ? "VAN — มีรถประจำ" : "ขนส่ง — เลือกรถได้ทุกวัน")}
+      ${row("ประเภท", d.driver_type === "van" ? "VAN — มีรถประจำ"
+                       : d.driver_type === "admin" ? "แอดมิน — กรอกย้อนหลังได้ (เลือกรถ + วันที่ได้)"
+                       : "ขนส่ง — เลือกรถได้ทุกวัน")}
       ${row("โกดัง", esc(d.warehouse || d.trucks?.warehouse))}
       ${row("สายที่ประจำ", esc(d.route_code))}
       ${row("รถประจำ", d.trucks?.plate_number ? `<b>${esc(d.trucks.plate_number)}</b>` : null)}
@@ -2735,8 +2773,9 @@ function openEditDriver() {
 }
 
 function onEditTypeChange() {
-  const isVan = document.getElementById("ed_type").value === "van";
-  document.getElementById("ed_vanFields").style.display = isVan ? "" : "none";
+  const t = document.getElementById("ed_type").value;
+  // route + รถประจำ แสดงเฉพาะ VAN
+  document.getElementById("ed_vanFields").style.display = t === "van" ? "" : "none";
 }
 
 async function submitEditDriver() {
@@ -3863,7 +3902,7 @@ async function openEditTruck(id) {
   reservedSel.innerHTML = `<option value="">— ไม่ผูก (ใครเลือกก็ได้) —</option>` +
     (Array.isArray(drivers) ? drivers : [])
       .filter(d => d.is_active !== false)
-      .map(d => `<option value="${d.id}">${esc(d.name)}${d.line_user_id ? ` 🟢` : ``}${d.driver_type ? ` (${d.driver_type === "transport" ? "ขนส่ง" : "VAN"})` : ""}</option>`)
+      .map(d => `<option value="${d.id}">${esc(d.name)}${d.line_user_id ? ` 🟢` : ``}${d.driver_type ? ` (${d.driver_type === "transport" ? "ขนส่ง" : d.driver_type === "admin" ? "แอดมิน" : "VAN"})` : ""}</option>`)
       .join("");
 
   document.getElementById("et_id").value            = truck.id;
