@@ -2352,11 +2352,11 @@ function renderMaintSchedule() {
           <b style="font-size:16px">${esc(t.plate_number)}</b>
           <span style="opacity:.85;font-size:13px"> · ${esc(t.warehouse)} · ${truckTypeLabel(t.truck_type)}</span>
         </div>
-        <div>
-          ${overdueBadge} ${alertBadge}
-          <span style="font-size:12px;opacity:.8;margin-left:8px">📊 ไมล์ล่าสุด: <b>${t.current_mileage ? fmtNum(t.current_mileage) : "—"}</b></span>
+        <div style="background:rgba(255,255,255,.2);padding:6px 12px;border-radius:8px">
+          📊 <b style="font-size:15px">${t.current_mileage ? fmtNum(t.current_mileage) : "—"}</b> <span style="font-size:12px;opacity:.85">${mileageUnit(t.truck_type)} (ล่าสุดในระบบ)</span>
         </div>
       </div>
+      ${overdueBadge || alertBadge ? `<div style="padding:8px 14px;background:#fafafa;border-bottom:1px solid #e0e0e0">${overdueBadge} ${alertBadge}</div>` : ""}
       <div style="padding:0">
         <table style="width:100%;border-collapse:collapse;font-size:13px">
           <thead style="background:#f5f5f5">
