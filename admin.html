@@ -5207,4 +5207,16 @@ function doLogout() {
   location.reload();
 }
 
-// ── Check saved session ─────────────────────────────────────────────────�
+// ── Check saved session ───────────────────────────────────────────────────────
+const savedUser = sessionStorage.getItem("adminUser");
+const savedPass = sessionStorage.getItem("adminPass");
+if (savedUser && savedPass) {
+  AUTH_HEADER = "Basic " + btoa(savedUser + ":" + savedPass);
+  document.getElementById("loginScreen").style.display = "none";
+  document.getElementById("mainContent").style.display = "block";
+  startApp();
+}
+</script>
+</div><!-- /mainContent -->
+</body>
+</html>
