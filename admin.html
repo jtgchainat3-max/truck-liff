@@ -861,6 +861,7 @@ body.role-non-super .super-only { display: none !important; }
       <button class="btn btn-primary" onclick="testReminder('morning')">ทดสอบเตือนไมล์เช้า</button>
       <button class="btn btn-primary" onclick="testReminder('evening')">ทดสอบเตือนไมล์เย็น</button>
       <button class="btn btn-orange" onclick="testReminder('doc')">ทดสอบเตือนเอกสาร</button>
+      <button class="btn btn-success" onclick="testReminder('maintenance')">ทดสอบเตือนแผนซ่อม</button>
     </div>
     <div id="testMsg" style="margin-top:10px;font-size:13px;color:#555"></div>
   </div>
@@ -1046,10 +1047,6 @@ body.role-non-super .super-only { display: none !important; }
       <div class="form-group"><label>ค่าใช้จ่าย (฿)</label><input id="am_cost" type="number" placeholder="0"></div>
       <div class="form-group"><label>ร้านที่ซ่อม</label><input id="am_shop" placeholder="ชื่อร้าน/อู่"></div>
     </div>
-    <div class="form-row">
-      <div class="form-group"><label>ซ่อมครั้งถัดไปที่ไมล์</label><input id="am_nextmile" type="number" placeholder="กม."></div>
-      <div class="form-group"><label>วันซ่อมครั้งถัดไป</label><input id="am_nextdate" type="date"></div>
-    </div>
     <div class="form-group"><label>หมายเหตุ</label><textarea id="am_notes"></textarea></div>
     <div class="modal-footer">
       <button class="btn btn-gray" onclick="closeModal('addMaintModal')">ยกเลิก</button>
@@ -1074,14 +1071,15 @@ body.role-non-super .super-only { display: none !important; }
   </div>
 </div>
 
-<!-- Add Notification Target Modal -->
+<!-- Add/Edit Notification Target Modal -->
 <div class="modal-bg" id="addNotifModal">
   <div class="modal">
-    <h3>+ เพิ่มกลุ่ม LINE / แอดมิน</h3>
-    <div class="alert alert-info">💡 ทะเบียน LINE Group ID: เพิ่ม OA เข้ากลุ่ม แล้วดู Group ID จาก webhook log</div>
+    <h3 id="notifModalTitle">+ เพิ่มกลุ่ม LINE / แอดมิน</h3>
+    <input type="hidden" id="nt_id">
+    <div class="alert alert-info">💡 LINE Group ID: เพิ่ม OA เข้ากลุ่ม แล้วดู Group ID จาก webhook log</div>
     <div class="form-row">
       <div class="form-group"><label>ประเภท</label>
-        <select id="nt_type">
+        <select id="nt_type" onchange="onNotifTypeChange()">
           <option value="group">กลุ่มไลน์</option>
           <option value="admin">แอดมิน (LINE User)</option>
         </select>
@@ -1094,11 +1092,39 @@ body.role-non-super .super-only { display: none !important; }
         </select>
       </div>
     </div>
-    <div class="form-group"><label>ชื่อ (สำหรับอ้างอิง)</label><input id="nt_name" placeholder="เช่น กลุ่มโกดังชัยนาท"></div>
+    <div class="form-group"><label>ชื่อ (สำหรับอ้างอิง) *</label><input id="nt_name" placeholder="เช่น กลุ่มแอดมิน, กลุ่มคนขับชัยนาท"></div>
     <div class="form-group"><label>LINE Group ID / User ID *</label><input id="nt_lineid" placeholder="Cxxxxxxx หรือ Uxxxxxxx"></div>
+
+    <div class="form-group">
+      <label style="margin-bottom:8px;display:block">📬 รับแจ้งเตือนอะไรบ้าง</label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <label style="display:flex;align-items:center;gap:6px;padding:6px;background:#f5f5f5;border-radius:4px;cursor:pointer">
+          <input type="checkbox" id="nt_notify_daily"> 🚛 ไมล์เช้า/เย็น
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;padding:6px;background:#f5f5f5;border-radius:4px;cursor:pointer">
+          <input type="checkbox" id="nt_notify_maintenance"> 🔧 แผนซ่อม
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;padding:6px;background:#f5f5f5;border-radius:4px;cursor:pointer">
+          <input type="checkbox" id="nt_notify_doc"> 📋 เอกสาร (ภาษี/ประกัน)
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;padding:6px;background:#f5f5f5;border-radius:4px;cursor:pointer">
+          <input type="checkbox" id="nt_notify_anomaly"> ⚠️ ผิดปกติ
+        </label>
+      </div>
+      <div style="margin-top:6px;font-size:12px;color:#666">
+        💡 ตัวอย่าง: <b>กลุ่มแอดมิน</b> = ติ๊กเอกสาร + แผนซ่อม + ผิดปกติ &nbsp;|&nbsp; <b>กลุ่มคนขับ</b> = ติ๊กไมล์ + แผนซ่อม
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+        <input type="checkbox" id="nt_is_active" checked> เปิดใช้งาน
+      </label>
+    </div>
+
     <div class="modal-footer">
       <button class="btn btn-gray" onclick="closeModal('addNotifModal')">ยกเลิก</button>
-      <button class="btn btn-primary" onclick="doAddNotif()">บันทึก</button>
+      <button class="btn btn-primary" onclick="doSaveNotif()">บันทึก</button>
     </div>
     <div id="addNotifMsg" style="margin-top:8px;font-size:13px;text-align:center"></div>
   </div>
@@ -4416,31 +4442,100 @@ async function changeRegCode() {
   }
 }
 
+// เก็บ targets ทั้งหมดไว้ใช้ตอน edit (เพื่อไม่ต้อง fetch ซ้ำ)
+let _notifTargetsCache = [];
+
 async function loadNotifTargets() {
   const el  = document.getElementById("notifTargets");
   const data = await api("notification-targets");
   if (!data) return;
+  _notifTargetsCache = data;
 
   if (data.length === 0) {
     el.innerHTML = `<p style="color:#aaa">ยังไม่มีกลุ่มหรือแอดมิน กด + เพิ่มได้เลย</p>`;
     return;
   }
 
+  const isSuper = (currentUserRole === "superadmin");
+
   let html = `<div class="tbl-wrap"><table>
-    <tr><th>ประเภท</th><th>ชื่อ</th><th>LINE ID</th><th>โกดัง</th><th>แจ้งรายวัน</th><th>แจ้งเอกสาร</th><th>แจ้งผิดปกติ</th></tr>`;
+    <tr>
+      <th>ประเภท</th><th>ชื่อ</th><th>LINE ID</th><th>โกดัง</th>
+      <th title="แจ้งไมล์เช้า/เย็น">🚛 ไมล์</th>
+      <th title="แจ้งแผนซ่อม">🔧 ซ่อม</th>
+      <th title="แจ้งเอกสาร (ภาษี/ประกัน)">📋 เอกสาร</th>
+      <th title="แจ้งความผิดปกติ">⚠️ ผิดปกติ</th>
+      <th>สถานะ</th>
+      <th>จัดการ</th>
+    </tr>`;
   for (const t of data) {
-    html += `<tr>
+    const rowStyle = t.is_active ? "" : "opacity:0.5";
+    html += `<tr style="${rowStyle}">
       <td><span class="badge ${t.target_type === 'group' ? 'b-blue' : 'b-ok'}">${t.target_type === 'group' ? 'กลุ่ม' : 'แอดมิน'}</span></td>
       <td>${esc(t.target_name)}</td>
       <td><small style="font-family:monospace">${esc(t.line_id)}</small></td>
       <td>${esc(t.warehouse) || "ทุกโกดัง"}</td>
-      <td>${t.notify_daily ? "✅" : "—"}</td>
-      <td>${t.notify_doc ? "✅" : "—"}</td>
-      <td>${t.notify_anomaly ? "✅" : "—"}</td>
+      <td style="text-align:center">${t.notify_daily ? "✅" : "—"}</td>
+      <td style="text-align:center">${t.notify_maintenance ? "✅" : "—"}</td>
+      <td style="text-align:center">${t.notify_doc ? "✅" : "—"}</td>
+      <td style="text-align:center">${t.notify_anomaly ? "✅" : "—"}</td>
+      <td style="text-align:center">${t.is_active ? "🟢" : "⚫"}</td>
+      <td>
+        <button class="btn btn-sm btn-gray" onclick="openEditNotifModal(${t.id})">แก้ไข</button>
+        ${isSuper ? `<button class="btn btn-sm btn-danger super-only" onclick="doDeleteNotif(${t.id}, '${esc(t.target_name)}')">ลบ</button>` : ""}
+      </td>
     </tr>`;
   }
   html += `</table></div>`;
   el.innerHTML = html;
+}
+
+function onNotifTypeChange() {
+  // ถ้าเลือก "แอดมิน" → ปิด LINE User ID hint, ถ้าเลือก "กลุ่ม" → เปิด
+  const type = document.getElementById("nt_type").value;
+  const hintEl = document.getElementById("nt_lineid");
+  if (hintEl) hintEl.placeholder = type === "group" ? "Cxxxxxxx (Group ID)" : "Uxxxxxxx (User ID)";
+}
+
+function _resetNotifForm() {
+  document.getElementById("nt_id").value = "";
+  document.getElementById("nt_type").value = "group";
+  document.getElementById("nt_warehouse").value = "";
+  document.getElementById("nt_name").value = "";
+  document.getElementById("nt_lineid").value = "";
+  document.getElementById("nt_notify_daily").checked = false;
+  document.getElementById("nt_notify_maintenance").checked = false;
+  document.getElementById("nt_notify_doc").checked = false;
+  document.getElementById("nt_notify_anomaly").checked = false;
+  document.getElementById("nt_is_active").checked = true;
+  document.getElementById("addNotifMsg").textContent = "";
+  onNotifTypeChange();
+}
+
+function openEditNotifModal(id) {
+  const t = _notifTargetsCache.find(x => x.id === id);
+  if (!t) return alert("ไม่พบข้อมูล");
+  _resetNotifForm();
+  document.getElementById("notifModalTitle").textContent = "✏️ แก้ไขกลุ่ม LINE / แอดมิน";
+  document.getElementById("nt_id").value = t.id;
+  document.getElementById("nt_type").value = t.target_type || "group";
+  document.getElementById("nt_warehouse").value = t.warehouse || "";
+  document.getElementById("nt_name").value = t.target_name || "";
+  document.getElementById("nt_lineid").value = t.line_id || "";
+  document.getElementById("nt_notify_daily").checked = !!t.notify_daily;
+  document.getElementById("nt_notify_maintenance").checked = !!t.notify_maintenance;
+  document.getElementById("nt_notify_doc").checked = !!t.notify_doc;
+  document.getElementById("nt_notify_anomaly").checked = !!t.notify_anomaly;
+  document.getElementById("nt_is_active").checked = !!t.is_active;
+  onNotifTypeChange();
+  openModal("addNotifModal");
+}
+
+async function doDeleteNotif(id, name) {
+  if (!confirm(`ลบกลุ่ม "${name}" ใช่มั้ย?`)) return;
+  const res = await api(`notification-targets/${id}`, { method: "DELETE" });
+  if (res?.success) loadNotifTargets();
+  else alert(res?.error || "ลบไม่สำเร็จ");
 }
 
 async function loadSystemSettings() {
@@ -4477,7 +4572,20 @@ async function testReminder(type) {
     headers: { "Authorization": AUTH_HEADER, "Content-Type": "application/json" },
     body: JSON.stringify({ type })
   }).then(r => r.json()).catch(e => ({ error: e.message }));
-  el.textContent = res.error ? `❌ ${res.error}` : `✅ ส่งสำเร็จ: missing=${res.missing}, sent=${res.sent}`;
+  if (res.error) {
+    el.textContent = `❌ ${res.error}`;
+    return;
+  }
+  // Format ตาม type
+  if (type === "morning" || type === "evening") {
+    el.textContent = `✅ ส่งสำเร็จ: ขาดส่ง=${res.missing} คัน, ส่ง=${res.sent} ราย`;
+  } else if (type === "doc") {
+    el.textContent = `✅ ส่งสำเร็จ: เอกสารใกล้หมด=${res.doc_warnings} รายการ, ส่งกลุ่ม=${res.sent}`;
+  } else if (type === "maintenance") {
+    el.textContent = `✅ ส่งสำเร็จ: รถที่ต้องเตือน=${res.trucks_with_alerts} คัน, ส่งคนขับ=${res.driver_sent}, ส่งกลุ่มแอดมิน=${res.admin_sent}`;
+  } else {
+    el.textContent = `✅ ส่งสำเร็จ: ${JSON.stringify(res)}`;
+  }
 }
 
 // ════════════════════════════════════════════════════════════
@@ -4889,8 +4997,6 @@ async function doAddMaint() {
     mileage_at_service:   parseInt(document.getElementById("am_mile").value) || null,
     cost:                 parseFloat(document.getElementById("am_cost").value) || null,
     shop_name:            document.getElementById("am_shop").value || null,
-    next_service_mileage: parseInt(document.getElementById("am_nextmile").value) || null,
-    next_service_date:    document.getElementById("am_nextdate").value || null,
     notes:                document.getElementById("am_notes").value || null,
   };
   const res = await api("add-maintenance", { method: "POST", body: JSON.stringify(body) });
@@ -4916,17 +5022,32 @@ async function doEditMileage() {
   else { document.getElementById("editMileageMsg").textContent = res?.error || "เกิดข้อผิดพลาด"; }
 }
 
-function openAddNotifModal() { openModal("addNotifModal"); }
+function openAddNotifModal() {
+  _resetNotifForm();
+  document.getElementById("notifModalTitle").textContent = "+ เพิ่มกลุ่ม LINE / แอดมิน";
+  openModal("addNotifModal");
+}
 
-async function doAddNotif() {
+async function doSaveNotif() {
+  const id = document.getElementById("nt_id").value;
   const body = {
-    target_type: document.getElementById("nt_type").value,
-    target_name: document.getElementById("nt_name").value.trim(),
-    line_id:     document.getElementById("nt_lineid").value.trim(),
-    warehouse:   document.getElementById("nt_warehouse").value || null,
+    target_type:        document.getElementById("nt_type").value,
+    target_name:        document.getElementById("nt_name").value.trim(),
+    line_id:            document.getElementById("nt_lineid").value.trim(),
+    warehouse:          document.getElementById("nt_warehouse").value || null,
+    notify_daily:       document.getElementById("nt_notify_daily").checked,
+    notify_maintenance: document.getElementById("nt_notify_maintenance").checked,
+    notify_doc:         document.getElementById("nt_notify_doc").checked,
+    notify_anomaly:     document.getElementById("nt_notify_anomaly").checked,
+    is_active:          document.getElementById("nt_is_active").checked,
   };
-  if (!body.target_name || !body.line_id) { alert("กรุณากรอกชื่อและ LINE ID"); return; }
-  const res = await api("add-notification-target", { method: "POST", body: JSON.stringify(body) });
+  if (!body.target_name || !body.line_id) {
+    document.getElementById("addNotifMsg").textContent = "กรุณากรอกชื่อและ LINE ID";
+    return;
+  }
+  const res = id
+    ? await api(`notification-targets/${id}`, { method: "PUT", body: JSON.stringify(body) })
+    : await api("add-notification-target", { method: "POST", body: JSON.stringify(body) });
   if (res?.success) { closeModal("addNotifModal"); loadNotifTargets(); }
   else { document.getElementById("addNotifMsg").textContent = res?.error || "เกิดข้อผิดพลาด"; }
 }
