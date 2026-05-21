@@ -2475,6 +2475,9 @@ async function reloadMaintIntervalsModal() {
       <th></th>
     </tr></thead>
     <tbody>${displayRows.map(i => {
+      // 'all' group: แสดงค่าจริงทุกแถว
+      // non-'all' group: แสดงค่าเฉพาะ row ที่ override; row อื่นว่าง + โชว์ fallback
+      const showValue = group === "all" || i._overridden;
       const fallback = group !== "all" && !i._overridden;
       const baseI = baseMap[i.maintenance_type];
       const fallbackText = fallback && baseI
@@ -2483,9 +2486,9 @@ async function reloadMaintIntervalsModal() {
       return `
       <tr data-type="${esc(i.maintenance_type)}" ${fallback ? `style="opacity:.7"` : ""}>
         <td style="padding:6px 8px">${esc(i.icon || "🔧")} <b>${esc(i.label_th)}</b><br><small style="color:#888">${esc(i.maintenance_type)}</small>${fallbackText ? `<br>${fallbackText}` : ""}</td>
-        <td style="padding:6px 8px;text-align:right"><input class="mi-km" type="number" value="${i._overridden ? (i.interval_km ?? "") : ""}" style="width:90px;padding:4px 6px;text-align:right" placeholder="—"></td>
-        <td style="padding:6px 8px;text-align:right"><input class="mi-months" type="number" value="${i._overridden ? (i.interval_months ?? "") : ""}" style="width:70px;padding:4px 6px;text-align:right" placeholder="—"></td>
-        <td style="padding:6px 8px;text-align:right"><input class="mi-alert-km" type="number" value="${i._overridden ? (i.alert_km_before ?? "") : ""}" style="width:80px;padding:4px 6px;text-align:right" placeholder="${isForklift ? "50" : "500"}"></td>
+        <td style="padding:6px 8px;text-align:right"><input class="mi-km" type="number" value="${showValue ? (i.interval_km ?? "") : ""}" style="width:90px;padding:4px 6px;text-align:right" placeholder="—"></td>
+        <td style="padding:6px 8px;text-align:right"><input class="mi-months" type="number" value="${showValue ? (i.interval_months ?? "") : ""}" style="width:70px;padding:4px 6px;text-align:right" placeholder="—"></td>
+        <td style="padding:6px 8px;text-align:right"><input class="mi-alert-km" type="number" value="${showValue ? (i.alert_km_before ?? "") : ""}" style="width:80px;padding:4px 6px;text-align:right" placeholder="${isForklift ? "50" : "500"}"></td>
         <td style="padding:6px 8px;text-align:center;white-space:nowrap">
           <button class="btn btn-primary" style="padding:4px 10px;font-size:12px;width:auto" onclick="saveMaintInterval('${esc(i.maintenance_type)}')">บันทึก</button>
           ${group === "all" && PROTECTED.includes(i.maintenance_type)
