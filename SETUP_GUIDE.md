@@ -423,9 +423,28 @@ INSERT INTO companies (name, short_name, address, tax_id) VALUES
 
 ---
 
-## 12. Optional: Cloudflare R2
+## 12. ⚠️ Cloudflare R2 (สำหรับ Fleet ขนาดกลาง-ใหญ่)
 
-ถ้าต้องการ scale storage แยก (Supabase free มี 1GB):
+### เมื่อไหร่ต้องใช้?
+
+| จำนวนรถ | Storage/เดือน | Setup R2? |
+|---------|---------------|-----------|
+| 1-10 คัน | ~250 MB | Optional (ใช้ Supabase free ได้) |
+| 11-30 คัน | ~500-800 MB | ⚠️ แนะนำตั้งแต่แรก |
+| 31+ คัน | >1 GB | ✅ **จำเป็น** — Supabase free จะเต็มในเดือนเดียว |
+
+### 💰 ค่าใช้จ่าย (เทียบกับ Upgrade Supabase)
+- **R2**: 10GB ฟรี → $0.015/GB/เดือน
+- **Supabase Pro**: $25/เดือน (100GB)
+- ตัวอย่าง 100GB: R2 = ~50 บาท/เดือน vs Supabase Pro = 900 บาท/เดือน
+
+### Storage Strategy ในระบบ
+ระบบออกแบบให้แยกเก็บ 2 ที่:
+- **Supabase Storage** = รูปไมล์รายวัน (auto-cleanup 3 เดือน — ไม่ต้องเก็บนาน)
+- **R2** = รูปบิลน้ำมัน + บิลซ่อม + ใบขับขี่ (เก็บถาวร — proof of expense)
+
+ถ้า config R2 ครบ → ระบบใช้ R2 สำหรับ bill/license อัตโนมัติ
+ถ้าไม่มี R2 → fallback ใช้ Supabase ทั้งหมด
 
 ### Step 12.1: สร้าง R2 Bucket
 1. https://dash.cloudflare.com → R2
