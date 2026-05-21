@@ -1474,6 +1474,33 @@ function togglePickerWarehouse(screen) {
   renderTruckList(screen, document.getElementById(listId));
 }
 
+
+// ── ส่ง form data + retry ถ้า backend warn ไมล์ห่างมาก ─────────────────────
+// Returns: response JSON
+async function submitWithFarMileageConfirm(url, fd) {
+  const doFetch = async () => {
+    const r = await fetch(url, { method: "POST", body: fd });
+    const text = await r.text();
+    let res;
+    try { res = JSON.parse(text); }
+    catch { res = { error: `Server error (${r.status})` }; }
+    return { status: r.status, res };
+  };
+
+  let { status, res } = await doFetch();
+  if (status === 422 && res.confirm_required === "far_mileage") {
+    const ok = confirm(
+      "⚠️ ระบบตรวจพบว่าไมล์อาจไม่ใช่รถคันนี้\n\n" +
+      (res.error || "ไมล์ห่างจากครั้งก่อนมาก") +
+      "\n\nกด OK ถ้ายืนยันว่าใช่รถคันนี้\nกด Cancel เพื่อแก้ไข"
+    );
+    if (!ok) return { error: "ยกเลิก — กรุณาเลือกรถใหม่หรือตรวจเลขไมล์อีกครั้ง" };
+    fd.append("confirm_far_mileage", "true");
+    ({ status, res } = await doFetch());
+  }
+  return res;
+}
+
 // ════════════════════════════════════════════════════════════
 // MILEAGE FLOW (ลบ OCR — ถ่ายรูป + กรอกเลขเอง)
 // ════════════════════════════════════════════════════════════
@@ -1671,10 +1698,7 @@ async function confirmMileage() {
 
   let res;
   try {
-    const r = await fetch(`${API_BASE}/submit-mileage`, { method: "POST", body: fd });
-    const text = await r.text();
-    try { res = JSON.parse(text); }
-    catch { res = { error: `Server error (${r.status})` }; }
+    res = await submitWithFarMileageConfirm(`${API_BASE}/submit-mileage`, fd);
   } catch (e) {
     res = { error: `เชื่อมต่อไม่ได้: ${e.message}` };
   } finally {
@@ -1884,10 +1908,7 @@ async function submitFuel() {
   isSubmitting = true;
   let res;
   try {
-    const r = await fetch(`${API_BASE}/submit-fuel`, { method: "POST", body: fd });
-    const text = await r.text();
-    try { res = JSON.parse(text); }
-    catch { res = { error: `Server error (${r.status})` }; }
+    res = await submitWithFarMileageConfirm(`${API_BASE}/submit-fuel`, fd);
   } catch (e) {
     res = { error: `เชื่อมต่อไม่ได้: ${e.message}` };
   } finally {
@@ -2466,10 +2487,7 @@ async function submitMaintenance() {
   isSubmitting = true;
   let res;
   try {
-    const r = await fetch(`${API_BASE}/submit-maintenance`, { method: "POST", body: fd });
-    const text = await r.text();
-    try { res = JSON.parse(text); }
-    catch { res = { error: `Server error (${r.status})` }; }
+    res = await submitWithFarMileageConfirm(`${API_BASE}/submit-maintenance`, fd);
   } catch (e) {
     res = { error: `เชื่อมต่อไม่ได้: ${e.message}` };
   } finally {
