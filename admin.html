@@ -3863,28 +3863,40 @@ async function exportBillsPDF() {
   const mS = data.maintenance_summary || { grand_total: 0, grand_count: 0, by_truck: [], by_company: [] };
   const gS = data.grand_summary || { total: 0, fuel_total: 0, maintenance_total: 0 };
 
-  // ── จัดกลุ่ม fuel rows ตามทะเบียน เพื่อโชว์เป็น section ของแต่ละคัน ──
-  function groupByTruck(rows, costField) {
-    const groups = {};
+  // ── จัดกลุ่ม → โกดัง → รถ (เพื่อโชว์ section per warehouse) ──
+  function groupByWarehouseThenTruck(rows, costField) {
+    const wh = {};
     for (const r of rows) {
-      const key = (r.trucks?.plate_number || "-") + "|" + (r.trucks?.id || 0);
-      if (!groups[key]) {
-        groups[key] = {
+      const w = r.trucks?.warehouse || "(ไม่ระบุโกดัง)";
+      const k = (r.trucks?.plate_number || "-") + "|" + (r.trucks?.id || 0);
+      if (!wh[w]) wh[w] = { warehouse: w, trucks: {}, total: 0, count: 0, truckIds: new Set() };
+      if (!wh[w].trucks[k]) {
+        wh[w].trucks[k] = {
           plate:        r.trucks?.plate_number || "-",
-          warehouse:    r.trucks?.warehouse || "-",
+          warehouse:    w,
           company_name: r.trucks?.companies?.name || "(ไม่ระบุบริษัท)",
           rows: [],
           total: 0,
         };
+        wh[w].truckIds.add(r.trucks?.id || 0);
       }
       const cost = parseFloat(r[costField] || r.total_cost_entered || r.total_cost || r.cost || 0) || 0;
-      groups[key].rows.push(r);
-      groups[key].total += cost;
+      wh[w].trucks[k].rows.push(r);
+      wh[w].trucks[k].total += cost;
+      wh[w].total += cost;
+      wh[w].count++;
     }
-    return Object.values(groups).sort((a, b) => b.total - a.total);
+    // Convert nested objects → arrays + sort by total desc
+    return Object.values(wh).map(w => ({
+      warehouse: w.warehouse,
+      total:     w.total,
+      count:     w.count,
+      truck_count: w.truckIds.size,
+      trucks:    Object.values(w.trucks).sort((a, b) => b.total - a.total),
+    })).sort((a, b) => b.total - a.total);
   }
-  const fuelGroups  = groupByTruck(data.fuel || [], "total_cost");
-  const maintGroups = groupByTruck(data.maintenance || [], "cost");
+  const fuelByWarehouse  = groupByWarehouseThenTruck(data.fuel || [], "total_cost");
+  const maintByWarehouse = groupByWarehouseThenTruck(data.maintenance || [], "cost");
 
   // helper: format number with thousand separator (สำหรับ PDF)
   const f = (n) => (n === null || n === undefined || n === "") ? "—" : Number(n).toLocaleString("th-TH", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
@@ -4105,47 +4117,92 @@ async function exportBillsPDF() {
     </tbody>
   </table>
 
-  <!-- ═══ FUEL: รายการแยกตามรถ ═══ -->
-  <h2>⛽ น้ำมัน — รายละเอียดทุกรายการ</h2>
-  ${fuelGroups.map(g => `
-    <h3>🚛 ${esc(g.plate)} <span class="section-info">· ${esc(g.warehouse)} · ${esc(g.company_name)}</span></h3>
-    <table>
-      <colgroup>
-        <col style="width:14%">
-        <col style="width:20%">
-        <col style="width:12%">
-        <col style="width:10%">
-        <col style="width:12%">
-        <col style="width:14%">
-        <col style="width:18%">
-      </colgroup>
-      <thead><tr>
-        <th>วันที่</th>
-        <th>คนขับ</th>
-        <th>ไมล์</th>
-        <th>ลิตร</th>
-        <th>ราคา/ล.</th>
-        <th>ยอดรวม</th>
-        <th>ปั๊ม</th>
-      </tr></thead>
-      <tbody>
-      ${g.rows.map(r => `
-        <tr>
-          <td class="ctr">${r.log_date}</td>
-          <td>${esc(r.drivers?.name) || "—"}</td>
-          <td class="num">${f(r.mileage)}</td>
-          <td class="num">${f(r.liters)}</td>
-          <td class="num">${f(r.price_per_liter)}</td>
-          <td class="num"><b>${fM(r.total_cost)}</b></td>
-          <td>${esc(r.station_name) || "—"}</td>
-        </tr>`).join("")}
-      <tr class="subtotal">
-        <td colspan="5">รวม ${esc(g.plate)} (${g.rows.length} ครั้ง)</td>
-        <td class="num">${fM(g.total)}</td>
-        <td></td>
-      </tr>
-      </tbody>
-    </table>
+  <!-- ═══ FUEL: สรุปต่อโกดัง ═══ -->
+  <h2>⛽ น้ำมัน — สรุปยอดต่อโกดัง</h2>
+  <table>
+    <colgroup>
+      <col style="width:38%">
+      <col style="width:14%">
+      <col style="width:14%">
+      <col style="width:22%">
+      <col style="width:12%">
+    </colgroup>
+    <thead><tr>
+      <th>โกดัง</th>
+      <th>จำนวนรถ</th>
+      <th>รายการ</th>
+      <th>ยอดรวม</th>
+      <th>สัดส่วน</th>
+    </tr></thead>
+    <tbody>
+    ${fuelByWarehouse.map(w => `
+      <tr>
+        <td><b>📍 ${esc(w.warehouse)}</b></td>
+        <td class="num">${f(w.truck_count)}</td>
+        <td class="num">${f(w.count)}</td>
+        <td class="num"><b>${fM(w.total)}</b></td>
+        <td class="num">${pct(w.total, fS.grand_total)}</td>
+      </tr>`).join("")}
+    <tr class="grand">
+      <td>รวมทุกโกดัง</td>
+      <td class="num">—</td>
+      <td class="num">${f(fS.grand_count)}</td>
+      <td class="num">${fM(fS.grand_total)}</td>
+      <td class="num">100.0%</td>
+    </tr>
+    </tbody>
+  </table>
+
+  <!-- ═══ FUEL: รายการแยกตามโกดัง → รถ ═══ -->
+  <h2>⛽ น้ำมัน — รายละเอียดทุกรายการ (แยกตามโกดัง)</h2>
+  ${fuelByWarehouse.map(w => `
+    <div style="background:#0d47a1;color:#fff;padding:10px 14px;margin:18px 0 0 0;border-radius:6px 6px 0 0;font-size:15px;font-weight:700">
+      📍 โกดัง ${esc(w.warehouse)}
+      <span style="float:right;font-weight:400;font-size:13px;opacity:.9">${w.truck_count} คัน · ${w.count} รายการ · <b>${fM(w.total)}</b></span>
+    </div>
+    ${w.trucks.map(g => `
+      <h3>🚛 ${esc(g.plate)} <span class="section-info">· ${esc(g.company_name)}</span></h3>
+      <table>
+        <colgroup>
+          <col style="width:14%">
+          <col style="width:20%">
+          <col style="width:12%">
+          <col style="width:10%">
+          <col style="width:12%">
+          <col style="width:14%">
+          <col style="width:18%">
+        </colgroup>
+        <thead><tr>
+          <th>วันที่</th>
+          <th>คนขับ</th>
+          <th>ไมล์</th>
+          <th>ลิตร</th>
+          <th>ราคา/ล.</th>
+          <th>ยอดรวม</th>
+          <th>ปั๊ม</th>
+        </tr></thead>
+        <tbody>
+        ${g.rows.map(r => `
+          <tr>
+            <td class="ctr">${r.log_date}</td>
+            <td>${esc(r.drivers?.name) || "—"}</td>
+            <td class="num">${f(r.mileage)}</td>
+            <td class="num">${f(r.liters)}</td>
+            <td class="num">${f(r.price_per_liter)}</td>
+            <td class="num"><b>${fM(r.total_cost)}</b></td>
+            <td>${esc(r.station_name) || "—"}</td>
+          </tr>`).join("")}
+        <tr class="subtotal">
+          <td colspan="5">รวม ${esc(g.plate)} (${g.rows.length} ครั้ง)</td>
+          <td class="num">${fM(g.total)}</td>
+          <td></td>
+        </tr>
+        </tbody>
+      </table>
+    `).join("")}
+    <div style="background:#1976d2;color:#fff;padding:8px 14px;margin:0 0 12px 0;border-radius:0 0 6px 6px;font-size:13px;font-weight:700;text-align:right">
+      📊 รวมโกดัง ${esc(w.warehouse)}: <b>${fM(w.total)}</b> (${w.count} ครั้ง · ${w.truck_count} คัน)
+    </div>
   `).join("")}
   ` : ""}
 
@@ -4216,44 +4273,89 @@ async function exportBillsPDF() {
     </tbody>
   </table>
 
-  <!-- ═══ MAINTENANCE: รายการแยกตามรถ ═══ -->
-  <h2>🔧 ซ่อมบำรุง — รายละเอียดทุกรายการ</h2>
-  ${maintGroups.map(g => `
-    <h3>🚛 ${esc(g.plate)} <span class="section-info">· ${esc(g.warehouse)} · ${esc(g.company_name)}</span></h3>
-    <table>
-      <colgroup>
-        <col style="width:13%">
-        <col style="width:18%">
-        <col style="width:20%">
-        <col style="width:11%">
-        <col style="width:14%">
-        <col style="width:24%">
-      </colgroup>
-      <thead><tr>
-        <th>วันที่</th>
-        <th>ประเภท</th>
-        <th>ร้าน</th>
-        <th>ไมล์</th>
-        <th>ยอดรวม</th>
-        <th>หมายเหตุ</th>
-      </tr></thead>
-      <tbody>
-      ${g.rows.map(r => `
-        <tr>
-          <td class="ctr">${r.maintenance_date}</td>
-          <td>${esc(MAINT_LABELS[r.maintenance_type] || r.maintenance_type)}</td>
-          <td>${esc(r.shop_name) || "—"}</td>
-          <td class="num">${f(r.mileage_at_service)}</td>
-          <td class="num"><b>${fM(r.cost)}</b></td>
-          <td>${esc((r.notes || "—").slice(0, 60))}</td>
-        </tr>`).join("")}
-      <tr class="subtotal">
-        <td colspan="4">รวม ${esc(g.plate)} (${g.rows.length} ครั้ง)</td>
-        <td class="num">${fM(g.total)}</td>
-        <td></td>
-      </tr>
-      </tbody>
-    </table>
+  <!-- ═══ MAINTENANCE: สรุปต่อโกดัง ═══ -->
+  <h2>🔧 ซ่อมบำรุง — สรุปยอดต่อโกดัง</h2>
+  <table>
+    <colgroup>
+      <col style="width:38%">
+      <col style="width:14%">
+      <col style="width:14%">
+      <col style="width:22%">
+      <col style="width:12%">
+    </colgroup>
+    <thead><tr>
+      <th>โกดัง</th>
+      <th>จำนวนรถ</th>
+      <th>รายการ</th>
+      <th>ยอดรวม</th>
+      <th>สัดส่วน</th>
+    </tr></thead>
+    <tbody>
+    ${maintByWarehouse.map(w => `
+      <tr>
+        <td><b>📍 ${esc(w.warehouse)}</b></td>
+        <td class="num">${f(w.truck_count)}</td>
+        <td class="num">${f(w.count)}</td>
+        <td class="num"><b>${fM(w.total)}</b></td>
+        <td class="num">${pct(w.total, mS.grand_total)}</td>
+      </tr>`).join("")}
+    <tr class="grand">
+      <td>รวมทุกโกดัง</td>
+      <td class="num">—</td>
+      <td class="num">${f(mS.grand_count)}</td>
+      <td class="num">${fM(mS.grand_total)}</td>
+      <td class="num">100.0%</td>
+    </tr>
+    </tbody>
+  </table>
+
+  <!-- ═══ MAINTENANCE: รายการแยกตามโกดัง → รถ ═══ -->
+  <h2>🔧 ซ่อมบำรุง — รายละเอียดทุกรายการ (แยกตามโกดัง)</h2>
+  ${maintByWarehouse.map(w => `
+    <div style="background:#0d47a1;color:#fff;padding:10px 14px;margin:18px 0 0 0;border-radius:6px 6px 0 0;font-size:15px;font-weight:700">
+      📍 โกดัง ${esc(w.warehouse)}
+      <span style="float:right;font-weight:400;font-size:13px;opacity:.9">${w.truck_count} คัน · ${w.count} รายการ · <b>${fM(w.total)}</b></span>
+    </div>
+    ${w.trucks.map(g => `
+      <h3>🚛 ${esc(g.plate)} <span class="section-info">· ${esc(g.company_name)}</span></h3>
+      <table>
+        <colgroup>
+          <col style="width:13%">
+          <col style="width:18%">
+          <col style="width:20%">
+          <col style="width:11%">
+          <col style="width:14%">
+          <col style="width:24%">
+        </colgroup>
+        <thead><tr>
+          <th>วันที่</th>
+          <th>ประเภท</th>
+          <th>ร้าน</th>
+          <th>ไมล์</th>
+          <th>ยอดรวม</th>
+          <th>หมายเหตุ</th>
+        </tr></thead>
+        <tbody>
+        ${g.rows.map(r => `
+          <tr>
+            <td class="ctr">${r.maintenance_date}</td>
+            <td>${esc(MAINT_LABELS[r.maintenance_type] || r.maintenance_type)}</td>
+            <td>${esc(r.shop_name) || "—"}</td>
+            <td class="num">${f(r.mileage_at_service)}</td>
+            <td class="num"><b>${fM(r.cost)}</b></td>
+            <td>${esc((r.notes || "—").slice(0, 60))}</td>
+          </tr>`).join("")}
+        <tr class="subtotal">
+          <td colspan="4">รวม ${esc(g.plate)} (${g.rows.length} ครั้ง)</td>
+          <td class="num">${fM(g.total)}</td>
+          <td></td>
+        </tr>
+        </tbody>
+      </table>
+    `).join("")}
+    <div style="background:#1976d2;color:#fff;padding:8px 14px;margin:0 0 12px 0;border-radius:0 0 6px 6px;font-size:13px;font-weight:700;text-align:right">
+      📊 รวมโกดัง ${esc(w.warehouse)}: <b>${fM(w.total)}</b> (${w.count} ครั้ง · ${w.truck_count} คัน)
+    </div>
   `).join("")}
   ` : ""}
 
