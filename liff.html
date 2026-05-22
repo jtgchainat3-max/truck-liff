@@ -1667,11 +1667,24 @@ async function confirmMileage() {
     }
   }
 
-  // ห้ามไมล์น้อยกว่าครั้งก่อน (HARD REJECT — backend ก็ check ซ้ำ) — admin ข้าม
-  if (!isAdminDriver() && driverInfo?.last_evening_mileage && mileageVal < driverInfo.last_evening_mileage) {
-    alert(`❌ เลขไมล์ที่กรอก (${fmtNum(mileageVal)}) น้อยกว่าไมล์ล่าสุด (${fmtNum(driverInfo.last_evening_mileage)})\n\nกรอกใหม่ให้ถูกต้อง — เลขไมล์ต้องไม่น้อยกว่าครั้งก่อน`);
-    document.getElementById("mileageInputNum").focus();
-    return;
+  // ห้ามไมล์น้อยกว่าครั้งก่อนของรถคันที่เลือก (HARD REJECT — backend ก็ check ซ้ำ) — admin ข้าม
+  // 🐛 FIX 2026-05-22: VAN ที่เปลี่ยนไปขับรถคันอื่น ต้องเช็คไมล์ของรถคันที่เลือก
+  // ไม่ใช่ไมล์ของรถประจำ (driverInfo.last_evening_mileage ผูกกับรถประจำเท่านั้น)
+  if (!isAdminDriver()) {
+    let truckLastMileage = null;
+    if (selectedTruckId === driverInfo?.truck_id) {
+      // ขับรถประจำ → ใช้ไมล์เย็นล่าสุดของ driverInfo (ใหม่กว่า cache บางทีเพราะส่งวันนี้)
+      truckLastMileage = driverInfo?.last_evening_mileage ?? null;
+    } else if (allTrucksCache) {
+      // เปลี่ยนไปรถคันอื่น → ดูจาก cache ของรถคันที่เลือก
+      const t = allTrucksCache.find(t => t.id === selectedTruckId);
+      truckLastMileage = t?.last_mileage ?? null;
+    }
+    if (truckLastMileage && mileageVal < truckLastMileage) {
+      alert(`❌ เลขไมล์ที่กรอก (${fmtNum(mileageVal)}) น้อยกว่าไมล์ล่าสุดของรถคันนี้ (${fmtNum(truckLastMileage)})\n\nกรอกใหม่ให้ถูกต้อง — เลขไมล์ต้องไม่น้อยกว่าครั้งก่อน`);
+      document.getElementById("mileageInputNum").focus();
+      return;
+    }
   }
 
   const fd  = new FormData();
