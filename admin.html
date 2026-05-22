@@ -1258,6 +1258,16 @@ function fmtTime(ts) {
   return new Date(ts).toLocaleTimeString("en-GB", { timeZone: TZ, hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
+/** ISO timestamp → "18 พ.ค. 14:32" — สั้นใช้แสดงในตาราง */
+function fmtDateTime(ts) {
+  if (!ts) return "-";
+  const d = new Date(ts);
+  const ymd = d.toLocaleDateString("sv-SE", { timeZone: TZ }); // "2026-05-18"
+  const [, m, day] = ymd.split("-");
+  const tm = d.toLocaleTimeString("en-GB", { timeZone: TZ, hour: "2-digit", minute: "2-digit", hour12: false });
+  return `${day} ${THAI_MONTHS[Number(m) - 1]} ${tm}`;
+}
+
 /** Date column → badge แสดงจำนวนวันเหลือ */
 function daysLeftLabel(d) {
   if (!d) return `<span class="badge b-na">ไม่มีข้อมูล</span>`;
@@ -1419,7 +1429,7 @@ async function loadDaily() {
       <h3>รายละเอียดรายคัน — ${thaiDateShort(date)} <small style="color:#888;font-weight:400">(แต่ละเที่ยวแสดงคู่ ออก→กลับ · กดแก้ไขตัวเลขถ้าคนขับกรอกผิด)</small></h3>
       <div class="tbl-wrap"><table>
         <tr>
-          <th>ทะเบียน</th><th>คนขับ/สาย</th>
+          <th>ทะเบียน</th><th>📊 ไมล์ล่าสุด</th><th>คนขับ/สาย</th>
           <th>เที่ยว</th>
           <th>🚀 ออกทำงาน</th>
           <th>🏁 กลับโกดัง</th>
@@ -1431,6 +1441,11 @@ async function loadDaily() {
     const anomaly = (t.all_logs || []).some(l => l.anomaly_flag);
     const rowBg = anomaly ? "background:#fff3e0" : "";
 
+    const truckUnit = mileageUnit(t.truck_type);
+    const lastMileCell = t.last_mileage != null
+      ? `<b>${fmtNum(t.last_mileage)}</b> ${truckUnit}${t.last_mileage_at ? `<br><small style="color:#888">${fmtDateTime(t.last_mileage_at)}</small>` : ""}`
+      : `<small style="color:#aaa">-</small>`;
+
     if (trips.length === 0) {
       // รถยังไม่ส่งอะไรเลยวันนี้
       const assigned = t.assigned_driver_name
@@ -1438,6 +1453,7 @@ async function loadDaily() {
         : `<small style="color:#aaa">ยังไม่มีคนขับวันนี้</small>`;
       html += `<tr style="${rowBg};opacity:.6">
         <td><b>${esc(t.plate_number)}</b><br><small style="color:#888">${esc(t.warehouse)}</small></td>
+        <td>${lastMileCell}</td>
         <td>${assigned}</td>
         <td colspan="4" style="text-align:center;color:#888">— ยังไม่มีการบันทึก —</td>
       </tr>`;
@@ -1478,11 +1494,17 @@ async function loadDaily() {
         ? `<td rowspan="${trips.length}" style="vertical-align:top"><b>${esc(t.plate_number)}</b><br><small style="color:#888">${esc(t.warehouse)}</small></td>`
         : "";
 
+      // ⭐ ไมล์ล่าสุดในระบบ — rowspan เหมือน truck cell
+      const lastMileTd = idx === 0
+        ? `<td rowspan="${trips.length}" style="vertical-align:top">${lastMileCell}</td>`
+        : "";
+
       // ⭐ driver cell — per trip (ไม่ใช่ per truck แล้ว) → transport drivers ที่หลายคนขับรถคันเดียวจะเห็นใครขับเที่ยวไหน
       const driverCell = `<td style="vertical-align:top">${tripDriverName}<br><small style="color:#888">${esc(tripRoute || "")}</small></td>`;
 
       html += `<tr style="${rowBg}">
         ${truckCell}
+        ${lastMileTd}
         ${driverCell}
         <td><b style="color:#1a73e8">เที่ยว ${idx + 1}</b></td>
         <td>${fmtCell(m)}</td>
@@ -3045,10 +3067,10 @@ async function loadTrucks() {
     <h3>รายการรถ${filterLabel}</h3>
     <div style="font-size:13px;color:#666;margin-bottom:10px">📊 ${summary}</div>
     <div class="tbl-wrap"><table>
-    <tr><th>ทะเบียน</th><th>โกดัง</th><th>ประเภท</th><th>ยี่ห้อ/รุ่น</th><th>คนขับ</th><th>Picker</th><th>ภาษี</th><th>ประกัน</th><th>พรบ.</th><th>จัดการ</th></tr>`;
+    <tr><th>ทะเบียน</th><th>📊 ไมล์ล่าสุด</th><th>โกดัง</th><th>ประเภท</th><th>ยี่ห้อ/รุ่น</th><th>คนขับ</th><th>Picker</th><th>ภาษี</th><th>ประกัน</th><th>พรบ.</th><th>จัดการ</th></tr>`;
 
   if (filtered.length === 0) {
-    html += `<tr><td colspan="10" style="text-align:center;color:#888;padding:20px">ไม่มีรถที่ตรงเงื่อนไข</td></tr>`;
+    html += `<tr><td colspan="11" style="text-align:center;color:#888;padding:20px">ไม่มีรถที่ตรงเงื่อนไข</td></tr>`;
   } else {
     for (const t of filtered) {
       const driver = (t.drivers || []).find(d => d.is_active);
@@ -3062,8 +3084,14 @@ async function loadTrucks() {
                    || (t.drivers || []).find(d => d.id === t.reserved_for_driver_id);
         reservedBadge = `<br><span class="badge" style="background:#7c4dff;color:#fff;font-size:10px;margin-top:2px">🔒 รถประจำตัว: ${owner?.name ? esc(owner.name) : `#${t.reserved_for_driver_id}`}</span>`;
       }
+      // ⭐ ไมล์ล่าสุดในระบบ (จาก trucks.last_mileage_recorded — update ทุกครั้งที่ส่งไมล์/น้ำมัน/ซ่อม)
+      const tUnit = mileageUnit(t.truck_type);
+      const lastMileCell = t.last_mileage_recorded != null
+        ? `<b>${fmtNum(t.last_mileage_recorded)}</b> ${tUnit}${t.last_mileage_at ? `<br><small style="color:#888">${fmtDateTime(t.last_mileage_at)}</small>` : ""}`
+        : `<small style="color:#aaa">-</small>`;
       html += `<tr ${t.is_pickable === false ? 'style="opacity:0.55"' : ''}>
         <td><b>${esc(t.plate_number)}</b>${reservedBadge}</td>
+        <td>${lastMileCell}</td>
         <td>${esc(t.warehouse)}</td>
         <td>${truckTypeLabel(t.truck_type)}</td>
         <td>${esc(t.brand) || ""} ${esc(t.model) || ""}</td>
