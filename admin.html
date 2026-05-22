@@ -1057,12 +1057,13 @@ body.role-non-super .super-only { display: none !important; }
   </div>
 </div>
 
-<!-- Edit Mileage Modal -->
+<!-- Edit Mileage Modal — ใช้ร่วม mileage_logs / fuel_logs -->
 <div class="modal-bg" id="editMileageModal">
   <div class="modal">
-    <h3>✏️ แก้ไขเลขไมล์</h3>
+    <h3 id="em_title">✏️ แก้ไขเลขไมล์</h3>
     <input type="hidden" id="em_id">
-    <div class="form-group"><label>เลขไมล์ใหม่ (กม.)</label><input id="em_mileage" type="number"></div>
+    <input type="hidden" id="em_table" value="mileage">
+    <div class="form-group"><label>เลขไมล์ใหม่</label><input id="em_mileage" type="number"></div>
     <div class="form-group"><label>เหตุผลที่แก้ไข</label><textarea id="em_note"></textarea></div>
     <div class="modal-footer">
       <button class="btn btn-gray" onclick="closeModal('editMileageModal')">ยกเลิก</button>
@@ -1755,13 +1756,15 @@ async function loadFuel() {
       ? Math.round((kmSinceVal / r.liters) * 100) / 100
       : null;
 
+    // ⛽ ปุ่มแก้ไขไมล์ของบิลน้ำมัน — stopPropagation กันคลิกแล้วเปิด detail
+    const fuelEditBtn = `<button class="btn btn-sm btn-gray" style="padding:2px 6px;font-size:11px;margin-left:4px" onclick="event.stopPropagation();openEditFuelMileage(${r.id}, ${r.mileage})" title="แก้ไขเลขไมล์">✏️</button>`;
     html += `<tr style="cursor:pointer" onclick="showFuelDetail(${r.id})">
       <td><code style="background:#f5f5f5;padding:2px 6px;border-radius:4px;font-size:11px">#${r.id}</code></td>
       <td>${thaiDateShort(r.log_date)}<br><small style="color:#888">${fmtTime(r.created_at)}</small></td>
       <td><b>${esc(r.trucks?.plate_number) || "-"}</b></td>
       <td>${esc(r.trucks?.warehouse) || "-"}</td>
       <td>${esc(r.drivers?.name) || "-"}${r.drivers?.driver_type ? `<br><span style="font-size:10px;display:inline-block;padding:1px 6px;border-radius:8px;background:${r.drivers.driver_type === "admin" ? "#f3e5f5;color:#6a1b9a" : r.drivers.driver_type === "transport" ? "#fff3e0;color:#e65100" : "#e3f2fd;color:#0d47a1"};font-weight:600">${r.drivers.driver_type === "admin" ? "👤 แอดมิน" : r.drivers.driver_type === "transport" ? "🚛 ขนส่ง" : "🚐 VAN"}</span>` : ""}</td>
-      <td>${fmtNum(r.mileage)}</td>
+      <td style="white-space:nowrap">${fmtNum(r.mileage)} ${fuelEditBtn}</td>
       <td>${kmSince}</td>
       <td>${fmtNum(r.liters != null ? Math.round(r.liters * 100) / 100 : null)} ล.</td>
       <td>${fmtNum(r.price_per_liter)} ฿</td>
@@ -5037,20 +5040,39 @@ async function doAddMaint() {
 
 function openEditMileage(id, mileage) {
   document.getElementById("em_id").value      = id;
+  document.getElementById("em_table").value   = "mileage";
   document.getElementById("em_mileage").value = mileage;
   document.getElementById("em_note").value    = "";
+  document.getElementById("em_title").textContent = "✏️ แก้ไขเลขไมล์";
+  document.getElementById("editMileageMsg").textContent = "";
+  openModal("editMileageModal");
+}
+
+// ⛽ แก้ไขไมล์ของบิลน้ำมัน — ใช้ modal เดียวกัน แต่ flag table = "fuel"
+function openEditFuelMileage(id, mileage) {
+  document.getElementById("em_id").value      = id;
+  document.getElementById("em_table").value   = "fuel";
+  document.getElementById("em_mileage").value = mileage;
+  document.getElementById("em_note").value    = "";
+  document.getElementById("em_title").textContent = "⛽ แก้ไขเลขไมล์ของบิลน้ำมัน";
   document.getElementById("editMileageMsg").textContent = "";
   openModal("editMileageModal");
 }
 
 async function doEditMileage() {
   const id      = parseInt(document.getElementById("em_id").value);
+  const table   = document.getElementById("em_table").value || "mileage";
   const mileage = parseInt(document.getElementById("em_mileage").value);
   const note    = document.getElementById("em_note").value.trim();
   if (!mileage) { alert("กรุณาระบุเลขไมล์"); return; }
-  const res = await api("edit-mileage", { method: "PUT", body: JSON.stringify({ id, mileage, edit_note: note, edited_by: "admin" }) });
-  if (res?.success) { closeModal("editMileageModal"); loadDaily(); loadAnomalies(); }
-  else { document.getElementById("editMileageMsg").textContent = res?.error || "เกิดข้อผิดพลาด"; }
+  const res = await api("edit-mileage", { method: "PUT", body: JSON.stringify({ id, mileage, edit_note: note, table }) });
+  if (res?.success) {
+    closeModal("editMileageModal");
+    if (table === "fuel") { loadFuel(); }
+    else { loadDaily(); loadAnomalies(); }
+  } else {
+    document.getElementById("editMileageMsg").textContent = res?.error || "เกิดข้อผิดพลาด";
+  }
 }
 
 function openAddNotifModal() {
