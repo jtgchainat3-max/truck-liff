@@ -809,6 +809,15 @@ body.role-non-super .super-only { display: none !important; }
       <button class="btn btn-primary" onclick="openAddNotifModal()">+ เพิ่มกลุ่ม/แอดมิน</button>
     </div>
   </div>
+
+  <!-- ⏰ เวลาแจ้งเตือนอัตโนมัติ -->
+  <div class="card">
+    <h3>⏰ เวลาแจ้งเตือนอัตโนมัติ <small style="color:#888;font-weight:400">(เวลาไทย)</small></h3>
+    <div style="font-size:13px;color:#666;margin-bottom:12px">
+      💡 ตั้งเวลาที่ระบบจะส่งแจ้งเตือนเข้า LINE อัตโนมัติ — แก้แล้วกด <b>บันทึก</b> จะมีผลทันที (ไม่ต้อง deploy)
+    </div>
+    <div id="cronJobsContent"><div class="loader"><div class="spinner"></div>กำลังโหลด...</div></div>
+  </div>
   <div class="card">
     <h3>⚙️ ตั้งค่าระบบ</h3>
     <div id="settingsContent"><div class="loader"><div class="spinner"></div>กำลังโหลด...</div></div>
@@ -3490,7 +3499,84 @@ async function submitAddDriver() {
 // SETTINGS
 // ════════════════════════════════════════════════════════════
 async function loadSettings() {
-  await Promise.all([loadNotifTargets(), loadSystemSettings(), loadStorageStatus(), loadSystemStatus()]);
+  await Promise.all([loadNotifTargets(), loadCronJobs(), loadSystemSettings(), loadStorageStatus(), loadSystemStatus()]);
+}
+
+// ════════════════════════════════════════════════════════════
+// ⏰ Cron Job Schedule Management
+// ════════════════════════════════════════════════════════════
+
+// ⭐ Friendly labels + grouping ของ cron jobs ที่ admin แก้ได้
+// (ชื่อ jobname ต้องตรงกับ migration 20260612_notification_schedules.sql)
+const CRON_JOB_META = {
+  "morning-mileage-group":      { label: "🌅 เตือนไมล์เช้า — เข้ากลุ่ม LINE",        desc: "แจ้งกลุ่มเรื่องรถที่ยังไม่ส่งไมล์เช้า" },
+  "evening-mileage-group":      { label: "🌆 เตือนไมล์เย็น — เข้ากลุ่ม LINE",        desc: "แจ้งกลุ่มเรื่องรถที่ออกแล้วแต่ยังไม่กลับ" },
+  "maintenance-driver-morning": { label: "🔧 เตือนซ่อมบำรุง — DM คนขับ",            desc: "ส่งให้คนขับแต่ละคนเรื่องรถที่ถึงรอบซ่อม" },
+  "license-driver-morning":     { label: "🪪 เตือนใบขับขี่ — DM คนขับ",              desc: "ส่งให้คนขับเรื่องใบขับขี่ใกล้หมดอายุ" },
+  "maintenance-group-evening":  { label: "🔧 สรุปซ่อมบำรุง — เข้ากลุ่ม LINE",        desc: "สรุปรถที่ต้องซ่อมส่งให้แอดมินในกลุ่ม" },
+  "license-group-evening":      { label: "🪪 สรุปใบขับขี่ — เข้ากลุ่ม LINE",         desc: "สรุปใบขับขี่ใกล้หมดอายุส่งให้แอดมิน" },
+  "doc-group-evening":          { label: "📋 เตือนเอกสารรถ — เข้ากลุ่ม LINE",         desc: "ภาษี / ประกัน / พรบ. ใกล้หมดอายุ" },
+};
+
+async function loadCronJobs() {
+  const el = document.getElementById("cronJobsContent");
+  if (!el) return;
+  const data = await api("cron-jobs");
+  if (!data || data.error) {
+    el.innerHTML = `<div class="alert alert-err">${data?.error || "โหลดไม่สำเร็จ"}</div>`;
+    return;
+  }
+  if (data.length === 0) {
+    el.innerHTML = `<div class="alert alert-info">ยังไม่มี cron jobs ในระบบ — ต้องรัน migration <code>20260612_notification_schedules.sql</code> ก่อน</div>`;
+    return;
+  }
+  let html = `<div class="tbl-wrap"><table>
+    <tr><th style="width:45%">งานที่จะส่ง</th><th>เวลา (BKK)</th><th>สถานะ</th><th></th></tr>`;
+  for (const j of data) {
+    const meta = CRON_JOB_META[j.jobname] || { label: j.jobname, desc: "" };
+    const hh = (j.bkk_hour    ?? 0).toString().padStart(2, "0");
+    const mm = (j.bkk_minute  ?? 0).toString().padStart(2, "0");
+    const id = `cron_${j.jobname.replace(/[^a-z0-9]/gi, "_")}`;
+    html += `<tr>
+      <td>
+        <b>${esc(meta.label)}</b>
+        ${meta.desc ? `<br><small style="color:#888">${esc(meta.desc)}</small>` : ""}
+        <br><code style="font-size:10px;color:#aaa">${esc(j.jobname)}</code>
+      </td>
+      <td style="white-space:nowrap">
+        <input type="time" id="${id}" value="${hh}:${mm}" style="width:110px;padding:6px 8px;font-size:14px">
+      </td>
+      <td>${j.active
+        ? `<span class="badge b-ok">✅ ทำงาน</span>`
+        : `<span class="badge b-exp">⏸ ปิดอยู่</span>`}</td>
+      <td>
+        <button class="btn btn-sm btn-primary" style="padding:6px 12px" onclick="saveCronJob('${esc(j.jobname)}', '${id}')">💾 บันทึก</button>
+      </td>
+    </tr>`;
+  }
+  html += `</table></div>
+    <div id="cronJobsMsg" style="margin-top:10px;font-size:13px;min-height:20px"></div>`;
+  el.innerHTML = html;
+}
+
+async function saveCronJob(jobname, inputId) {
+  const input = document.getElementById(inputId);
+  const msg   = document.getElementById("cronJobsMsg");
+  if (!input?.value) { msg.innerHTML = `<span style="color:#e74c3c">⚠️ กรุณาเลือกเวลา</span>`; return; }
+  const [hh, mm] = input.value.split(":").map(s => parseInt(s));
+  if (isNaN(hh) || isNaN(mm)) { msg.innerHTML = `<span style="color:#e74c3c">⚠️ เวลาไม่ถูกต้อง</span>`; return; }
+
+  msg.innerHTML = `<span style="color:#888">⏳ กำลังบันทึก...</span>`;
+  const res = await api("cron-jobs", {
+    method: "PUT",
+    body: JSON.stringify({ jobname, hour: hh, minute: mm }),
+  });
+  if (res?.success) {
+    msg.innerHTML = `<span style="color:#2e7d32">✅ บันทึกแล้ว — ${esc(jobname)} จะส่งตอน ${input.value} ทุกวัน</span>`;
+    setTimeout(() => loadCronJobs(), 800); // refresh table
+  } else {
+    msg.innerHTML = `<span style="color:#e74c3c">❌ ${esc(res?.error || "บันทึกไม่สำเร็จ")}</span>`;
+  }
 }
 
 // ── ลิงก์ทดสอบ GPS — generate auto จาก URL ปัจจุบัน ──
