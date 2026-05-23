@@ -3508,14 +3508,15 @@ async function loadSettings() {
 
 // ⭐ Friendly labels + grouping ของ cron jobs ที่ admin แก้ได้
 // (ชื่อ jobname ต้องตรงกับ migration 20260612_notification_schedules.sql)
+// type + channel ใช้สำหรับปุ่ม "ทดสอบ" — เรียก send-reminders ด้วย payload ตรงตาม cron
 const CRON_JOB_META = {
-  "morning-mileage-group":      { label: "🌅 เตือนไมล์เช้า — เข้ากลุ่ม LINE",        desc: "แจ้งกลุ่มเรื่องรถที่ยังไม่ส่งไมล์เช้า" },
-  "evening-mileage-group":      { label: "🌆 เตือนไมล์เย็น — เข้ากลุ่ม LINE",        desc: "แจ้งกลุ่มเรื่องรถที่ออกแล้วแต่ยังไม่กลับ" },
-  "maintenance-driver-morning": { label: "🔧 เตือนซ่อมบำรุง — DM คนขับ",            desc: "ส่งให้คนขับแต่ละคนเรื่องรถที่ถึงรอบซ่อม" },
-  "license-driver-morning":     { label: "🪪 เตือนใบขับขี่ — DM คนขับ",              desc: "ส่งให้คนขับเรื่องใบขับขี่ใกล้หมดอายุ" },
-  "maintenance-group-evening":  { label: "🔧 สรุปซ่อมบำรุง — เข้ากลุ่ม LINE",        desc: "สรุปรถที่ต้องซ่อมส่งให้แอดมินในกลุ่ม" },
-  "license-group-evening":      { label: "🪪 สรุปใบขับขี่ — เข้ากลุ่ม LINE",         desc: "สรุปใบขับขี่ใกล้หมดอายุส่งให้แอดมิน" },
-  "doc-group-evening":          { label: "📋 เตือนเอกสารรถ — เข้ากลุ่ม LINE",         desc: "ภาษี / ประกัน / พรบ. ใกล้หมดอายุ" },
+  "morning-mileage-group":      { label: "🌅 เตือนไมล์เช้า — เข้ากลุ่ม LINE",        desc: "แจ้งกลุ่มเรื่องรถที่ยังไม่ส่งไมล์เช้า",      type: "morning",     channel: "group"  },
+  "evening-mileage-group":      { label: "🌆 เตือนไมล์เย็น — เข้ากลุ่ม LINE",        desc: "แจ้งกลุ่มเรื่องรถที่ออกแล้วแต่ยังไม่กลับ",  type: "evening",     channel: "group"  },
+  "maintenance-driver-morning": { label: "🔧 เตือนซ่อมบำรุง — DM คนขับ",            desc: "ส่งให้คนขับแต่ละคนเรื่องรถที่ถึงรอบซ่อม",   type: "maintenance", channel: "driver" },
+  "license-driver-morning":     { label: "🪪 เตือนใบขับขี่ — DM คนขับ",              desc: "ส่งให้คนขับเรื่องใบขับขี่ใกล้หมดอายุ",       type: "license",     channel: "driver" },
+  "maintenance-group-evening":  { label: "🔧 สรุปซ่อมบำรุง — เข้ากลุ่ม LINE",        desc: "สรุปรถที่ต้องซ่อมส่งให้แอดมินในกลุ่ม",     type: "maintenance", channel: "group"  },
+  "license-group-evening":      { label: "🪪 สรุปใบขับขี่ — เข้ากลุ่ม LINE",         desc: "สรุปใบขับขี่ใกล้หมดอายุส่งให้แอดมิน",      type: "license",     channel: "group"  },
+  "doc-group-evening":          { label: "📋 เตือนเอกสารรถ — เข้ากลุ่ม LINE",         desc: "ภาษี / ประกัน / พรบ. ใกล้หมดอายุ",          type: "doc",         channel: "group"  },
 };
 
 async function loadCronJobs() {
@@ -3549,8 +3550,9 @@ async function loadCronJobs() {
       <td>${j.active
         ? `<span class="badge b-ok">✅ ทำงาน</span>`
         : `<span class="badge b-exp">⏸ ปิดอยู่</span>`}</td>
-      <td>
-        <button class="btn btn-sm btn-primary" style="padding:6px 12px" onclick="saveCronJob('${esc(j.jobname)}', '${id}')">💾 บันทึก</button>
+      <td style="white-space:nowrap">
+        <button class="btn btn-sm btn-primary" style="padding:6px 10px" onclick="saveCronJob('${esc(j.jobname)}', '${id}')">💾 บันทึก</button>
+        <button class="btn btn-sm btn-orange" style="padding:6px 10px;margin-left:4px" onclick="testCronJob('${esc(j.jobname)}')" title="ส่งทดสอบทันที (ไม่ต้องรอเวลา)">📨 ทดสอบ</button>
       </td>
     </tr>`;
   }
@@ -3577,6 +3579,40 @@ async function saveCronJob(jobname, inputId) {
   } else {
     msg.innerHTML = `<span style="color:#e74c3c">❌ ${esc(res?.error || "บันทึกไม่สำเร็จ")}</span>`;
   }
+}
+
+// 📨 ทดสอบส่ง LINE ทันที — เรียก send-reminders ด้วย type/channel จาก CRON_JOB_META
+async function testCronJob(jobname) {
+  const msg  = document.getElementById("cronJobsMsg");
+  const meta = CRON_JOB_META[jobname];
+  if (!meta?.type) {
+    msg.innerHTML = `<span style="color:#e74c3c">❌ ไม่พบ metadata ของ job ${esc(jobname)}</span>`;
+    return;
+  }
+  msg.innerHTML = `<span style="color:#888">⏳ กำลังส่งทดสอบ <b>${esc(meta.label)}</b>...</span>`;
+  const res = await fetch(`${REMIND_BASE}`, {
+    method: "POST",
+    headers: { "Authorization": AUTH_HEADER, "Content-Type": "application/json" },
+    body: JSON.stringify({ type: meta.type, channel: meta.channel }),
+  }).then(r => r.json()).catch(e => ({ error: e.message }));
+  if (res?.error) {
+    msg.innerHTML = `<span style="color:#e74c3c">❌ ${esc(res.error)}</span>`;
+    return;
+  }
+  // สรุปตาม type
+  let detail = "";
+  if (meta.type === "morning" || meta.type === "evening") {
+    detail = `ขาดส่ง=${res.missing ?? "?"} คัน · ส่ง=${res.sent ?? "?"} ราย`;
+  } else if (meta.type === "doc") {
+    detail = `เอกสารใกล้หมด=${res.doc_warnings ?? "?"} รายการ · ส่งกลุ่ม=${res.sent ?? "?"}`;
+  } else if (meta.type === "maintenance") {
+    detail = `รถที่ต้องเตือน=${res.trucks_with_alerts ?? "?"} คัน · DM คนขับ=${res.driver_sent ?? 0} · กลุ่มแอดมิน=${res.admin_sent ?? 0}`;
+  } else if (meta.type === "license") {
+    detail = `ใบขับขี่ใกล้หมด=${res.drivers_with_alerts ?? "?"} คน · DM คนขับ=${res.driver_sent ?? 0} · กลุ่มแอดมิน=${res.admin_sent ?? 0}`;
+  } else {
+    detail = JSON.stringify(res);
+  }
+  msg.innerHTML = `<span style="color:#2e7d32">✅ ส่งสำเร็จ — ${esc(meta.label)}<br><small>${esc(detail)}</small></span>`;
 }
 
 // ── ลิงก์ทดสอบ GPS — generate auto จาก URL ปัจจุบัน ──
