@@ -3612,7 +3612,11 @@ async function testCronJob(jobname) {
   } else {
     detail = JSON.stringify(res);
   }
-  msg.innerHTML = `<span style="color:#2e7d32">✅ ส่งสำเร็จ — ${esc(meta.label)}<br><small>${esc(detail)}</small></span>`;
+  // ⚡ ถ้า groupSent=0 ทั้งที่มี missing → แสดง LINE error เพื่อ debug
+  const lineErr = res.line_error ? `<br><small style="color:#e74c3c">⚠️ LINE error: ${esc(res.line_error)}</small>` : "";
+  const color   = res.line_error ? "#e67e22" : "#2e7d32";
+  const icon    = res.line_error ? "⚠️" : "✅";
+  msg.innerHTML = `<span style="color:${color}">${icon} ${esc(meta.label)}<br><small>${esc(detail)}</small>${lineErr}</span>`;
 }
 
 // ── ลิงก์ทดสอบ GPS — generate auto จาก URL ปัจจุบัน ──
