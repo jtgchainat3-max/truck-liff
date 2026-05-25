@@ -167,6 +167,7 @@ body.role-non-super .super-only { display: none !important; }
   <div class="tab active" data-tab="summary" onclick="switchTab('summary')">📊 ภาพรวม</div>
   <div class="tab" data-tab="daily" onclick="switchTab('daily')">📋 ไมล์รายวัน</div>
   <div class="tab" data-tab="fuel" onclick="switchTab('fuel')">⛽ น้ำมัน</div>
+  <div class="tab" data-tab="gps" onclick="switchTab('gps')">🛰 GPS</div>
 
   <!-- ซ่อมบำรุง > แผนซ่อม -->
   <div class="tab-group" data-group="maintenance">
@@ -450,6 +451,23 @@ body.role-non-super .super-only { display: none !important; }
   </div>
 
   <div id="accountingContent"><div class="loader"><div class="spinner"></div>กำลังโหลด...</div></div>
+</div>
+
+<!-- ═══════════════════════════════════ GPS LIVE (Sinotrack iframe) ═══════════════════════════════════ -->
+<div id="sec-gps" class="section">
+  <div class="card" style="padding:10px 14px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+    <div style="font-size:13px;color:#555">
+      🛰 <b>SinoTrack Live</b> — ติดตามรถ realtime ผ่าน sinotrack.com
+      <br><small style="color:#888">ครั้งแรกต้อง login (user: <code>JTG</code>) เบราว์เซอร์จะจำให้</small>
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      <button class="btn btn-gray" style="padding:6px 12px;font-size:12px;width:auto" onclick="reloadGpsFrame()">🔄 รีโหลด</button>
+      <a class="btn btn-primary" style="padding:6px 12px;font-size:12px;width:auto;text-decoration:none;display:inline-block" href="https://www.sinotrack.com" target="_blank" rel="noopener">↗ เปิดในแท็บใหม่</a>
+    </div>
+  </div>
+  <div style="position:relative;width:100%;height:calc(100vh - 220px);min-height:500px;border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;background:#fafafa">
+    <iframe id="gpsFrame" src="about:blank" style="width:100%;height:100%;border:none" referrerpolicy="no-referrer" allow="geolocation; fullscreen"></iframe>
+  </div>
 </div>
 
 <!-- ═══════════════════════════════════ ANOMALIES ═══════════════════════════════════ -->
@@ -1344,6 +1362,7 @@ const TAB_LOADERS = {
   summary:     loadSummary,
   daily:       () => { document.getElementById("dailyDate").value = todayISO(); loadDaily(); },
   fuel:        () => { document.getElementById("fuelFrom").value = todayISO(); document.getElementById("fuelTo").value = todayISO(); populateFuelTruckFilter(); loadFuel(); },
+  gps:         loadGpsFrame,
   maintenance: () => { populateMaintTruckFilter(); loadMaintenance(); },
   maintsched:  loadMaintSchedule,
   verify:      () => { populateVerifyTruckFilter(); loadVerifyQueue(); },
@@ -1356,6 +1375,22 @@ const TAB_LOADERS = {
   adminusers:  loadAdminUsers,
   settings:    loadSettings,
 };
+
+// ── 🛰 GPS iframe — lazy load (set src ครั้งแรกที่คลิก เพื่อไม่ต้องโหลดทุกครั้งที่หน้าเปิด) ──
+function loadGpsFrame() {
+  const f = document.getElementById("gpsFrame");
+  if (!f) return;
+  if (!f.src || f.src === "about:blank" || f.dataset.loaded !== "1") {
+    f.src = "https://www.sinotrack.com";
+    f.dataset.loaded = "1";
+  }
+}
+function reloadGpsFrame() {
+  const f = document.getElementById("gpsFrame");
+  if (!f) return;
+  f.src = "https://www.sinotrack.com?_t=" + Date.now();
+  f.dataset.loaded = "1";
+}
 
 // ── Toggle dropdown ของ parent tab — ใช้กับ click (สำหรับ touch + desktop) ──
 function toggleTabGroup(parentEl, ev) {
@@ -5393,6 +5428,7 @@ const ALL_TABS = [
   { key: "summary",     label: "📊 ภาพรวม" },
   { key: "daily",       label: "📋 ไมล์รายวัน" },
   { key: "fuel",        label: "⛽ น้ำมัน" },
+  { key: "gps",         label: "🛰 GPS Live" },
   { key: "maintenance", label: "🔧 ซ่อมบำรุง" },
   { key: "maintsched",  label: "🛠 แผนซ่อม" },
   { key: "verify",      label: "🔍 ตรวจสอบบิล" },
@@ -5409,7 +5445,7 @@ const ALL_TABS = [
 // Default tabs ของ role (ถ้าไม่ตั้ง custom)
 const DEFAULT_TABS_BY_ROLE = {
   superadmin: ALL_TABS.map(t => t.key),  // ทุกแท็บ
-  admin:      ["summary","daily","fuel","maintenance","maintsched","verify","accounting","anomalies","documents","trucks","drivers","companies","settings"],
+  admin:      ["summary","daily","fuel","gps","maintenance","maintsched","verify","accounting","anomalies","documents","trucks","drivers","companies","settings"],
 };
 
 async function loadCurrentUserRole() {
