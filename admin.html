@@ -704,6 +704,45 @@ body.role-non-super .super-only { display: none !important; }
   </div>
 </div>
 
+<!-- ═══ MODAL: เปลี่ยนรถประจำ (One-click switch) ═══ -->
+<div class="modal-overlay" id="switchTruckModal">
+  <div class="modal-box" style="max-width:520px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <h3>🔄 เปลี่ยนรถประจำ</h3>
+      <button onclick="closeModal('switchTruckModal')" style="background:none;border:none;font-size:24px;color:#999;cursor:pointer">×</button>
+    </div>
+
+    <div id="st_driverInfo" style="background:#f3e5f5;border:1px solid #ce93d8;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:14px"></div>
+
+    <div class="field">
+      <label>รถใหม่ *</label>
+      <select id="st_newTruck">
+        <option value="">— เลือกรถ —</option>
+      </select>
+      <small style="color:#888;font-size:11px">แสดงเฉพาะรถที่ว่าง (ไม่ติดคนขับประจำคนอื่น)</small>
+    </div>
+
+    <div class="field">
+      <label>เหตุผล (ไม่บังคับ)</label>
+      <input type="text" id="st_reason" placeholder="เช่น รถเก่าเข้าซ่อม, สลับรอบบำรุง" maxlength="200">
+    </div>
+
+    <div style="background:#fff3e0;border:1px solid #ffcc80;border-radius:8px;padding:10px 12px;margin-top:10px;font-size:12px;color:#6d4c41">
+      ⚠️ ระบบจะทำให้อัตโนมัติ:<br>
+      • ปลดรถเก่า → เปิดให้คนอื่นขับได้<br>
+      • จองรถใหม่ → เป็น "รถประจำ" ของคนขับนี้<br>
+      • บันทึกประวัติใน notes ของทั้ง 2 คันรถ<br>
+      • ประวัติ log เก่ายังผูกกับรถเดิม (ไม่หาย)
+    </div>
+
+    <div id="switchTruckErr" style="color:#e53935;font-size:13px;min-height:18px;margin-top:6px"></div>
+    <div class="modal-actions" style="margin-top:14px">
+      <button class="btn btn-gray" style="width:auto;padding:10px 20px" onclick="closeModal('switchTruckModal')">ยกเลิก</button>
+      <button class="btn btn-primary" style="width:auto;padding:10px 20px;background:#7c4dff" onclick="submitSwitchTruck()">🔄 ยืนยันเปลี่ยน</button>
+    </div>
+  </div>
+</div>
+
 <!-- ═══════════════════════════════════ COMPANIES ═══════════════════════════════════ -->
 <div id="sec-companies" class="section">
   <div style="margin-bottom:14px;display:flex;gap:10px">
@@ -3200,7 +3239,8 @@ async function loadDrivers() {
       <td>${licenseStatus(d.license_expiry_date)}</td>
       <td><span class="badge ${d.is_active ? 'b-ok' : 'b-exp'}">${d.is_active ? 'ใช้งาน' : 'ปิด'}</span></td>
       <td style="white-space:nowrap">
-        <button class="btn btn-gray" style="padding:4px 10px;font-size:12px;width:auto" onclick="toggleDriver(${d.id},${d.is_active})">${d.is_active ? 'ปิด' : 'เปิด'}</button>
+        ${d.driver_type === "van" && d.is_active ? `<button class="btn" style="padding:4px 10px;font-size:12px;width:auto;background:#7c4dff;color:#fff" onclick="openSwitchTruckModal(${d.id})" title="เปลี่ยนรถประจำ">🔄 เปลี่ยนรถ</button>` : ""}
+        <button class="btn btn-gray" style="padding:4px 10px;font-size:12px;width:auto;margin-left:4px" onclick="toggleDriver(${d.id},${d.is_active})">${d.is_active ? 'ปิด' : 'เปิด'}</button>
         <button class="btn btn-red" style="padding:4px 10px;font-size:12px;width:auto;margin-left:4px" onclick="deleteDriver(${d.id}, ${JSON.stringify(d.name).replace(/"/g, '&quot;')})">🗑 ลบ</button>
       </td>
     </tr>`;
@@ -3493,6 +3533,111 @@ async function submitAddDriver() {
 
   closeAddDriverModal();
   loadDrivers();
+}
+
+// ═══════════════════════════════════════════════════════════
+// 🔄 SWITCH TRUCK — เปลี่ยนรถประจำของคนขับ VAN แบบ one-click
+// ═══════════════════════════════════════════════════════════
+let switchTruckDriverId = null;
+
+async function openSwitchTruckModal(driverId) {
+  const d = (allDriversCache || []).find(x => x.id === driverId);
+  if (!d) { alert("ไม่พบข้อมูลคนขับ"); return; }
+  if (d.driver_type !== "van") {
+    alert("ฟังก์ชันนี้ใช้ได้เฉพาะคนขับประเภท VAN เท่านั้น");
+    return;
+  }
+
+  switchTruckDriverId = driverId;
+
+  // โหลด trucks ถ้ายังไม่มี cache
+  if (!allTrucks || allTrucks.length === 0) {
+    try {
+      const tr = await api("trucks");
+      if (Array.isArray(tr)) allTrucks = tr;
+    } catch (e) { /* best-effort */ }
+  }
+
+  // แสดงข้อมูลคนขับ + รถเดิม
+  const oldPlate = d.trucks?.plate_number ? esc(d.trucks.plate_number) : "<span style='color:#888'>(ไม่มีรถประจำ)</span>";
+  document.getElementById("st_driverInfo").innerHTML = `
+    👤 <b>${esc(d.name)}</b> ${d.route_code ? `<span class="badge b-blue" style="font-size:11px">${esc(d.route_code)}</span>` : ""}<br>
+    <span style="font-size:13px;color:#666">รถเดิม: ${oldPlate}</span>
+  `;
+
+  // โหลด dropdown รถที่ว่าง (ไม่ติด reserved กับคนอื่น + active + pickable)
+  const driverWh = d.warehouse || d.trucks?.warehouse || "";
+  const available = (allTrucks || []).filter(t => {
+    if (!t.is_active) return false;
+    if (t.is_pickable === false) return false;
+    if (t.id === d.truck_id) return false;  // กันเลือกรถเดิม
+    if (t.reserved_for_driver_id && t.reserved_for_driver_id !== driverId) return false;
+    return true;
+  });
+
+  // เรียงให้รถโกดังเดียวกันมาก่อน
+  available.sort((a, b) => {
+    const aw = (a.warehouse === driverWh) ? 0 : 1;
+    const bw = (b.warehouse === driverWh) ? 0 : 1;
+    if (aw !== bw) return aw - bw;
+    return String(a.plate_number).localeCompare(String(b.plate_number));
+  });
+
+  const sel = document.getElementById("st_newTruck");
+  sel.innerHTML = `<option value="">— เลือกรถ —</option>` +
+    available.map(t => {
+      const sameWh = t.warehouse === driverWh ? "" : " 🌐";
+      return `<option value="${t.id}">${esc(t.plate_number)} (${esc(t.warehouse || "-")})${sameWh}</option>`;
+    }).join("");
+
+  if (available.length === 0) {
+    sel.innerHTML = `<option value="">— ไม่มีรถว่าง —</option>`;
+  }
+
+  document.getElementById("st_reason").value = "";
+  document.getElementById("switchTruckErr").textContent = "";
+  document.getElementById("switchTruckModal").classList.add("open");
+}
+
+async function submitSwitchTruck() {
+  const errEl = document.getElementById("switchTruckErr");
+  const newTruckId = document.getElementById("st_newTruck").value;
+  const reason     = document.getElementById("st_reason").value.trim();
+
+  if (!switchTruckDriverId) { errEl.textContent = "❌ ไม่พบ driver_id"; return; }
+  if (!newTruckId) { errEl.textContent = "❌ กรุณาเลือกรถใหม่"; return; }
+
+  const d = (allDriversCache || []).find(x => x.id === switchTruckDriverId);
+  const oldPlate = d?.trucks?.plate_number || "(ไม่มี)";
+  const newOpt   = document.getElementById("st_newTruck").selectedOptions[0]?.text || newTruckId;
+
+  if (!confirm(`เปลี่ยนรถประจำของ ${d?.name}\n\nจาก: ${oldPlate}\nไป:  ${newOpt}\n\nยืนยัน?`)) return;
+
+  errEl.style.color = "#888";
+  errEl.textContent = "⏳ กำลังเปลี่ยน...";
+
+  const res = await api("switch-driver-truck", {
+    method: "POST",
+    body: JSON.stringify({
+      driver_id: switchTruckDriverId,
+      new_truck_id: parseInt(newTruckId),
+      reason: reason || null,
+    }),
+  });
+
+  if (res?.success) {
+    errEl.style.color = "#2e7d32";
+    errEl.textContent = "✅ " + (res.message || "เปลี่ยนรถสำเร็จ");
+    setTimeout(async () => {
+      closeModal("switchTruckModal");
+      // reload trucks cache ด้วย เพื่อให้ dropdown อัพเดต
+      try { allTrucks = await api("trucks"); } catch (e) {}
+      loadDrivers();
+    }, 900);
+  } else {
+    errEl.style.color = "#e53935";
+    errEl.textContent = "❌ " + (res?.error || "เปลี่ยนไม่สำเร็จ");
+  }
 }
 
 // ════════════════════════════════════════════════════════════
