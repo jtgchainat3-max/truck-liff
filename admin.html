@@ -1081,6 +1081,12 @@ body.role-non-super .super-only { display: none !important; }
       <div class="form-group"><label>หมดอายุประกัน</label><input id="et_ins" type="date"></div>
       <div class="form-group"><label>หมดอายุ พรบ.</label><input id="et_comp" type="date"></div>
     </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>📏 ระยะกรอกสูงสุดต่อครั้ง (km/ชม.) <span style="color:#888;font-weight:normal;font-size:11px">— ว่าง = ใช้ default ตามประเภท (pickup 500, truck 800, forklift 50)</span></label>
+        <input id="et_maxdelta" type="number" min="10" max="10000" step="10" placeholder="เช่น 700 (รถส่วนตัวขับไกล)">
+      </div>
+    </div>
     <div class="modal-footer">
       <button class="btn btn-gray" onclick="closeModal('editTruckModal')">ยกเลิก</button>
       <button class="btn btn-primary" onclick="doEditTruck()">บันทึก</button>
@@ -5025,6 +5031,7 @@ async function openEditTruck(id) {
   document.getElementById("et_tax").value           = truck.tax_due_date || "";
   document.getElementById("et_ins").value           = truck.insurance_due_date || "";
   document.getElementById("et_comp").value          = truck.compulsory_insurance_due_date || "";
+  document.getElementById("et_maxdelta").value      = truck.max_mileage_delta ?? "";
   openModal("editTruckModal");
 }
 
@@ -5049,6 +5056,7 @@ async function doEditTruck() {
     tax_due_date:                  document.getElementById("et_tax").value || null,
     insurance_due_date:            document.getElementById("et_ins").value || null,
     compulsory_insurance_due_date: document.getElementById("et_comp").value || null,
+    max_mileage_delta:             document.getElementById("et_maxdelta").value ? parseInt(document.getElementById("et_maxdelta").value) : null,
   };
   const res = await api("update-truck", { method: "PUT", body: JSON.stringify(body) });
   if (res?.success) { closeModal("editTruckModal"); loadTrucks(); loadDocuments(); }
