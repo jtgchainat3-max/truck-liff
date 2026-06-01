@@ -657,6 +657,7 @@ body.role-non-super .super-only { display: none !important; }
         👑 <b>เจ้าของ (Owner)</b> — เลือกได้ทุกคันทุกโกดัง ไม่จำกัด
       </label>
     </div>
+    <!-- 🛣 สาย — เฉพาะ VAN -->
     <div class="form-row" id="ed_vanFields">
       <div class="field">
         <label>สาย (V01-V12)</label>
@@ -670,10 +671,12 @@ body.role-non-super .super-only { display: none !important; }
           <option value="V11">V11</option><option value="V12">V12</option>
         </select>
       </div>
-      <div class="field">
-        <label>รถประจำ</label>
-        <select id="ed_truck"><option value="">-- ไม่ระบุ --</option></select>
-      </div>
+    </div>
+
+    <!-- 🚛 รถประจำ — ทุกประเภท (กรองตามโกดัง) -->
+    <div class="field">
+      <label>🚛 รถประจำ <span style="color:#888;font-weight:normal;font-size:11px">— ถ้าตั้ง คนขับจะใช้รถนี้ทุกครั้ง / ถ้าไม่ตั้ง จะเลือกในแอป LIFF ตามโกดัง</span></label>
+      <select id="ed_truck" onchange="onEditTruckChange()"><option value="">-- ไม่ระบุ (ให้เลือกในแอป) --</option></select>
     </div>
     <div id="editDriverErr" style="color:#e53935;font-size:13px;min-height:18px;margin-top:6px"></div>
     <div class="modal-actions" style="margin-top:14px">
@@ -3280,8 +3283,7 @@ async function loadDrivers() {
       <td>${licenseStatus(d.license_expiry_date)}</td>
       <td><span class="badge ${d.is_active ? 'b-ok' : 'b-exp'}">${d.is_active ? 'ใช้งาน' : 'ปิด'}</span></td>
       <td style="white-space:nowrap">
-        ${d.driver_type === "van" && d.is_active ? `<button class="btn" style="padding:4px 10px;font-size:12px;width:auto;background:#7c4dff;color:#fff" onclick="openSwitchTruckModal(${d.id})" title="เปลี่ยนรถประจำ">🔄 เปลี่ยนรถ</button>` : ""}
-        <button class="btn btn-gray" style="padding:4px 10px;font-size:12px;width:auto;margin-left:4px" onclick="toggleDriver(${d.id},${d.is_active})">${d.is_active ? 'ปิด' : 'เปิด'}</button>
+        <button class="btn btn-gray" style="padding:4px 10px;font-size:12px;width:auto" onclick="toggleDriver(${d.id},${d.is_active})">${d.is_active ? 'ปิด' : 'เปิด'}</button>
         <button class="btn btn-red" style="padding:4px 10px;font-size:12px;width:auto;margin-left:4px" onclick="deleteDriver(${d.id}, ${JSON.stringify(d.name).replace(/"/g, '&quot;')})">🗑 ลบ</button>
       </td>
     </tr>`;
@@ -3461,10 +3463,8 @@ function openEditDriver() {
   document.getElementById("ed_route").value        = d.route_code || "";
   document.getElementById("ed_owner").checked      = d.is_owner === true;
 
-  // โหลดรายการรถ
-  const truckSel = document.getElementById("ed_truck");
-  truckSel.innerHTML = `<option value="">-- ไม่ระบุ --</option>` +
-    allTrucks.map(t => `<option value="${t.id}" ${t.id === d.truck_id ? "selected" : ""}>${esc(t.plate_number)} (${esc(t.warehouse)})</option>`).join("");
+  // โหลด dropdown รถประจำ — จะกรองตามโกดัง+owner ใน populateEditTruckOptions()
+  populateEditTruckOptions(d.truck_id);
 
   onEditTypeChange();
   document.getElementById("editDriverErr").textContent = "";
@@ -3472,11 +3472,45 @@ function openEditDriver() {
   document.getElementById("editDriverModal").classList.add("open");
 }
 
+// ── โหลด dropdown รถประจำ — กรองตามโกดังของคนขับ + sync เมื่อเปลี่ยนโกดัง ──
+function populateEditTruckOptions(selectedTruckId) {
+  const truckSel = document.getElementById("ed_truck");
+  const wh       = document.getElementById("ed_warehouse").value;
+  const isOwner  = document.getElementById("ed_owner").checked;
+
+  // owner เห็นทุกคันทุกโกดัง / ไม่ใช่ owner เห็นเฉพาะโกดังเดียวกัน
+  const visible = (allTrucks || []).filter(t => {
+    if (!t.is_active) return false;
+    if (isOwner) return true;
+    if (!wh) return true;  // ยังไม่เลือกโกดัง — แสดงทุกคัน
+    return t.warehouse === wh;
+  });
+
+  truckSel.innerHTML = `<option value="">-- ไม่ระบุ (ให้เลือกในแอป) --</option>` +
+    visible.map(t => `<option value="${t.id}" ${t.id === selectedTruckId ? "selected" : ""}>${esc(t.plate_number)} (${esc(t.warehouse)})</option>`).join("");
+}
+
 function onEditTypeChange() {
   const t = document.getElementById("ed_type").value;
-  // route + รถประจำ แสดงเฉพาะ VAN
+  // สาย V01-V12 → เฉพาะ VAN (รถประจำใช้ได้ทุกประเภท)
   document.getElementById("ed_vanFields").style.display = t === "van" ? "" : "none";
 }
+
+function onEditTruckChange() {
+  // placeholder — เผื่อ logic ตอนเปลี่ยนรถในอนาคต
+}
+
+// ── re-filter dropdown เมื่อเปลี่ยนโกดัง หรือ toggle owner ──
+document.addEventListener("DOMContentLoaded", () => {
+  document.getElementById("ed_warehouse")?.addEventListener("change", () => {
+    const cur = parseInt(document.getElementById("ed_truck").value) || null;
+    populateEditTruckOptions(cur);
+  });
+  document.getElementById("ed_owner")?.addEventListener("change", () => {
+    const cur = parseInt(document.getElementById("ed_truck").value) || null;
+    populateEditTruckOptions(cur);
+  });
+});
 
 async function submitEditDriver() {
   const errEl = document.getElementById("editDriverErr");
@@ -3507,7 +3541,7 @@ async function submitEditDriver() {
     driver_type: type,
     warehouse: warehouse || null,
     route_code: type === "van" ? (route || null) : null,
-    truck_id: type === "van" && truckId ? parseInt(truckId) : null,
+    truck_id: truckId ? parseInt(truckId) : null,  // ⭐ ทุกประเภทตั้งรถประจำได้
     is_owner: document.getElementById("ed_owner").checked,
   };
 
