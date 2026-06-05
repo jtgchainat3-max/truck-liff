@@ -1597,14 +1597,29 @@ async function loadDriverLeaderboard(from, to) {
   const el = document.getElementById("driverLeaderboard");
   if (!el) return;
   const data = await api(`driver-leaderboard?date_from=${from}&date_to=${to}`);
-  if (!data || data.error) { el.innerHTML = ""; return; }
+  if (!data || data.error) {
+    el.innerHTML = `<div class="card"><h3>🏆 อันดับคนขับ</h3><div class="alert alert-err">โหลดไม่สำเร็จ: ${esc(data?.error || "no response")}</div></div>`;
+    return;
+  }
 
-  const ranked = data.ranked || [];
-  const others = data.others || [];
+  // Combine ranked + others — แล้วใช้ logic frontend ใหม่ (robust)
+  // ป้องกัน backend filter เพี้ยน — เอามารวมกันแล้วแบ่งใหม่
+  const all = [...(data.ranked || []), ...(data.others || [])];
   const fmtNum = (n) => n == null ? "-" : Number(n).toLocaleString("th-TH", { maximumFractionDigits: 2 });
 
-  if (ranked.length === 0 && others.filter(d => d.total_km > 0 || d.total_liters > 0).length === 0) {
-    el.innerHTML = `<div class="card"><h3 style="margin:0 0 10px">🏆 อันดับคนขับ</h3><p style="color:#aaa;text-align:center;padding:20px">ยังไม่มีข้อมูลในช่วงนี้</p></div>`;
+  // คนที่มี km/L คำนวณได้ + ไม่ใช่ forklift = ranked
+  const ranked = all.filter(d => d.km_per_liter != null && d.km_per_liter > 0 && d.truck_type !== "forklift")
+                    .sort((a, b) => (b.km_per_liter || 0) - (a.km_per_liter || 0));
+  // ที่เหลือที่มีกิจกรรม = others
+  const others = all.filter(d => !(d.km_per_liter != null && d.km_per_liter > 0 && d.truck_type !== "forklift"))
+                    .filter(d => (d.total_km || 0) > 0 || (d.total_liters || 0) > 0)
+                    .sort((a, b) => (b.total_km || 0) - (a.total_km || 0));
+
+  if (ranked.length === 0 && others.length === 0) {
+    el.innerHTML = `<div class="card"><h3 style="margin:0 0 10px">🏆 อันดับคนขับ</h3>
+      <p style="color:#aaa;text-align:center;padding:20px">ยังไม่มีข้อมูลในช่วงนี้</p>
+      <details style="margin-top:6px"><summary style="cursor:pointer;font-size:11px;color:#aaa">debug: raw data</summary><pre style="font-size:10px;color:#999;background:#f5f5f5;padding:8px;overflow:auto;max-height:200px">${esc(JSON.stringify(data, null, 2))}</pre></details>
+    </div>`;
     return;
   }
 
