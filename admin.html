@@ -893,6 +893,17 @@ body.role-non-super .super-only { display: none !important; }
 
 <!-- ═══════════════════════════════════ SETTINGS ═══════════════════════════════════ -->
 <div id="sec-settings" class="section">
+  <!-- 💾 Backup -->
+  <div class="card super-only">
+    <h3>💾 Backup ข้อมูล</h3>
+    <div style="font-size:13px;color:#666;margin-bottom:12px">
+      📦 ดาวน์โหลด snapshot ทุกตารางเป็นไฟล์ JSON เก็บไว้นอกระบบ (เผื่อ Supabase พัง / ลบผิด)<br>
+      💡 ทำเดือนละครั้งก็พอ — Supabase มี auto-backup ภายในให้ด้วยอยู่แล้ว
+    </div>
+    <button class="btn btn-primary" style="width:auto;padding:10px 24px" onclick="downloadBackup()">📥 ดาวน์โหลด Backup ตอนนี้</button>
+    <div id="backupMsg" style="margin-top:10px;font-size:13px"></div>
+  </div>
+
   <div class="card">
     <h3>🔔 เป้าหมายแจ้งเตือน (กลุ่มไลน์ / แอดมิน)</h3>
     <div id="notifTargets"><div class="loader"><div class="spinner"></div>กำลังโหลด...</div></div>
@@ -1496,12 +1507,17 @@ async function loadUsage() {
       <div class="card" style="padding:12px 14px;background:linear-gradient(135deg,#fff3e0,#fff)">
         <div style="font-size:11px;color:#f57c00;font-weight:700">⛽ น้ำมันรวม</div>
         <div style="font-size:24px;font-weight:700;color:#e65100">${fmtNum(totals.total_liters)} L</div>
-        <div style="font-size:11px;color:#888">${fmtNum(totals.total_cost)} บาท</div>
+        <div style="font-size:11px;color:#888">${fmtNum(totals.total_fuel_cost)} ฿</div>
+      </div>
+      <div class="card" style="padding:12px 14px;background:linear-gradient(135deg,#ffebee,#fff)">
+        <div style="font-size:11px;color:#c62828;font-weight:700">🔧 ซ่อมรวม</div>
+        <div style="font-size:24px;font-weight:700;color:#b71c1c">${fmtNum(totals.total_maint_cost)} ฿</div>
+        <div style="font-size:11px;color:#888">รวมค่าใช้จ่าย</div>
       </div>
       <div class="card" style="padding:12px 14px;background:linear-gradient(135deg,#f3e5f5,#fff)">
         <div style="font-size:11px;color:#7b1fa2;font-weight:700">📊 เฉลี่ย efficiency</div>
         <div style="font-size:24px;font-weight:700;color:#4a148c">${fmtNum(totals.avg_km_per_liter)} กม./L</div>
-        <div style="font-size:11px;color:#888">รวมทุกคัน</div>
+        <div style="font-size:11px;color:#888">${fmtNum(totals.avg_cost_per_km)} ฿/กม.</div>
       </div>
     </div>
   `;
@@ -1516,35 +1532,43 @@ async function loadUsage() {
   html += `<div class="card"><h3 style="margin:0 0 10px">รายคัน (${data.from} → ${data.to})</h3><div class="tbl-wrap"><table>
     <tr>
       <th>ทะเบียน</th><th>โกดัง</th>
-      <th style="text-align:right">วันใช้งาน</th>
+      <th style="text-align:right">วันใช้</th>
       <th style="text-align:right">รวมระยะ</th>
       <th style="text-align:right">เฉลี่ย/วัน</th>
       <th style="text-align:right">น้ำมัน (L)</th>
-      <th style="text-align:right">ค่าน้ำมัน</th>
+      <th style="text-align:right">฿ น้ำมัน</th>
+      <th style="text-align:right">฿ ซ่อม</th>
       <th style="text-align:right">กม./L</th>
-      <th style="text-align:right">ครั้งเติม</th>
+      <th style="text-align:right">฿/กม.</th>
     </tr>`;
 
   for (const t of trucks) {
     const u = unit(t.truck_type);
-    const used = t.total_km > 0 || t.total_liters > 0;
+    const used = t.total_km > 0 || t.total_liters > 0 || t.maint_cost > 0;
     const dimmed = used ? "" : "color:#bbb";
     const effColor = t.km_per_liter == null ? "#aaa"
-                   : (t.truck_type === "forklift") ? "#666"  // forklift ไม่ค่อย make sense
-                   : t.km_per_liter < 5 ? "#c62828"     // เปลือง
+                   : (t.truck_type === "forklift") ? "#666"
+                   : t.km_per_liter < 5 ? "#c62828"
                    : t.km_per_liter < 8 ? "#e65100"
                    : t.km_per_liter < 12 ? "#558b2f"
                    : "#2e7d32";
+    // Color cost/km — ยิ่งต่ำยิ่งดี
+    const costColor = t.cost_per_km == null ? "#aaa"
+                    : t.cost_per_km > 10 ? "#c62828"   // เกิน 10฿/km = แพง
+                    : t.cost_per_km > 7  ? "#e65100"
+                    : t.cost_per_km > 4  ? "#558b2f"
+                    : "#2e7d32";
     html += `<tr style="${dimmed}">
       <td><b>${esc(t.plate_number)}</b></td>
       <td>${esc(t.warehouse) || "-"}</td>
       <td style="text-align:right">${t.days_active}</td>
       <td style="text-align:right"><b>${fmtNum(t.total_km)}</b> ${u}</td>
-      <td style="text-align:right">${fmtNum(t.avg_km_per_day)} ${u}</td>
+      <td style="text-align:right">${fmtNum(t.avg_km_per_day)}</td>
       <td style="text-align:right">${fmtNum(t.total_liters)}</td>
-      <td style="text-align:right">${fmtNum(t.total_cost)}</td>
+      <td style="text-align:right">${fmtNum(t.fuel_cost)}</td>
+      <td style="text-align:right">${t.maint_cost > 0 ? fmtNum(t.maint_cost) : "-"}</td>
       <td style="text-align:right;color:${effColor};font-weight:600">${t.km_per_liter == null ? "-" : fmtNum(t.km_per_liter)}</td>
-      <td style="text-align:right">${t.fuel_count}</td>
+      <td style="text-align:right;color:${costColor};font-weight:600">${t.cost_per_km == null ? "-" : fmtNum(t.cost_per_km)}</td>
     </tr>`;
   }
 
@@ -1554,12 +1578,84 @@ async function loadUsage() {
     <td style="text-align:right">${fmtNum(totals.total_km)} กม.</td>
     <td></td>
     <td style="text-align:right">${fmtNum(totals.total_liters)}</td>
-    <td style="text-align:right">${fmtNum(totals.total_cost)}</td>
+    <td style="text-align:right">${fmtNum(totals.total_fuel_cost)}</td>
+    <td style="text-align:right">${fmtNum(totals.total_maint_cost)}</td>
     <td style="text-align:right">${fmtNum(totals.avg_km_per_liter)}</td>
-    <td></td>
+    <td style="text-align:right">${fmtNum(totals.avg_cost_per_km)}</td>
   </tr>`;
 
   html += `</table></div></div>`;
+
+  // ─── 🏆 Driver Leaderboard ───
+  html += `<div id="driverLeaderboard" style="margin-top:14px"><div class="loader"><div class="spinner"></div>กำลังโหลด leaderboard...</div></div>`;
+
+  el.innerHTML = html;
+  loadDriverLeaderboard(from, to);
+}
+
+async function loadDriverLeaderboard(from, to) {
+  const el = document.getElementById("driverLeaderboard");
+  if (!el) return;
+  const data = await api(`driver-leaderboard?date_from=${from}&date_to=${to}`);
+  if (!data || data.error) { el.innerHTML = ""; return; }
+
+  const ranked = data.ranked || [];
+  const others = data.others || [];
+  const fmtNum = (n) => n == null ? "-" : Number(n).toLocaleString("th-TH", { maximumFractionDigits: 2 });
+
+  if (ranked.length === 0 && others.filter(d => d.total_km > 0 || d.total_liters > 0).length === 0) {
+    el.innerHTML = `<div class="card"><h3 style="margin:0 0 10px">🏆 อันดับคนขับ</h3><p style="color:#aaa;text-align:center;padding:20px">ยังไม่มีข้อมูลในช่วงนี้</p></div>`;
+    return;
+  }
+
+  let html = `<div class="card"><h3 style="margin:0 0 10px">🏆 อันดับประสิทธิภาพคนขับ (กม./L)</h3>
+    <p style="font-size:11px;color:#888;margin:0 0 10px">⚠️ คำนวณจากระยะที่ขับครั้งแรกของวันนั้น — ใช้ดูภาพรวม ไม่ใช่ตัวเลขแม่นยำ 100%</p>
+    <div class="tbl-wrap"><table>
+      <tr>
+        <th style="text-align:center;width:60px">อันดับ</th>
+        <th>ชื่อ</th>
+        <th>รถ/สาย</th>
+        <th>โกดัง</th>
+        <th style="text-align:right">ระยะ (กม.)</th>
+        <th style="text-align:right">น้ำมัน (L)</th>
+        <th style="text-align:right">กม./L</th>
+      </tr>`;
+
+  ranked.forEach((d, i) => {
+    const rank = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `#${i+1}`;
+    const effColor = d.km_per_liter < 5 ? "#c62828"
+                   : d.km_per_liter < 8 ? "#e65100"
+                   : d.km_per_liter < 12 ? "#558b2f"
+                   : "#2e7d32";
+    const bgColor = i === 0 ? "background:#fff8e1" : i === 1 ? "background:#f5f5f5" : i === 2 ? "background:#fff3e0" : "";
+    html += `<tr style="${bgColor}">
+      <td style="text-align:center;font-size:20px;font-weight:700">${rank}</td>
+      <td><b>${esc(d.name)}</b></td>
+      <td>${d.plate ? esc(d.plate) : "<span style='color:#aaa'>-</span>"}${d.route_code ? ` <span class="badge b-blue" style="font-size:10px">${esc(d.route_code)}</span>` : ""}</td>
+      <td>${esc(d.warehouse) || "-"}</td>
+      <td style="text-align:right">${fmtNum(d.total_km)}</td>
+      <td style="text-align:right">${fmtNum(d.total_liters)}</td>
+      <td style="text-align:right;color:${effColor};font-weight:700;font-size:15px">${fmtNum(d.km_per_liter)}</td>
+    </tr>`;
+  });
+
+  html += `</table></div>`;
+
+  // คนที่มีกิจกรรมแต่คำนวณ km/L ไม่ได้ (forklift, ไม่มีน้ำมัน)
+  const hasUsage = others.filter(d => d.total_km > 0 || d.total_liters > 0);
+  if (hasUsage.length > 0) {
+    html += `<details style="margin-top:14px"><summary style="cursor:pointer;font-weight:600;color:#666">▸ คนขับอื่นๆ (${hasUsage.length} คน — ไม่มี km/L)</summary>
+      <div class="tbl-wrap" style="margin-top:8px"><table>
+        <tr><th>ชื่อ</th><th>รถ</th><th>โกดัง</th><th style="text-align:right">ระยะ</th><th style="text-align:right">น้ำมัน</th></tr>`;
+    hasUsage.forEach(d => {
+      html += `<tr><td>${esc(d.name)}</td><td>${d.plate ? esc(d.plate) : "-"}</td><td>${esc(d.warehouse) || "-"}</td>
+        <td style="text-align:right">${fmtNum(d.total_km)}</td>
+        <td style="text-align:right">${fmtNum(d.total_liters)}</td></tr>`;
+    });
+    html += `</table></div></details>`;
+  }
+
+  html += `</div>`;
   el.innerHTML = html;
 }
 
@@ -3882,6 +3978,38 @@ async function submitSwitchTruck() {
 // ════════════════════════════════════════════════════════════
 async function loadSettings() {
   await Promise.all([loadNotifTargets(), loadCronJobs(), loadSystemSettings(), loadStorageStatus(), loadSystemStatus()]);
+}
+
+// ─── 💾 Backup ───
+async function downloadBackup() {
+  const msgEl = document.getElementById("backupMsg");
+  msgEl.style.color = "#888";
+  msgEl.textContent = "⏳ กำลังเตรียมไฟล์... (อาจใช้เวลา 5-30 วินาที)";
+
+  try {
+    // ใช้ fetch ตรง — เพราะ api() คาดหวัง JSON return แต่อันนี้เป็น attachment download
+    const res = await fetch(`${API_BASE}/backup-download`, {
+      headers: { "Authorization": AUTH_HEADER },
+    });
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => ({}));
+      throw new Error(errBody.error || `HTTP ${res.status}`);
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `truck-tracker-backup-${new Date().toISOString().slice(0,10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    msgEl.style.color = "#2e7d32";
+    msgEl.textContent = `✅ ดาวน์โหลดแล้ว (${Math.round(blob.size / 1024)} KB)`;
+  } catch (e) {
+    msgEl.style.color = "#c62828";
+    msgEl.textContent = `❌ ดาวน์โหลดไม่สำเร็จ: ${e.message || e}`;
+  }
 }
 
 // ════════════════════════════════════════════════════════════
