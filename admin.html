@@ -401,6 +401,14 @@ body.role-non-super .super-only { display: none !important; }
         <option value="11">พ.ย.</option><option value="12">ธ.ค.</option>
       </select>
     </div>
+    <div class="form-group" style="flex:0 0 130px">
+      <label>โกดัง</label>
+      <select id="acctWarehouse" onchange="onAcctWarehouseChange()">
+        <option value="">ทั้งหมด</option>
+        <option value="ชัยนาท">ชัยนาท</option>
+        <option value="ลพบุรี">ลพบุรี</option>
+      </select>
+    </div>
     <div class="form-group" style="flex:0 0 200px">
       <label>รถ</label>
       <select id="acctTruck" onchange="loadAccounting()">
@@ -440,6 +448,14 @@ body.role-non-super .super-only { display: none !important; }
           <option value="all">ทั้งหมด</option>
           <option value="fuel">น้ำมัน</option>
           <option value="maintenance">ซ่อมบำรุง</option>
+        </select>
+      </div>
+      <div class="form-group" style="flex:0 0 130px">
+        <label>โกดัง</label>
+        <select id="exportWarehouse">
+          <option value="">ทั้งหมด</option>
+          <option value="ชัยนาท">ชัยนาท</option>
+          <option value="ลพบุรี">ลพบุรี</option>
         </select>
       </div>
       <div style="flex:1;display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap">
@@ -2321,10 +2337,21 @@ function populateAccountingFilters() {
   monthSel.addEventListener("change", () => { monthSel.dataset.userSelected = "1"; }, { once: true });
 
   const truckSel = document.getElementById("acctTruck");
+  const warehouseSel = document.getElementById("acctWarehouse");
+  const warehouseFilter = warehouseSel ? warehouseSel.value : "";
   const cur = truckSel.value;
   truckSel.innerHTML = `<option value="">ทุกคัน</option>` +
-    allTrucks.map(t => `<option value="${t.id}">${esc(t.plate_number)} (${esc(t.warehouse)})</option>`).join("");
-  if (cur) truckSel.value = cur;
+    allTrucks
+      .filter(t => !warehouseFilter || t.warehouse === warehouseFilter)
+      .map(t => `<option value="${t.id}">${esc(t.plate_number)} (${esc(t.warehouse)})</option>`).join("");
+  if (cur && allTrucks.some(t => String(t.id) === cur && (!warehouseFilter || t.warehouse === warehouseFilter))) truckSel.value = cur;
+}
+
+function onAcctWarehouseChange() {
+  // reset truck filter แล้ว reload
+  document.getElementById("acctTruck").value = "";
+  populateAccountingFilters();
+  loadAccounting();
 }
 
 async function loadAccounting() {
@@ -2334,8 +2361,10 @@ async function loadAccounting() {
   const el = document.getElementById("accountingContent");
   el.innerHTML = `<div class="loader"><div class="spinner"></div>กำลังโหลด...</div>`;
 
+  const warehouse = document.getElementById("acctWarehouse")?.value || "";
   let q = `accounting-monthly?year=${year}&month=${month}`;
   if (truckId) q += `&truck_id=${truckId}`;
+  if (warehouse) q += `&warehouse=${encodeURIComponent(warehouse)}`;
   const data = await api(q);
   if (!data || data.error) {
     el.innerHTML = `<div class="alert alert-err">${data?.error || "โหลดไม่สำเร็จ"}</div>`;
@@ -4089,7 +4118,8 @@ async function exportBillsZip() {
   msgEl.style.color = "#888";
   msgEl.textContent = "⏳ กำลังโหลดข้อมูล...";
 
-  const data = await api(`export-bills?year=${year}&month=${month}&type=${type}`);
+  const warehouse = document.getElementById("exportWarehouse")?.value || "";
+  const data = await api(`export-bills?year=${year}&month=${month}&type=${type}${warehouse ? "&warehouse=" + encodeURIComponent(warehouse) : ""}`);
   if (!data || data.error) {
     msgEl.style.color = "#e53935";
     msgEl.textContent = "❌ " + (data?.error || "ดึงข้อมูลไม่สำเร็จ");
@@ -4251,7 +4281,8 @@ async function exportBillsPDF() {
   msgEl.style.color = "#888";
   msgEl.textContent = "⏳ กำลังสร้างรายงาน...";
 
-  const data = await api(`export-bills?year=${year}&month=${month}&type=${type}`);
+  const warehouse = document.getElementById("exportWarehouse")?.value || "";
+  const data = await api(`export-bills?year=${year}&month=${month}&type=${type}${warehouse ? "&warehouse=" + encodeURIComponent(warehouse) : ""}`);
   if (!data || data.error) {
     msgEl.style.color = "#e53935";
     msgEl.textContent = "❌ " + (data?.error || "ดึงข้อมูลไม่สำเร็จ");
