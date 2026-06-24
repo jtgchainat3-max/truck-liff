@@ -90,6 +90,10 @@ body.role-non-super .super-only { display: none !important; }
 /* Date filter row */
 .filter-row{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px}
 .filter-row .form-group{margin-bottom:0;min-width:140px}
+/* Period filter buttons */
+.maint-period-btn{background:#e8e8e8;color:#555;border-radius:16px}
+.maint-period-btn:hover{background:#d0d0d0}
+.maint-period-btn.active{background:#1a73e8;color:#fff}
 /* Loader */
 .loader{text-align:center;padding:40px;color:#aaa;font-size:15px}
 .spinner{width:30px;height:30px;border:3px solid #e0e0e0;border-top:3px solid #1a73e8;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 12px}
@@ -295,6 +299,17 @@ body.role-non-super .super-only { display: none !important; }
       <button class="btn btn-primary" onclick="openAddMaintModal()">+ เพิ่มบำรุงรักษา</button>
     </div>
   </div>
+  <!-- Period quick-filter -->
+  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
+    <span style="font-size:13px;color:#888;font-weight:600;margin-right:2px">📅 ช่วงเวลา:</span>
+    <button class="btn btn-sm maint-period-btn active" data-period="week"   onclick="setMaintPeriod(this)">อาทิตย์นี้</button>
+    <button class="btn btn-sm maint-period-btn"        data-period="month"  onclick="setMaintPeriod(this)">เดือนนี้</button>
+    <button class="btn btn-sm maint-period-btn"        data-period="lmonth" onclick="setMaintPeriod(this)">เดือนก่อน</button>
+    <button class="btn btn-sm maint-period-btn"        data-period="3m"     onclick="setMaintPeriod(this)">3 เดือน</button>
+    <button class="btn btn-sm maint-period-btn"        data-period="6m"     onclick="setMaintPeriod(this)">6 เดือน</button>
+    <button class="btn btn-sm maint-period-btn"        data-period="1y"     onclick="setMaintPeriod(this)">1 ปี</button>
+    <button class="btn btn-sm maint-period-btn"        data-period="all"    onclick="setMaintPeriod(this)">ทั้งหมด</button>
+  </div>
   <div id="maintContent"><div class="loader"><div class="spinner"></div>กำลังโหลด...</div></div>
 </div>
 
@@ -445,7 +460,9 @@ body.role-non-super .super-only { display: none !important; }
       </div>
       <div style="flex:1;display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap">
         <button class="btn btn-primary" style="width:auto;padding:10px 16px" onclick="exportBillsZip()">📦 Download ZIP (รูป+CSV)</button>
-        <button class="btn btn-success" style="width:auto;padding:10px 16px" onclick="exportBillsPDF()">📄 Export PDF สรุป</button>
+        <button class="btn btn-success" style="width:auto;padding:10px 16px" onclick="exportBillsPDF()">📄 PDF สรุปทั้งหมด</button>
+        <button class="btn" style="width:auto;padding:10px 16px;background:#0277bd;color:#fff;font-weight:600" onclick="exportBillsPDF('ชัยนาท')">🖨️ ปริ้นชัยนาท</button>
+        <button class="btn" style="width:auto;padding:10px 16px;background:#2e7d32;color:#fff;font-weight:600" onclick="exportBillsPDF('ลพบุรี')">🖨️ ปริ้นลพบุรี</button>
       </div>
     </div>
     <div id="exportMsg" style="margin-top:10px;font-size:13px"></div>
@@ -700,6 +717,7 @@ body.role-non-super .super-only { display: none !important; }
           <option value="V07">V07</option><option value="V08">V08</option>
           <option value="V09">V09</option><option value="V10">V10</option>
           <option value="V11">V11</option><option value="V12">V12</option>
+          <option value="PC01">PC01</option>
         </select>
       </div>
     </div>
@@ -3037,15 +3055,76 @@ async function saveMaintInterval(type) {
 let allMaintCache = [];
 let allMaintSessions = [];  // grouped by session_id สำหรับ display
 
+// คำนวณ date range จาก period ที่เลือก (Bangkok time)
+function maintPeriodDates(period) {
+  const bkk = d => {
+    // คืน YYYY-MM-DD ใน Bangkok time
+    return new Date(d.getTime() + 7*60*60*1000).toISOString().slice(0,10);
+  };
+  const now   = new Date();
+  const today = new Date(now.getTime() + 7*60*60*1000);
+  today.setUTCHours(0,0,0,0);
+
+  if (period === "week") {
+    // จันทร์ — วันนี้
+    const day = today.getUTCDay() || 7; // 1=จ ... 7=อา
+    const mon = new Date(today);
+    mon.setUTCDate(today.getUTCDate() - (day - 1));
+    return { from: bkk(mon), to: bkk(today) };
+  }
+  if (period === "month") {
+    const from = new Date(today);
+    from.setUTCDate(1);
+    return { from: bkk(from), to: bkk(today) };
+  }
+  if (period === "lmonth") {
+    const firstThisMonth = new Date(today);
+    firstThisMonth.setUTCDate(1);
+    const lastPrev = new Date(firstThisMonth);
+    lastPrev.setUTCDate(0);
+    const firstPrev = new Date(lastPrev);
+    firstPrev.setUTCDate(1);
+    return { from: bkk(firstPrev), to: bkk(lastPrev) };
+  }
+  if (period === "3m") {
+    const from = new Date(today);
+    from.setUTCMonth(from.getUTCMonth() - 3);
+    return { from: bkk(from), to: bkk(today) };
+  }
+  if (period === "6m") {
+    const from = new Date(today);
+    from.setUTCMonth(from.getUTCMonth() - 6);
+    return { from: bkk(from), to: bkk(today) };
+  }
+  if (period === "1y") {
+    const from = new Date(today);
+    from.setUTCFullYear(from.getUTCFullYear() - 1);
+    return { from: bkk(from), to: bkk(today) };
+  }
+  return { from: null, to: null }; // "all"
+}
+
+let _maintPeriod = "week"; // default
+
+function setMaintPeriod(btn) {
+  document.querySelectorAll(".maint-period-btn").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  _maintPeriod = btn.dataset.period;
+  loadMaintenance();
+}
+
 async function loadMaintenance() {
   const typeFilter  = document.getElementById("maintFilter").value;
   const truckFilter = document.getElementById("maintTruckFilter").value;
   const el          = document.getElementById("maintContent");
   el.innerHTML = `<div class="loader"><div class="spinner"></div>กำลังโหลด...</div>`;
 
+  const { from, to } = maintPeriodDates(_maintPeriod);
   const params = [];
   if (typeFilter)  params.push(`type=${typeFilter}`);
   if (truckFilter) params.push(`truck_id=${truckFilter}`);
+  if (from)        params.push(`date_from=${from}`);
+  if (to)          params.push(`date_to=${to}`);
   const q = "maintenance" + (params.length ? "?" + params.join("&") : "");
   const data = await api(q);
   if (!data || data.error) {
@@ -4557,7 +4636,7 @@ async function exportBillsZip() {
   msgEl.textContent = `✅ ดาวน์โหลด ZIP เสร็จ — ${downloaded} รูป + summary.csv`;
 }
 
-async function exportBillsPDF() {
+async function exportBillsPDF(warehouseFilter = '') {
   const year = document.getElementById("exportYear").value;
   const month = document.getElementById("exportMonth").value;
   const type = document.getElementById("exportType").value;
@@ -4614,8 +4693,23 @@ async function exportBillsPDF() {
       trucks:    Object.values(w.trucks).sort((a, b) => b.total - a.total),
     })).sort((a, b) => b.total - a.total);
   }
-  const fuelByWarehouse  = groupByWarehouseThenTruck(data.fuel || [], "total_cost");
-  const maintByWarehouse = groupByWarehouseThenTruck(data.maintenance || [], "cost");
+  const fuelByWarehouse  = groupByWarehouseThenTruck(data.fuel || [], "total_cost")
+    .filter(w => !warehouseFilter || w.warehouse === warehouseFilter);
+  const maintByWarehouse = groupByWarehouseThenTruck(data.maintenance || [], "cost")
+    .filter(w => !warehouseFilter || w.warehouse === warehouseFilter);
+
+  // คำนวณ totals จากข้อมูลที่ filter แล้ว (ใช้ใน summary card + by_truck table)
+  const printFuelTotal  = fuelByWarehouse.reduce((s, w) => s + w.total, 0);
+  const printFuelCount  = fuelByWarehouse.reduce((s, w) => s + w.count, 0);
+  const printMaintTotal = maintByWarehouse.reduce((s, w) => s + w.total, 0);
+  const printMaintCount = maintByWarehouse.reduce((s, w) => s + w.count, 0);
+  // by_truck รวมจากโกดังที่ filter (เรียงตาม total desc)
+  const printFuelByTruck  = fuelByWarehouse.flatMap(w => w.trucks)
+    .map(t => ({ plate: t.plate, warehouse: t.warehouse, company_name: t.company_name, count: t.rows.length, total: t.total }))
+    .sort((a, b) => b.total - a.total);
+  const printMaintByTruck = maintByWarehouse.flatMap(w => w.trucks)
+    .map(t => ({ plate: t.plate, warehouse: t.warehouse, company_name: t.company_name, count: t.rows.length, total: t.total }))
+    .sort((a, b) => b.total - a.total);
 
   // helper: format number with thousand separator (สำหรับ PDF)
   const f = (n) => (n === null || n === undefined || n === "") ? "—" : Number(n).toLocaleString("th-TH", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
@@ -4738,72 +4832,36 @@ async function exportBillsPDF() {
     &nbsp; <span style="color:#666;font-size:13px">ตั้งค่าใน print dialog: ขนาด A4, margin = ปานกลาง</span>
   </div>
 
-  <h1>📋 รายงานบิล — ${thaiMonth} ${yearThai}</h1>
-  <div class="subtitle">สร้างเมื่อ ${new Date().toLocaleString("th-TH")} · ${type === "all" ? "น้ำมัน + ซ่อมบำรุง" : type === "fuel" ? "เฉพาะน้ำมัน" : "เฉพาะซ่อมบำรุง"}</div>
+  <h1>📋 รายงานบิล — ${thaiMonth} ${yearThai}${warehouseFilter ? ` · โกดัง${warehouseFilter}` : ''}</h1>
+  <div class="subtitle">สร้างเมื่อ ${new Date().toLocaleString("th-TH")} · ${type === "all" ? "น้ำมัน + ซ่อมบำรุง" : type === "fuel" ? "เฉพาะน้ำมัน" : "เฉพาะซ่อมบำรุง"}${warehouseFilter ? ` · เฉพาะโกดัง${warehouseFilter}` : ' · ทุกโกดัง'}</div>
 
   ${type === "all" ? `
   <!-- ═══ SUMMARY ═══ -->
   <div class="summary-card">
-    <div class="title">💰 สรุปยอดรวมทั้งหมด</div>
+    <div class="title">💰 สรุปยอดรวม${warehouseFilter ? `โกดัง${warehouseFilter}` : 'ทั้งหมด'}</div>
     <table>
       <tr>
         <td>⛽ ค่าน้ำมันรวม</td>
-        <td class="num">${fS.grand_count} รายการ</td>
-        <td class="num"><b>${fM(gS.fuel_total)}</b></td>
+        <td class="num">${printFuelCount} รายการ</td>
+        <td class="num"><b>${fM(printFuelTotal)}</b></td>
       </tr>
       <tr>
         <td>🔧 ค่าซ่อมบำรุงรวม</td>
-        <td class="num">${mS.grand_count} รายการ</td>
-        <td class="num"><b>${fM(gS.maintenance_total)}</b></td>
+        <td class="num">${printMaintCount} รายการ</td>
+        <td class="num"><b>${fM(printMaintTotal)}</b></td>
       </tr>
       <tr class="grand-row">
         <td>💵 ยอดรวมทั้งสิ้น</td>
-        <td class="num">${fS.grand_count + mS.grand_count} รายการ</td>
-        <td class="num"><b>${fM(gS.total)}</b></td>
+        <td class="num">${printFuelCount + printMaintCount} รายการ</td>
+        <td class="num"><b>${fM(printFuelTotal + printMaintTotal)}</b></td>
       </tr>
     </table>
   </div>
   ` : ""}
 
-  ${(type === "all" || type === "fuel") && (fS.by_company.length || fS.by_truck.length) ? `
-  <!-- ═══ FUEL: ต่อบริษัท ═══ -->
-  <h2>⛽ น้ำมัน — สรุปยอดต่อบริษัท</h2>
-  <table>
-    <colgroup>
-      <col style="width:42%">
-      <col style="width:12%">
-      <col style="width:12%">
-      <col style="width:22%">
-      <col style="width:12%">
-    </colgroup>
-    <thead><tr>
-      <th>บริษัท</th>
-      <th>จำนวนรถ</th>
-      <th>รายการ</th>
-      <th>ยอดรวม</th>
-      <th>สัดส่วน</th>
-    </tr></thead>
-    <tbody>
-    ${fS.by_company.map(c => `
-      <tr>
-        <td><b>${esc(c.company_name)}</b>${c.short_name ? ` <span class="lbl">(${esc(c.short_name)})</span>` : ""}</td>
-        <td class="num">${f(c.truck_count)}</td>
-        <td class="num">${f(c.count)}</td>
-        <td class="num"><b>${fM(c.total)}</b></td>
-        <td class="num">${pct(c.total, fS.grand_total)}</td>
-      </tr>`).join("")}
-    <tr class="grand">
-      <td>รวมน้ำมันทุกบริษัท</td>
-      <td class="num">—</td>
-      <td class="num">${f(fS.grand_count)}</td>
-      <td class="num">${fM(fS.grand_total)}</td>
-      <td class="num">100.0%</td>
-    </tr>
-    </tbody>
-  </table>
-
+  ${(type === "all" || type === "fuel") && (fuelByWarehouse.length > 0) ? `
   <!-- ═══ FUEL: ต่อรถ ═══ -->
-  <h2>⛽ น้ำมัน — สรุปยอดต่อรถแต่ละคัน</h2>
+  <h2>⛽ น้ำมัน — สรุปยอดต่อรถแต่ละคัน${warehouseFilter ? ` (โกดัง${warehouseFilter})` : ''}</h2>
   <table>
     <colgroup>
       <col style="width:18%">
@@ -4820,7 +4878,7 @@ async function exportBillsPDF() {
       <th>ยอดรวม</th>
     </tr></thead>
     <tbody>
-    ${fS.by_truck.map(t => `
+    ${printFuelByTruck.map(t => `
       <tr>
         <td><b>${esc(t.plate)}</b></td>
         <td class="ctr">${esc(t.warehouse)}</td>
@@ -4829,9 +4887,9 @@ async function exportBillsPDF() {
         <td class="num"><b>${fM(t.total)}</b></td>
       </tr>`).join("")}
     <tr class="grand">
-      <td colspan="3">รวมทุกคัน (${fS.by_truck.length} คัน)</td>
-      <td class="num">${f(fS.grand_count)}</td>
-      <td class="num">${fM(fS.grand_total)}</td>
+      <td colspan="3">รวมทุกคัน (${printFuelByTruck.length} คัน)</td>
+      <td class="num">${f(printFuelCount)}</td>
+      <td class="num">${fM(printFuelTotal)}</td>
     </tr>
     </tbody>
   </table>
@@ -4860,13 +4918,13 @@ async function exportBillsPDF() {
         <td class="num">${f(w.truck_count)}</td>
         <td class="num">${f(w.count)}</td>
         <td class="num"><b>${fM(w.total)}</b></td>
-        <td class="num">${pct(w.total, fS.grand_total)}</td>
+        <td class="num">${pct(w.total, printFuelTotal)}</td>
       </tr>`).join("")}
     <tr class="grand">
-      <td>รวมทุกโกดัง</td>
+      <td>${warehouseFilter ? `รวมโกดัง${warehouseFilter}` : 'รวมทุกโกดัง'}</td>
       <td class="num">—</td>
-      <td class="num">${f(fS.grand_count)}</td>
-      <td class="num">${fM(fS.grand_total)}</td>
+      <td class="num">${f(printFuelCount)}</td>
+      <td class="num">${fM(printFuelTotal)}</td>
       <td class="num">100.0%</td>
     </tr>
     </tbody>
@@ -4925,41 +4983,9 @@ async function exportBillsPDF() {
   `).join("")}
   ` : ""}
 
-  ${(type === "all" || type === "maintenance") && (mS.by_company.length || mS.by_truck.length) ? `
-  <!-- ═══ MAINTENANCE: ต่อบริษัท ═══ -->
-  <h2>🔧 ซ่อมบำรุง — สรุปยอดต่อบริษัท</h2>
-  <table>
-    <colgroup>
-      <col style="width:46%">
-      <col style="width:14%">
-      <col style="width:14%">
-      <col style="width:26%">
-    </colgroup>
-    <thead><tr>
-      <th>บริษัท</th>
-      <th>จำนวนรถ</th>
-      <th>รายการ</th>
-      <th>ยอดรวม</th>
-    </tr></thead>
-    <tbody>
-    ${mS.by_company.map(c => `
-      <tr>
-        <td><b>${esc(c.company_name)}</b></td>
-        <td class="num">${f(c.truck_count)}</td>
-        <td class="num">${f(c.count)}</td>
-        <td class="num"><b>${fM(c.total)}</b></td>
-      </tr>`).join("")}
-    <tr class="grand">
-      <td>รวมซ่อมบำรุงทุกบริษัท</td>
-      <td class="num">—</td>
-      <td class="num">${f(mS.grand_count)}</td>
-      <td class="num">${fM(mS.grand_total)}</td>
-    </tr>
-    </tbody>
-  </table>
-
+  ${(type === "all" || type === "maintenance") && (maintByWarehouse.length > 0) ? `
   <!-- ═══ MAINTENANCE: ต่อรถ ═══ -->
-  <h2>🔧 ซ่อมบำรุง — สรุปยอดต่อรถแต่ละคัน</h2>
+  <h2>🔧 ซ่อมบำรุง — สรุปยอดต่อรถแต่ละคัน${warehouseFilter ? ` (โกดัง${warehouseFilter})` : ''}</h2>
   <table>
     <colgroup>
       <col style="width:18%">
@@ -4976,7 +5002,7 @@ async function exportBillsPDF() {
       <th>ยอดรวม</th>
     </tr></thead>
     <tbody>
-    ${mS.by_truck.map(t => `
+    ${printMaintByTruck.map(t => `
       <tr>
         <td><b>${esc(t.plate)}</b></td>
         <td class="ctr">${esc(t.warehouse)}</td>
@@ -4985,9 +5011,9 @@ async function exportBillsPDF() {
         <td class="num"><b>${fM(t.total)}</b></td>
       </tr>`).join("")}
     <tr class="grand">
-      <td colspan="3">รวมทุกคัน (${mS.by_truck.length} คัน)</td>
-      <td class="num">${f(mS.grand_count)}</td>
-      <td class="num">${fM(mS.grand_total)}</td>
+      <td colspan="3">รวมทุกคัน (${printMaintByTruck.length} คัน)</td>
+      <td class="num">${f(printMaintCount)}</td>
+      <td class="num">${fM(printMaintTotal)}</td>
     </tr>
     </tbody>
   </table>
@@ -5016,13 +5042,13 @@ async function exportBillsPDF() {
         <td class="num">${f(w.truck_count)}</td>
         <td class="num">${f(w.count)}</td>
         <td class="num"><b>${fM(w.total)}</b></td>
-        <td class="num">${pct(w.total, mS.grand_total)}</td>
+        <td class="num">${pct(w.total, printMaintTotal)}</td>
       </tr>`).join("")}
     <tr class="grand">
-      <td>รวมทุกโกดัง</td>
+      <td>${warehouseFilter ? `รวมโกดัง${warehouseFilter}` : 'รวมทุกโกดัง'}</td>
       <td class="num">—</td>
-      <td class="num">${f(mS.grand_count)}</td>
-      <td class="num">${fM(mS.grand_total)}</td>
+      <td class="num">${f(printMaintCount)}</td>
+      <td class="num">${fM(printMaintTotal)}</td>
       <td class="num">100.0%</td>
     </tr>
     </tbody>
