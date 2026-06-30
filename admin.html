@@ -708,15 +708,15 @@ body.role-non-super .super-only { display: none !important; }
     <!-- 🛣 สาย — เฉพาะ VAN -->
     <div class="form-row" id="ed_vanFields">
       <div class="field">
-        <label>สาย (V01-V12)</label>
+        <label>สาย (JTGV01-JTGV12)</label>
         <select id="ed_route">
           <option value="">-- ไม่มี --</option>
-          <option value="V01">V01</option><option value="V02">V02</option>
-          <option value="V03">V03</option><option value="V04">V04</option>
-          <option value="V05">V05</option><option value="V06">V06</option>
-          <option value="V07">V07</option><option value="V08">V08</option>
-          <option value="V09">V09</option><option value="V10">V10</option>
-          <option value="V11">V11</option><option value="V12">V12</option>
+          <option value="JTGV01">JTGV01</option><option value="JTGV02">JTGV02</option>
+          <option value="JTGV03">JTGV03</option><option value="JTGV04">JTGV04</option>
+          <option value="JTGV05">JTGV05</option><option value="JTGV06">JTGV06</option>
+          <option value="JTGV07">JTGV07</option><option value="JTGV08">JTGV08</option>
+          <option value="JTGV09">JTGV09</option><option value="JTGV10">JTGV10</option>
+          <option value="JTGV11">JTGV11</option><option value="JTGV12">JTGV12</option>
           <option value="PC01">PC01</option>
         </select>
       </div>
@@ -3854,7 +3854,7 @@ function populateEditTruckOptions(selectedTruckId) {
 
 function onEditTypeChange() {
   const t = document.getElementById("ed_type").value;
-  // สาย V01-V12 → เฉพาะ VAN (รถประจำใช้ได้ทุกประเภท)
+  // สาย JTGV01-JTGV12 → เฉพาะ VAN (รถประจำใช้ได้ทุกประเภท)
   document.getElementById("ed_vanFields").style.display = t === "van" ? "" : "none";
 }
 
