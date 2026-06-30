@@ -2732,6 +2732,7 @@ async function loadAccounting() {
     <div class="card" style="padding:0;margin-bottom:18px"><div class="tbl-wrap"><table>
       <tr>
         <th>สาย</th>
+        <th>ทะเบียนรถ</th>
         <th style="text-align:right">จำนวน<br>ครั้ง</th>
         <th style="text-align:right">ลิตรรวม</th>
         <th style="text-align:right">ยอดรวม</th>
@@ -2739,8 +2740,10 @@ async function loadAccounting() {
       </tr>`;
     for (const r of data.fuel_by_route) {
       const pct = routeTotal > 0 ? ((r.total / routeTotal) * 100).toFixed(1) : "0.0";
+      const platesHtml = (r.plates || []).map(p => esc(p)).join("<br>");
       routeFuelHtml += `<tr>
         <td><b>${esc(r.route_code)}</b></td>
+        <td><small>${platesHtml || "-"}</small></td>
         <td style="text-align:right">${r.count}</td>
         <td style="text-align:right">${fmtNum(Math.round(r.liters * 10) / 10)} ล.</td>
         <td style="text-align:right"><b>฿${fmtNum(Math.round(r.total))}</b></td>
@@ -2749,6 +2752,7 @@ async function loadAccounting() {
     }
     routeFuelHtml += `<tr style="background:#f5f5f5;font-weight:700">
         <td>รวม</td>
+        <td></td>
         <td style="text-align:right">${data.fuel_by_route.reduce((s, r) => s + r.count, 0)}</td>
         <td style="text-align:right">${fmtNum(Math.round(routeLiters * 10) / 10)} ล.</td>
         <td style="text-align:right">฿${fmtNum(Math.round(routeTotal))}</td>
