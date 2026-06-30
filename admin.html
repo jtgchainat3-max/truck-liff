@@ -201,6 +201,7 @@ body.role-non-super .super-only { display: none !important; }
     <div class="tab-submenu">
       <div class="tab-sub" data-tab="trucks"  onclick="switchTab('trucks')">🚛 รถ</div>
       <div class="tab-sub" data-tab="drivers" onclick="switchTab('drivers')">👤 คนขับ</div>
+      <div class="tab-sub" data-tab="routes"  onclick="switchTab('routes')">🛣 รถ-สาย</div>
     </div>
   </div>
 
@@ -809,6 +810,80 @@ body.role-non-super .super-only { display: none !important; }
     <div class="modal-actions" style="margin-top:14px">
       <button class="btn btn-gray" style="width:auto;padding:10px 20px" onclick="closeModal('switchTruckModal')">ยกเลิก</button>
       <button class="btn btn-primary" style="width:auto;padding:10px 20px;background:#7c4dff" onclick="submitSwitchTruck()">🔄 ยืนยันเปลี่ยน</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════ ROUTES ════════════════════════════════════ -->
+<div id="sec-routes" class="section">
+  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px">
+    <h3 style="margin:0;flex:1">🛣 รถ-สาย — Assignment ปัจจุบัน</h3>
+    <button class="btn btn-primary" style="width:auto;padding:9px 18px" onclick="openAssignModal(null,'permanent')">➕ เพิ่ม/สลับถาวร</button>
+    <button class="btn btn-gray"    style="width:auto;padding:9px 18px" onclick="openAssignModal(null,'temp')">🔁 สลับชั่วคราว</button>
+    <button class="btn btn-gray"    style="width:auto;padding:9px 18px" onclick="loadRoutes()">🔄 รีเฟรช</button>
+  </div>
+  <div id="routesContent"><div class="loader"><div class="spinner"></div>กำลังโหลด...</div></div>
+</div>
+
+<!-- Modal: สลับรถ -->
+<div id="assignModal" class="modal" style="display:none">
+  <div class="modal-box" style="max-width:480px">
+    <h3 id="assignModalTitle" style="margin-top:0">🛣 สลับรถ</h3>
+
+    <div class="form-row">
+      <div class="field">
+        <label>สาย</label>
+        <select id="am_route">
+          <option value="">-- เลือกสาย --</option>
+          <option value="JTGV01">JTGV01</option><option value="JTGV02">JTGV02</option>
+          <option value="JTGV03">JTGV03</option><option value="JTGV04">JTGV04</option>
+          <option value="JTGV05">JTGV05</option><option value="JTGV06">JTGV06</option>
+          <option value="JTGV07">JTGV07</option><option value="JTGV08">JTGV08</option>
+          <option value="JTGV09">JTGV09</option><option value="JTGV10">JTGV10</option>
+          <option value="JTGV11">JTGV11</option><option value="JTGV12">JTGV12</option>
+          <option value="PC01">PC01</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>รถ</label>
+        <select id="am_truck">
+          <option value="">-- เลือกรถ --</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="field">
+        <label>ประเภท</label>
+        <select id="am_role">
+          <option value="primary">primary — รถประจำสาย</option>
+          <option value="spare">spare — รถสำรอง</option>
+          <option value="non_route">non_route — ไม่ใช่รถสาย</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="field">
+        <label>วันที่เริ่ม</label>
+        <input type="date" id="am_from">
+      </div>
+      <div class="field" id="am_toField">
+        <label>วันที่สิ้นสุด <small style="color:#888">(ชั่วคราว)</small></label>
+        <input type="date" id="am_to">
+      </div>
+    </div>
+
+    <div class="field">
+      <label>เหตุผล</label>
+      <input type="text" id="am_reason" placeholder="เช่น รถซ่อม, เซลลา, เปลี่ยนเซล...">
+    </div>
+
+    <div id="am_warning" style="display:none;background:#fff3cd;border:1px solid #ffc107;border-radius:6px;padding:10px;margin-top:8px;font-size:13px"></div>
+
+    <div style="display:flex;gap:10px;margin-top:18px">
+      <button class="btn btn-primary" style="flex:1" onclick="submitAssignment()">✅ บันทึก</button>
+      <button class="btn btn-gray"    style="width:auto;padding:10px 20px" onclick="closeAssignModal()">ยกเลิก</button>
     </div>
   </div>
 </div>
@@ -1441,6 +1516,7 @@ const TAB_LOADERS = {
   documents:   loadDocuments,
   trucks:      loadTrucks,
   drivers:     () => { loadRegCode(); setupGpsTestLink(); loadDrivers(); },
+  routes:      loadRoutes,
   companies:   loadCompanies,
   adminusers:  loadAdminUsers,
   settings:    loadSettings,
@@ -5436,6 +5512,180 @@ async function doEditTruck() {
   const res = await api("update-truck", { method: "PUT", body: JSON.stringify(body) });
   if (res?.success) { closeModal("editTruckModal"); loadTrucks(); loadDocuments(); }
   else { document.getElementById("editTruckMsg").textContent = res?.error || "เกิดข้อผิดพลาด"; }
+}
+
+// ════════════════════════════════════════════════════════════
+// ROUTES — รถ-สาย assignments
+// ════════════════════════════════════════════════════════════
+let _truckList = []; // cache รายการรถสำหรับ modal dropdown
+
+async function loadRoutes() {
+  const el = document.getElementById("routesContent");
+  el.innerHTML = '<div class="loader"><div class="spinner"></div>กำลังโหลด...</div>';
+
+  const [assignments, trucks] = await Promise.all([
+    api("truck-assignments"),
+    api("trucks"),
+  ]);
+
+  // cache รถไว้ให้ modal ใช้
+  _truckList = trucks || [];
+
+  if (!assignments || assignments.length === 0) {
+    el.innerHTML = '<div class="card" style="color:#888;text-align:center">ยังไม่มี assignment</div>';
+    return;
+  }
+
+  // แยก active vs history
+  const active  = assignments.filter(a => !a.to_date);
+  const history = assignments.filter(a =>  a.to_date);
+
+  // จัดกลุ่มตาม route
+  const byRoute = {};
+  for (const a of assignments) {
+    if (!byRoute[a.route_code]) byRoute[a.route_code] = { active: [], history: [] };
+    if (!a.to_date) byRoute[a.route_code].active.push(a);
+    else            byRoute[a.route_code].history.push(a);
+  }
+
+  const roleLabel = r => r === 'primary' ? '<span class="badge b-blue">ประจำ</span>'
+                       : r === 'spare'   ? '<span class="badge b-warn">สำรอง</span>'
+                       :                   '<span class="badge b-gray">ไม่ใช่สาย</span>';
+
+  const fmtDate = d => d ? d.slice(0,10) : '—';
+
+  let html = '';
+  for (const route of Object.keys(byRoute).sort()) {
+    const g = byRoute[route];
+    html += `
+    <div class="card" style="margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">
+        <b style="font-size:16px">🛣 ${esc(route)}</b>
+        <button class="btn btn-gray" style="width:auto;padding:4px 12px;font-size:12px"
+          onclick="openAssignModal('${esc(route)}','permanent')">➕ สลับถาวร</button>
+        <button class="btn btn-gray" style="width:auto;padding:4px 12px;font-size:12px"
+          onclick="openAssignModal('${esc(route)}','temp')">🔁 สลับชั่วคราว</button>
+      </div>`;
+
+    // active assignments
+    if (g.active.length === 0) {
+      html += `<div style="color:#aaa;font-size:13px;padding:6px 0">ยังไม่มีรถ active</div>`;
+    } else {
+      for (const a of g.active) {
+        const t = a.trucks;
+        html += `
+        <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #f0f0f0;flex-wrap:wrap">
+          <b style="font-size:15px">${esc(t?.plate_number || '-')}</b>
+          <small style="color:#888">${esc(t?.warehouse || '')}</small>
+          ${roleLabel(a.role)}
+          <small style="color:#888">ตั้งแต่ ${fmtDate(a.from_date)}</small>
+          ${a.reason ? `<small style="color:#e65100">• ${esc(a.reason)}</small>` : ''}
+          <button class="btn btn-red super-only" style="width:auto;padding:2px 8px;font-size:11px;margin-left:auto"
+            onclick="deleteAssignment('${a.id}','${esc(t?.plate_number||'')}','${esc(route)}')" title="ลบ assignment นี้">🗑</button>
+        </div>`;
+      }
+    }
+
+    // history (collapsible)
+    if (g.history.length > 0) {
+      html += `
+      <details style="margin-top:8px">
+        <summary style="cursor:pointer;font-size:12px;color:#888">📜 ประวัติ (${g.history.length} รายการ)</summary>
+        <div style="margin-top:6px">`;
+      for (const a of g.history) {
+        const t = a.trucks;
+        html += `
+        <div style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:12px;color:#666;border-bottom:1px solid #f8f8f8;flex-wrap:wrap">
+          <span>${esc(t?.plate_number || '-')}</span>
+          ${roleLabel(a.role)}
+          <span>${fmtDate(a.from_date)} → ${fmtDate(a.to_date)}</span>
+          ${a.reason ? `<span style="color:#e65100">• ${esc(a.reason)}</span>` : ''}
+          <small style="color:#aaa">(${esc(a.source)})</small>
+          <button class="btn btn-red super-only" style="width:auto;padding:1px 6px;font-size:10px;margin-left:auto"
+            onclick="deleteAssignment('${a.id}','${esc(t?.plate_number||'')}','${esc(route)}')" title="ลบ">🗑</button>
+        </div>`;
+      }
+      html += `</div></details>`;
+    }
+    html += `</div>`;
+  }
+  el.innerHTML = html;
+}
+
+function openAssignModal(routeCode, mode) {
+  // mode: 'permanent' | 'temp'
+  const isTemp = mode === 'temp';
+  document.getElementById("assignModalTitle").textContent = isTemp
+    ? "🔁 สลับรถชั่วคราว" : "➕ สลับรถถาวร / เพิ่ม Assignment";
+  document.getElementById("am_route").value   = routeCode || "";
+  document.getElementById("am_truck").value   = "";
+  document.getElementById("am_role").value    = "primary";
+  document.getElementById("am_from").value    = todayISO();
+  document.getElementById("am_to").value      = "";
+  document.getElementById("am_reason").value  = "";
+  document.getElementById("am_toField").style.display = isTemp ? "" : "none";
+  document.getElementById("am_warning").style.display = "none";
+  document.getElementById("assignModal").dataset.mode = mode;
+
+  // populate truck dropdown
+  const sel = document.getElementById("am_truck");
+  sel.innerHTML = '<option value="">-- เลือกรถ --</option>';
+  for (const t of _truckList.filter(t => t.is_active)) {
+    const opt = document.createElement("option");
+    opt.value = t.id;
+    opt.textContent = `${t.plate_number} (${t.warehouse || ''})`;
+    sel.appendChild(opt);
+  }
+
+  document.getElementById("assignModal").style.display = "flex";
+}
+
+function closeAssignModal() {
+  document.getElementById("assignModal").style.display = "none";
+}
+
+async function submitAssignment() {
+  const route    = document.getElementById("am_route").value.trim();
+  const truckId  = document.getElementById("am_truck").value;
+  const role     = document.getElementById("am_role").value;
+  const fromDate = document.getElementById("am_from").value;
+  const toDate   = document.getElementById("am_to").value;
+  const reason   = document.getElementById("am_reason").value.trim();
+  const mode     = document.getElementById("assignModal").dataset.mode;
+
+  if (!route || !truckId || !fromDate) {
+    alert("กรุณาระบุสาย, รถ, และวันที่เริ่ม");
+    return;
+  }
+  if (mode === "temp" && !toDate) {
+    alert("สลับชั่วคราวต้องระบุวันที่สิ้นสุด");
+    return;
+  }
+  if (mode === "temp" && toDate <= fromDate) {
+    alert("วันสิ้นสุดต้องมากกว่าวันเริ่ม");
+    return;
+  }
+
+  const body = {
+    truck_id:   parseInt(truckId),
+    route_code: route,
+    from_date:  fromDate,
+    to_date:    mode === "temp" ? toDate : null,
+    role,
+    reason: reason || null,
+  };
+
+  const res = await api("truck-assignments", { method: "POST", body: JSON.stringify(body) });
+  if (res?.error) { alert("เกิดข้อผิดพลาด: " + res.error); return; }
+  closeAssignModal();
+  loadRoutes();
+}
+
+async function deleteAssignment(id, plate, route) {
+  if (!confirm(`ลบ assignment รถ "${plate}" ออกจากสาย "${route}"?\n(ไม่สามารถกู้คืนได้)`)) return;
+  const res = await api(`truck-assignments/${id}`, { method: "DELETE" });
+  if (res?.error) { alert("เกิดข้อผิดพลาด: " + res.error); return; }
+  loadRoutes();
 }
 
 // ════════════════════════════════════════════════════════════
