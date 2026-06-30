@@ -2722,6 +2722,41 @@ async function loadAccounting() {
   const monthThaiName = ["มกราคม","กุมภาพันธ์","มีนาคม","เมษายน","พฤษภาคม","มิถุนายน","กรกฎาคม","สิงหาคม","กันยายน","ตุลาคม","พฤศจิกายน","ธันวาคม"][parseInt(month) - 1];
   const yearThai = parseInt(year) + 543;
 
+  // ── สรุปค่าน้ำมันแยกตามสายวิ่ง ────────────────────────────────────────────
+  let routeFuelHtml = "";
+  if (data.fuel_by_route && data.fuel_by_route.length > 0) {
+    const routeTotal = data.fuel_by_route.reduce((s, r) => s + r.total, 0);
+    const routeLiters = data.fuel_by_route.reduce((s, r) => s + r.liters, 0);
+    routeFuelHtml = `
+    <h3 style="margin-bottom:10px">🛣️ ค่าน้ำมันแยกตามสาย — ${monthThaiName} ${yearThai}</h3>
+    <div class="card" style="padding:0;margin-bottom:18px"><div class="tbl-wrap"><table>
+      <tr>
+        <th>สาย</th>
+        <th style="text-align:right">จำนวน<br>ครั้ง</th>
+        <th style="text-align:right">ลิตรรวม</th>
+        <th style="text-align:right">ยอดรวม</th>
+        <th style="text-align:right">%</th>
+      </tr>`;
+    for (const r of data.fuel_by_route) {
+      const pct = routeTotal > 0 ? ((r.total / routeTotal) * 100).toFixed(1) : "0.0";
+      routeFuelHtml += `<tr>
+        <td><b>${esc(r.route_code)}</b></td>
+        <td style="text-align:right">${r.count}</td>
+        <td style="text-align:right">${fmtNum(Math.round(r.liters * 10) / 10)} ล.</td>
+        <td style="text-align:right"><b>฿${fmtNum(Math.round(r.total))}</b></td>
+        <td style="text-align:right;color:#888">${pct}%</td>
+      </tr>`;
+    }
+    routeFuelHtml += `<tr style="background:#f5f5f5;font-weight:700">
+        <td>รวม</td>
+        <td style="text-align:right">${data.fuel_by_route.reduce((s, r) => s + r.count, 0)}</td>
+        <td style="text-align:right">${fmtNum(Math.round(routeLiters * 10) / 10)} ล.</td>
+        <td style="text-align:right">฿${fmtNum(Math.round(routeTotal))}</td>
+        <td style="text-align:right">100%</td>
+      </tr>
+    </table></div></div>`;
+  }
+
   let html = `
     <div class="summary-grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));margin-bottom:14px">
       <div class="sbox blue"><div class="num">${data.fuel.length}</div><div class="lbl">รายการน้ำมัน</div></div>
@@ -2729,6 +2764,7 @@ async function loadAccounting() {
       <div class="sbox green"><div class="num">${data.fuel_received}/${data.fuel.length}</div><div class="lbl">ได้รับบิลแล้ว</div></div>
       <div class="sbox red"><div class="num">${data.fuel_pending}</div><div class="lbl">รอบิล</div></div>
     </div>
+    ${routeFuelHtml}
     <h3 style="margin-bottom:10px">⛽ น้ำมัน — ${monthThaiName} ${yearThai}</h3>`;
 
   if (data.fuel.length === 0) {
