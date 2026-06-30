@@ -4721,6 +4721,16 @@ async function exportBillsZip() {
   perCompanyCsv.push(`รวมทั้งหมด,,,${fS.grand_total},,${mS.grand_total},${fS.grand_total + mS.grand_total}`);
   zip.file("03_สรุปแต่ละบริษัท.csv", "﻿" + perCompanyCsv.join("\n"));
 
+  // 04_สรุปแต่ละสาย.csv
+  if (data.fuel_by_route && data.fuel_by_route.length > 0) {
+    const perRouteCsv = ["สายวิ่ง,ทะเบียนรถ,ยอดรวมค่าน้ำมัน"];
+    for (const r of data.fuel_by_route) {
+      perRouteCsv.push(`${r.route_code},"${(r.plates || []).join(", ")}",${r.total}`);
+    }
+    perRouteCsv.push(`รวม,,${data.fuel_by_route.reduce((s, r) => s + r.total, 0)}`);
+    zip.file("04_สรุปแต่ละสาย.csv", "﻿" + perRouteCsv.join("\n"));
+  }
+
   // README.txt
   const thaiMonth2 = ["มกราคม","กุมภาพันธ์","มีนาคม","เมษายน","พฤษภาคม","มิถุนายน","กรกฎาคม","สิงหาคม","กันยายน","ตุลาคม","พฤศจิกายน","ธันวาคม"][parseInt(month) - 1];
   const readme = `📋 รายงานบิล ${thaiMonth2} ${parseInt(year) + 543}\n` +
@@ -4977,6 +4987,35 @@ async function exportBillsPDF(warehouseFilter = '') {
 
   ${(type === "all" || type === "fuel") && (fuelByWarehouse.length > 0) ? `
   <!-- ═══ FUEL: ต่อรถ ═══ -->
+  <!-- ═══ FUEL: สรุปต่อสายวิ่ง ═══ -->
+  ${(data.fuel_by_route && data.fuel_by_route.length > 0) ? `
+  <h2>🛣️ ค่าน้ำมัน — สรุปตามสายวิ่ง${warehouseFilter ? ` (โกดัง${warehouseFilter})` : ''}</h2>
+  <table>
+    <colgroup>
+      <col style="width:18%">
+      <col style="width:36%">
+      <col style="width:46%">
+    </colgroup>
+    <thead><tr>
+      <th>สายวิ่ง</th>
+      <th>ทะเบียนรถ</th>
+      <th style="text-align:right">ยอดรวมค่าน้ำมัน</th>
+    </tr></thead>
+    <tbody>
+    ${data.fuel_by_route.map(r => `
+      <tr>
+        <td><b>${esc(r.route_code)}</b></td>
+        <td>${(r.plates || []).map(p => esc(p)).join(", ")}</td>
+        <td class="num"><b>${fM(r.total)}</b></td>
+      </tr>`).join("")}
+    <tr class="grand">
+      <td colspan="2">รวม (${data.fuel_by_route.length} สาย)</td>
+      <td class="num">${fM(data.fuel_by_route.reduce((s, r) => s + r.total, 0))}</td>
+    </tr>
+    </tbody>
+  </table>` : ''}
+
+  <!-- ═══ FUEL: สรุปต่อรถ ═══ -->
   <h2>⛽ น้ำมัน — สรุปยอดต่อรถแต่ละคัน${warehouseFilter ? ` (โกดัง${warehouseFilter})` : ''}</h2>
   <table>
     <colgroup>
