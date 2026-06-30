@@ -4837,432 +4837,223 @@ async function exportBillsPDF(warehouseFilter = '') {
     .map(t => ({ plate: t.plate, warehouse: t.warehouse, company_name: t.company_name, count: t.rows.length, total: t.total }))
     .sort((a, b) => b.total - a.total);
 
-  // helper: format number with thousand separator (สำหรับ PDF)
-  const f = (n) => (n === null || n === undefined || n === "") ? "—" : Number(n).toLocaleString("th-TH", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  // ── helpers ──
+  const f  = (n) => (n === null || n === undefined || n === "") ? "—" : Number(n).toLocaleString("th-TH", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
   const fM = (n) => (n === null || n === undefined || n === "") ? "—" : `฿${Number(n).toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const pct = (part, total) => total ? `${(part / total * 100).toFixed(1)}%` : "0.0%";
+  const fN  = (n) => (!n) ? "—" : Number(n).toLocaleString("th-TH", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+
+  // ── สร้าง date × plate matrix (จัดกลุ่มตามโกดัง — รถโกดังเดียวกันอยู่ติดกัน) ──
+  const allFuelFiltered = (data.fuel || []).filter(r => !warehouseFilter || r.trucks?.warehouse === warehouseFilter);
+  const plateWarehouse  = {};
+  for (const r of allFuelFiltered) {
+    const p = r.trucks?.plate_number || '-';
+    if (!plateWarehouse[p]) plateWarehouse[p] = r.trucks?.warehouse || '(ไม่ระบุ)';
+  }
+  // เรียงตามโกดังก่อน แล้วค่อยตามทะเบียน → รถโกดังเดียวกันอยู่ติดกัน ไม่สลับไปมา
+  const matrixPlates = [...new Set(allFuelFiltered.map(r => r.trucks?.plate_number || '-'))]
+    .sort((a, b) => {
+      const wa = plateWarehouse[a] || '', wb = plateWarehouse[b] || '';
+      return wa !== wb ? wa.localeCompare(wb, 'th') : a.localeCompare(b, 'th');
+    });
+  const matrixDates = [...new Set(allFuelFiltered.map(r => r.log_date))].sort();
+  const matrixCell  = {};
+  for (const r of allFuelFiltered) {
+    const d = r.log_date, p = r.trucks?.plate_number || '-';
+    const cost = parseFloat(r.total_cost ?? r.total_cost_entered ?? 0) || 0;
+    if (!matrixCell[d]) matrixCell[d] = {};
+    matrixCell[d][p] = (matrixCell[d][p] || 0) + cost;
+  }
+  const matRowTotal = d => matrixPlates.reduce((s, p) => s + (matrixCell[d]?.[p] || 0), 0);
+  const matColTotal = p => matrixDates.reduce((s, d) => s + (matrixCell[d]?.[p] || 0), 0);
+  const matGrand    = matrixDates.reduce((s, d) => s + matRowTotal(d), 0);
+
+  // สร้าง warehouse group headers สำหรับ colspan row
+  const whGroups = [];
+  let _wh = null, _cnt = 0;
+  for (const p of matrixPlates) {
+    const w = plateWarehouse[p] || '(ไม่ระบุ)';
+    if (w !== _wh) { if (_wh !== null) whGroups.push({ wh: _wh, cnt: _cnt }); _wh = w; _cnt = 1; }
+    else _cnt++;
+  }
+  if (_wh !== null) whGroups.push({ wh: _wh, cnt: _cnt });
+
+  // สีต่อโกดัง (รองรับ 4 โกดัง)
+  const whHColors = ['#bbdefb','#ffccbc','#c8e6c9','#e1bee7'];
+  const whLColors = ['#e3f2fd','#fff3e0','#f1f8e9','#f3e5f5'];
+  const whCM = {}; // colorMap
+  whGroups.forEach((g, i) => { whCM[g.wh] = { h: whHColors[i % 4], l: whLColors[i % 4] }; });
+
+  const N = matrixPlates.length;
+  const plateColW = N > 0 ? Math.max(5, Math.floor(74 / N)) : 12;
+
+  // ── flat maintenance list ──
+  const allMaintFlat = maintByWarehouse.flatMap(w => w.trucks.flatMap(t => t.rows.map(r => ({ ...r, plate: t.plate }))));
+  allMaintFlat.sort((a, b) => a.maintenance_date.localeCompare(b.maintenance_date));
 
   const html = `<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><title>รายงาน ${thaiMonth} ${yearThai}</title>
 <style>
   * { box-sizing: border-box; }
   body {
-    font-family: 'Sarabun', 'Tahoma', sans-serif;
-    padding: 24px 28px;
-    color: #1a1a1a;
-    line-height: 1.4;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
+    font-family: 'Sarabun','Tahoma',sans-serif;
+    padding: 10px 14px; color: #1a1a1a;
+    line-height: 1.2; font-size: 10.5px;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
-  h1 { font-size: 22px; margin: 0 0 4px 0; color: #0d47a1; }
-  .subtitle { color: #888; font-size: 12px; margin-bottom: 18px; }
-
-  h2 {
-    font-size: 16px;
-    margin: 22px 0 8px 0;
-    padding: 8px 12px;
-    background: #1a73e8;
-    color: #fff;
-    border-radius: 6px 6px 0 0;
+  h1 { font-size: 16px; margin: 0 0 2px 0; color: #0d47a1; }
+  .subtitle { color: #888; font-size: 9.5px; margin-bottom: 8px; }
+  .sum-bar {
+    background: #e8f5e9; border: 1px solid #a5d6a7;
+    padding: 5px 10px; border-radius: 4px;
+    font-size: 11px; margin-bottom: 8px; color: #1b5e20;
   }
-  h3 {
-    font-size: 13px;
-    margin: 14px 0 0 0;
-    padding: 6px 12px;
-    background: #e3f2fd;
-    color: #0d47a1;
-    border-left: 4px solid #1a73e8;
-    border-radius: 0 4px 4px 0;
+  .sec {
+    font-size: 11px; font-weight: 700; color: #0d47a1;
+    margin: 10px 0 3px 0; border-left: 3px solid #1a73e8; padding-left: 6px;
   }
-
-  /* ── ตารางหลัก — fixed layout เพื่อคอลัมน์เท่ากันทุกแถว ── */
   table {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 0 0 14px 0;
-    font-size: 11.5px;
-    table-layout: fixed;
-    font-variant-numeric: tabular-nums;
+    width: 100%; border-collapse: collapse;
+    margin: 0 0 8px 0; font-size: 9.5px;
+    table-layout: fixed; font-variant-numeric: tabular-nums;
   }
   th, td {
-    border: 1px solid #d0d7de;
-    padding: 6px 8px;
-    vertical-align: middle;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    word-wrap: break-word;
+    border: 1px solid #ccc; padding: 2px 4px;
+    vertical-align: middle; overflow: hidden;
+    text-overflow: ellipsis; word-wrap: break-word;
   }
-  th {
-    background: #f1f5f9;
-    color: #1a1a1a;
-    font-weight: 700;
-    text-align: center;
-    font-size: 11px;
-    text-transform: none;
-  }
+  th { background: #f1f5f9; font-weight: 700; text-align: center; font-size: 8.5px; }
   td { text-align: left; }
-  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .num { text-align: right; }
   .ctr { text-align: center; }
-  .lbl { color: #6b7280; font-size: 10px; }
-
-  /* ── striped rows สำหรับอ่านง่าย ── */
   tbody tr:nth-child(even) td { background: #fafbfc; }
-  tbody tr.subtotal td { background: #fff8e1 !important; font-weight: 700; }
-  tbody tr.grand td { background: #c8e6c9 !important; font-weight: 700; font-size: 12.5px; }
-
-  /* ── สรุปยอดรวม (พื้นอ่อน อ่านง่าย) ── */
-  .summary-card {
-    background: #f5f5f5;
-    color: #1a1a1a;
-    padding: 16px 20px;
-    border-radius: 10px;
-    margin: 14px 0 18px 0;
-    border: 1px solid #d0d7de;
-  }
-  .summary-card .title { font-size: 15px; font-weight: 700; color: #0d47a1; margin-bottom: 10px; }
-  .summary-card table { background: transparent; font-size: 14px; margin: 0; }
-  .summary-card td { border: none; padding: 7px 0; color: #1a1a1a; }
-  .summary-card .grand-row td {
-    border-top: 2px solid #1a73e8;
-    background: #c8e6c9 !important;
-    font-size: 16px;
-    font-weight: 700;
-    padding: 10px 8px;
-    color: #1b5e20;
-  }
-
-  /* ── หัวบริษัท/รถ ── */
-  .section-info { font-size: 11px; color: #6b7280; font-weight: 400; }
-
-  /* ── print specific ── */
+  tbody tr.grand td { background: #c8e6c9 !important; font-weight: 700; }
   @media print {
-    body { padding: 14px 18px; }
-    h2 { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    h3 { page-break-after: avoid; }
-    table { page-break-inside: auto; }
-    tr { page-break-inside: avoid; page-break-after: auto; }
-    thead { display: table-header-group; }
-    tfoot { display: table-row-group; }
+    body { padding: 8px 10px; }
     .no-print { display: none !important; }
+    table { page-break-inside: auto; }
+    tr { page-break-inside: avoid; }
+    thead { display: table-header-group; }
   }
-
-  /* ── ปุ่ม print ── */
   .toolbar {
-    position: sticky; top: 0; background: #fff; border-bottom: 1px solid #ddd;
-    padding: 10px 0; margin: -24px -28px 14px -28px;
-    padding-left: 28px; padding-right: 28px; z-index: 100;
+    position: sticky; top: 0; background: #fff;
+    border-bottom: 1px solid #ddd; padding: 8px 0;
+    margin: -10px -14px 10px -14px; padding-left: 14px; z-index: 100;
   }
-  .toolbar button { padding: 8px 16px; background: #1a73e8; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-family: inherit; }
+  .toolbar button {
+    padding: 6px 14px; background: #1a73e8; color: #fff;
+    border: none; border-radius: 4px; cursor: pointer;
+    font-size: 13px; font-family: inherit;
+  }
 </style></head><body>
   <div class="toolbar no-print">
     <button onclick="window.print()">🖨 พิมพ์ / Save as PDF</button>
-    &nbsp; <span style="color:#666;font-size:13px">ตั้งค่าใน print dialog: ขนาด A4, margin = ปานกลาง</span>
+    &nbsp;<span style="color:#666;font-size:12px">A4 · margin ปานกลาง</span>
   </div>
 
   <h1>📋 รายงานบิล — ${thaiMonth} ${yearThai}${warehouseFilter ? ` · โกดัง${warehouseFilter}` : ''}</h1>
-  <div class="subtitle">สร้างเมื่อ ${new Date().toLocaleString("th-TH")} · ${type === "all" ? "น้ำมัน + ซ่อมบำรุง" : type === "fuel" ? "เฉพาะน้ำมัน" : "เฉพาะซ่อมบำรุง"}${warehouseFilter ? ` · เฉพาะโกดัง${warehouseFilter}` : ' · ทุกโกดัง'}</div>
+  <div class="subtitle">สร้าง ${new Date().toLocaleString("th-TH")} · ${type === "all" ? "น้ำมัน + ซ่อม" : type === "fuel" ? "เฉพาะน้ำมัน" : "เฉพาะซ่อม"}${warehouseFilter ? `` : ' · ทุกโกดัง'}</div>
 
   ${type === "all" ? `
-  <!-- ═══ SUMMARY ═══ -->
-  <div class="summary-card">
-    <div class="title">💰 สรุปยอดรวม${warehouseFilter ? `โกดัง${warehouseFilter}` : 'ทั้งหมด'}</div>
-    <table>
-      <tr>
-        <td>⛽ ค่าน้ำมันรวม</td>
-        <td class="num">${printFuelCount} รายการ</td>
-        <td class="num"><b>${fM(printFuelTotal)}</b></td>
-      </tr>
-      <tr>
-        <td>🔧 ค่าซ่อมบำรุงรวม</td>
-        <td class="num">${printMaintCount} รายการ</td>
-        <td class="num"><b>${fM(printMaintTotal)}</b></td>
-      </tr>
-      <tr class="grand-row">
-        <td>💵 ยอดรวมทั้งสิ้น</td>
-        <td class="num">${printFuelCount + printMaintCount} รายการ</td>
-        <td class="num"><b>${fM(printFuelTotal + printMaintTotal)}</b></td>
-      </tr>
-    </table>
-  </div>
-  ` : ""}
+  <div class="sum-bar">
+    ⛽ น้ำมัน <b>${fM(printFuelTotal)}</b> · ${printFuelCount} ครั้ง &nbsp;&nbsp;|&nbsp;&nbsp;
+    🔧 ซ่อม <b>${fM(printMaintTotal)}</b> · ${printMaintCount} รายการ &nbsp;&nbsp;|&nbsp;&nbsp;
+    💵 รวม <b>${fM(printFuelTotal + printMaintTotal)}</b>
+  </div>` : ''}
 
-  ${(type === "all" || type === "fuel") && (fuelByWarehouse.length > 0) ? `
-  <!-- ═══ FUEL: ต่อรถ ═══ -->
-  <!-- ═══ FUEL: สรุปต่อสายวิ่ง ═══ -->
-  ${(data.fuel_by_route && data.fuel_by_route.length > 0) ? `
-  <h2>🛣️ ค่าน้ำมัน — สรุปตามสายวิ่ง${warehouseFilter ? ` (โกดัง${warehouseFilter})` : ''}</h2>
+  ${(type === "all" || type === "fuel") && data.fuel_by_route?.length > 0 ? `
+  <div class="sec">สรุปค่าน้ำมันตามสายวิ่ง</div>
   <table>
-    <colgroup>
-      <col style="width:18%">
-      <col style="width:36%">
-      <col style="width:46%">
-    </colgroup>
-    <thead><tr>
-      <th>สายวิ่ง</th>
-      <th>ทะเบียนรถ</th>
-      <th style="text-align:right">ยอดรวมค่าน้ำมัน</th>
-    </tr></thead>
+    <colgroup><col style="width:12%"><col style="width:44%"><col style="width:18%"><col style="width:26%"></colgroup>
+    <thead><tr><th>สาย</th><th>ทะเบียน</th><th style="text-align:right">ลิตร</th><th style="text-align:right">ยอดรวม</th></tr></thead>
     <tbody>
     ${data.fuel_by_route.map(r => `
       <tr>
         <td><b>${esc(r.route_code)}</b></td>
-        <td>${(r.plates || []).map(p => esc(p)).join(", ")}</td>
+        <td>${(r.plates || []).map(p => esc(p)).join(', ')}</td>
+        <td class="num">${f(r.liters)}</td>
         <td class="num"><b>${fM(r.total)}</b></td>
-      </tr>`).join("")}
+      </tr>`).join('')}
     <tr class="grand">
-      <td colspan="2">รวม (${data.fuel_by_route.length} สาย)</td>
+      <td colspan="2">รวม ${data.fuel_by_route.length} สาย</td>
+      <td class="num">${f(data.fuel_by_route.reduce((s, r) => s + (r.liters || 0), 0))}</td>
       <td class="num">${fM(data.fuel_by_route.reduce((s, r) => s + r.total, 0))}</td>
     </tr>
     </tbody>
   </table>` : ''}
 
-  <!-- ═══ FUEL: สรุปต่อรถ ═══ -->
-  <h2>⛽ น้ำมัน — สรุปยอดต่อรถแต่ละคัน${warehouseFilter ? ` (โกดัง${warehouseFilter})` : ''}</h2>
+  ${(type === "all" || type === "fuel") && matrixDates.length > 0 ? `
+  <div class="sec">น้ำมัน — วันที่ × ทะเบียน (฿ กลมเป็นจำนวนเต็ม)</div>
   <table>
     <colgroup>
-      <col style="width:18%">
-      <col style="width:14%">
-      <col style="width:34%">
-      <col style="width:12%">
-      <col style="width:22%">
+      <col style="width:7%">
+      ${matrixPlates.map(() => `<col style="width:${plateColW}%">`).join('')}
+      <col style="width:8%">
     </colgroup>
-    <thead><tr>
-      <th>ทะเบียน</th>
-      <th>โกดัง</th>
-      <th>บริษัท</th>
-      <th>เติม (ครั้ง)</th>
-      <th>ยอดรวม</th>
-    </tr></thead>
-    <tbody>
-    ${printFuelByTruck.map(t => `
+    <thead>
       <tr>
-        <td><b>${esc(t.plate)}</b></td>
-        <td class="ctr">${esc(t.warehouse)}</td>
-        <td>${esc(t.company_name)}</td>
-        <td class="num">${f(t.count)}</td>
-        <td class="num"><b>${fM(t.total)}</b></td>
-      </tr>`).join("")}
+        <th rowspan="2" style="vertical-align:middle">วันที่</th>
+        ${whGroups.map(g => `<th colspan="${g.cnt}" style="background:${whCM[g.wh].h};color:#1a1a1a;font-size:8px">📍 ${esc(g.wh)}</th>`).join('')}
+        <th rowspan="2" style="vertical-align:middle">รวม</th>
+      </tr>
+      <tr>
+        ${matrixPlates.map(p => `<th style="background:${(whCM[plateWarehouse[p] || '(ไม่ระบุ)'] || {l:'#f1f5f9'}).l}">${esc(p)}</th>`).join('')}
+      </tr>
+    </thead>
+    <tbody>
+    ${matrixDates.map(d => `
+      <tr>
+        <td class="ctr"><b>${d.slice(8)}</b></td>
+        ${matrixPlates.map(p => {
+          const v = matrixCell[d]?.[p] || 0;
+          const lc = (whCM[plateWarehouse[p] || '(ไม่ระบุ)'] || {l:''}).l;
+          return v
+            ? `<td class="num" style="background:${lc}">${Number(v).toLocaleString('th-TH', { maximumFractionDigits: 0 })}</td>`
+            : `<td class="ctr" style="color:#ccc;background:${lc}">—</td>`;
+        }).join('')}
+        <td class="num"><b>${fN(matRowTotal(d))}</b></td>
+      </tr>`).join('')}
     <tr class="grand">
-      <td colspan="3">รวมทุกคัน (${printFuelByTruck.length} คัน)</td>
-      <td class="num">${f(printFuelCount)}</td>
-      <td class="num">${fM(printFuelTotal)}</td>
+      <td>รวม</td>
+      ${matrixPlates.map(p => `<td class="num">${fN(matColTotal(p))}</td>`).join('')}
+      <td class="num"><b>${fN(matGrand)}</b></td>
     </tr>
     </tbody>
-  </table>
+  </table>` : ''}
 
-  <!-- ═══ FUEL: สรุปต่อโกดัง ═══ -->
-  <h2>⛽ น้ำมัน — สรุปยอดต่อโกดัง</h2>
+  ${(type === "all" || type === "maintenance") && allMaintFlat.length > 0 ? `
+  <div class="sec">ซ่อมบำรุง — รายละเอียด (${allMaintFlat.length} รายการ · ${fM(printMaintTotal)})</div>
   <table>
     <colgroup>
-      <col style="width:38%">
-      <col style="width:14%">
-      <col style="width:14%">
-      <col style="width:22%">
-      <col style="width:12%">
+      <col style="width:10%"><col style="width:11%"><col style="width:16%">
+      <col style="width:18%"><col style="width:10%"><col style="width:24%"><col style="width:11%">
     </colgroup>
     <thead><tr>
-      <th>โกดัง</th>
-      <th>จำนวนรถ</th>
-      <th>รายการ</th>
-      <th>ยอดรวม</th>
-      <th>สัดส่วน</th>
+      <th>วันที่</th><th>ทะเบียน</th><th>ประเภท</th>
+      <th>ร้าน</th><th>ไมล์</th><th>หมายเหตุ</th><th style="text-align:right">ยอด</th>
     </tr></thead>
     <tbody>
-    ${fuelByWarehouse.map(w => `
+    ${allMaintFlat.map(r => `
       <tr>
-        <td><b>📍 ${esc(w.warehouse)}</b></td>
-        <td class="num">${f(w.truck_count)}</td>
-        <td class="num">${f(w.count)}</td>
-        <td class="num"><b>${fM(w.total)}</b></td>
-        <td class="num">${pct(w.total, printFuelTotal)}</td>
-      </tr>`).join("")}
+        <td class="ctr">${r.maintenance_date}</td>
+        <td><b>${esc(r.plate)}</b></td>
+        <td>${esc(MAINT_LABELS[r.maintenance_type] || r.maintenance_type)}</td>
+        <td>${esc(r.shop_name || '—')}</td>
+        <td class="num">${fN(r.mileage_at_service)}</td>
+        <td style="font-size:8.5px">${esc((r.notes || '—').slice(0, 50))}</td>
+        <td class="num"><b>${fM(r.cost)}</b></td>
+      </tr>`).join('')}
     <tr class="grand">
-      <td>${warehouseFilter ? `รวมโกดัง${warehouseFilter}` : 'รวมทุกโกดัง'}</td>
-      <td class="num">—</td>
-      <td class="num">${f(printFuelCount)}</td>
-      <td class="num">${fM(printFuelTotal)}</td>
-      <td class="num">100.0%</td>
-    </tr>
-    </tbody>
-  </table>
-
-  <!-- ═══ FUEL: รายการแยกตามโกดัง → รถ ═══ -->
-  <h2>⛽ น้ำมัน — รายละเอียดทุกรายการ (แยกตามโกดัง)</h2>
-  ${fuelByWarehouse.map(w => `
-    <div style="background:#0d47a1;color:#fff;padding:10px 14px;margin:18px 0 0 0;border-radius:6px 6px 0 0;font-size:15px;font-weight:700">
-      📍 โกดัง ${esc(w.warehouse)}
-      <span style="float:right;font-weight:400;font-size:13px;opacity:.9">${w.truck_count} คัน · ${w.count} รายการ · <b>${fM(w.total)}</b></span>
-    </div>
-    ${w.trucks.map(g => `
-      <h3>🚛 ${esc(g.plate)} <span class="section-info">· ${esc(g.company_name)}</span></h3>
-      <table>
-        <colgroup>
-          <col style="width:14%">
-          <col style="width:20%">
-          <col style="width:12%">
-          <col style="width:10%">
-          <col style="width:12%">
-          <col style="width:14%">
-          <col style="width:18%">
-        </colgroup>
-        <thead><tr>
-          <th>วันที่</th>
-          <th>คนขับ</th>
-          <th>ไมล์</th>
-          <th>ลิตร</th>
-          <th>ราคา/ล.</th>
-          <th>ยอดรวม</th>
-          <th>ปั๊ม</th>
-        </tr></thead>
-        <tbody>
-        ${g.rows.map(r => `
-          <tr>
-            <td class="ctr">${r.log_date}</td>
-            <td>${esc(r.drivers?.name) || "—"}</td>
-            <td class="num">${f(r.mileage)}</td>
-            <td class="num">${f(r.liters)}</td>
-            <td class="num">${f(r.price_per_liter)}</td>
-            <td class="num"><b>${fM(r.total_cost)}</b></td>
-            <td>${esc(r.station_name) || "—"}</td>
-          </tr>`).join("")}
-        <tr class="subtotal">
-          <td colspan="5">รวม ${esc(g.plate)} (${g.rows.length} ครั้ง)</td>
-          <td class="num">${fM(g.total)}</td>
-          <td></td>
-        </tr>
-        </tbody>
-      </table>
-    `).join("")}
-    <div style="background:#1976d2;color:#fff;padding:8px 14px;margin:0 0 12px 0;border-radius:0 0 6px 6px;font-size:13px;font-weight:700;text-align:right">
-      📊 รวมโกดัง ${esc(w.warehouse)}: <b>${fM(w.total)}</b> (${w.count} ครั้ง · ${w.truck_count} คัน)
-    </div>
-  `).join("")}
-  ` : ""}
-
-  ${(type === "all" || type === "maintenance") && (maintByWarehouse.length > 0) ? `
-  <!-- ═══ MAINTENANCE: ต่อรถ ═══ -->
-  <h2>🔧 ซ่อมบำรุง — สรุปยอดต่อรถแต่ละคัน${warehouseFilter ? ` (โกดัง${warehouseFilter})` : ''}</h2>
-  <table>
-    <colgroup>
-      <col style="width:18%">
-      <col style="width:14%">
-      <col style="width:36%">
-      <col style="width:12%">
-      <col style="width:20%">
-    </colgroup>
-    <thead><tr>
-      <th>ทะเบียน</th>
-      <th>โกดัง</th>
-      <th>บริษัท</th>
-      <th>ซ่อม (ครั้ง)</th>
-      <th>ยอดรวม</th>
-    </tr></thead>
-    <tbody>
-    ${printMaintByTruck.map(t => `
-      <tr>
-        <td><b>${esc(t.plate)}</b></td>
-        <td class="ctr">${esc(t.warehouse)}</td>
-        <td>${esc(t.company_name)}</td>
-        <td class="num">${f(t.count)}</td>
-        <td class="num"><b>${fM(t.total)}</b></td>
-      </tr>`).join("")}
-    <tr class="grand">
-      <td colspan="3">รวมทุกคัน (${printMaintByTruck.length} คัน)</td>
-      <td class="num">${f(printMaintCount)}</td>
+      <td colspan="6">รวม (${allMaintFlat.length} รายการ)</td>
       <td class="num">${fM(printMaintTotal)}</td>
     </tr>
     </tbody>
-  </table>
+  </table>` : ''}
 
-  <!-- ═══ MAINTENANCE: สรุปต่อโกดัง ═══ -->
-  <h2>🔧 ซ่อมบำรุง — สรุปยอดต่อโกดัง</h2>
-  <table>
-    <colgroup>
-      <col style="width:38%">
-      <col style="width:14%">
-      <col style="width:14%">
-      <col style="width:22%">
-      <col style="width:12%">
-    </colgroup>
-    <thead><tr>
-      <th>โกดัง</th>
-      <th>จำนวนรถ</th>
-      <th>รายการ</th>
-      <th>ยอดรวม</th>
-      <th>สัดส่วน</th>
-    </tr></thead>
-    <tbody>
-    ${maintByWarehouse.map(w => `
-      <tr>
-        <td><b>📍 ${esc(w.warehouse)}</b></td>
-        <td class="num">${f(w.truck_count)}</td>
-        <td class="num">${f(w.count)}</td>
-        <td class="num"><b>${fM(w.total)}</b></td>
-        <td class="num">${pct(w.total, printMaintTotal)}</td>
-      </tr>`).join("")}
-    <tr class="grand">
-      <td>${warehouseFilter ? `รวมโกดัง${warehouseFilter}` : 'รวมทุกโกดัง'}</td>
-      <td class="num">—</td>
-      <td class="num">${f(printMaintCount)}</td>
-      <td class="num">${fM(printMaintTotal)}</td>
-      <td class="num">100.0%</td>
-    </tr>
-    </tbody>
-  </table>
-
-  <!-- ═══ MAINTENANCE: รายการแยกตามโกดัง → รถ ═══ -->
-  <h2>🔧 ซ่อมบำรุง — รายละเอียดทุกรายการ (แยกตามโกดัง)</h2>
-  ${maintByWarehouse.map(w => `
-    <div style="background:#0d47a1;color:#fff;padding:10px 14px;margin:18px 0 0 0;border-radius:6px 6px 0 0;font-size:15px;font-weight:700">
-      📍 โกดัง ${esc(w.warehouse)}
-      <span style="float:right;font-weight:400;font-size:13px;opacity:.9">${w.truck_count} คัน · ${w.count} รายการ · <b>${fM(w.total)}</b></span>
-    </div>
-    ${w.trucks.map(g => `
-      <h3>🚛 ${esc(g.plate)} <span class="section-info">· ${esc(g.company_name)}</span></h3>
-      <table>
-        <colgroup>
-          <col style="width:13%">
-          <col style="width:18%">
-          <col style="width:20%">
-          <col style="width:11%">
-          <col style="width:14%">
-          <col style="width:24%">
-        </colgroup>
-        <thead><tr>
-          <th>วันที่</th>
-          <th>ประเภท</th>
-          <th>ร้าน</th>
-          <th>ไมล์</th>
-          <th>ยอดรวม</th>
-          <th>หมายเหตุ</th>
-        </tr></thead>
-        <tbody>
-        ${g.rows.map(r => `
-          <tr>
-            <td class="ctr">${r.maintenance_date}</td>
-            <td>${esc(MAINT_LABELS[r.maintenance_type] || r.maintenance_type)}</td>
-            <td>${esc(r.shop_name) || "—"}</td>
-            <td class="num">${f(r.mileage_at_service)}</td>
-            <td class="num"><b>${fM(r.cost)}</b></td>
-            <td>${esc((r.notes || "—").slice(0, 60))}</td>
-          </tr>`).join("")}
-        <tr class="subtotal">
-          <td colspan="4">รวม ${esc(g.plate)} (${g.rows.length} ครั้ง)</td>
-          <td class="num">${fM(g.total)}</td>
-          <td></td>
-        </tr>
-        </tbody>
-      </table>
-    `).join("")}
-    <div style="background:#1976d2;color:#fff;padding:8px 14px;margin:0 0 12px 0;border-radius:0 0 6px 6px;font-size:13px;font-weight:700;text-align:right">
-      📊 รวมโกดัง ${esc(w.warehouse)}: <b>${fM(w.total)}</b> (${w.count} ครั้ง · ${w.truck_count} คัน)
-    </div>
-  `).join("")}
-  ` : ""}
-
-  <div style="margin-top:30px;text-align:center;color:#999;font-size:11px;border-top:1px solid #eee;padding-top:14px">
-    Truck Service Tracker · Generated by JTG System · ${new Date().toLocaleString("th-TH")}
+  <div style="margin-top:10px;text-align:center;color:#bbb;font-size:8.5px;border-top:1px solid #eee;padding-top:6px">
+    Truck Service Tracker · JTG System · ${new Date().toLocaleString("th-TH")}
   </div>
 </body></html>`;
+
 
   const win = window.open("", "_blank");
   win.document.write(html);
@@ -5953,340 +5744,4 @@ function openPermissionModal(id, username, currentPerms) {
   permEditingUserId = id;
   document.getElementById("permUserLabel").textContent = username;
   document.getElementById("permMsg").textContent = "";
-  // วาด checkbox list ของแท็บทั้งหมด
-  const list = document.getElementById("permTabList");
-  const allowed = Array.isArray(currentPerms) ? new Set(currentPerms) : null;
-  list.innerHTML = ALL_TABS.map(t => {
-    const checked = allowed ? allowed.has(t.key) : false;
-    return `
-      <label style="display:flex;align-items:center;padding:8px 10px;gap:10px;border-bottom:1px solid #eee;cursor:pointer">
-        <input type="checkbox" class="perm-tab-cb" value="${t.key}" ${checked ? "checked" : ""} style="width:18px;height:18px;cursor:pointer">
-        <span style="font-size:14px">${t.label}</span>
-        <code style="margin-left:auto;font-size:11px;color:#888">${t.key}</code>
-      </label>`;
-  }).join("");
-  document.getElementById("permissionModal").classList.add("open");
-}
-
-function closePermissionModal() {
-  document.getElementById("permissionModal").classList.remove("open");
-  permEditingUserId = null;
-}
-
-function permSelectAll(check) {
-  document.querySelectorAll(".perm-tab-cb").forEach(cb => { cb.checked = check; });
-}
-
-function permUseDefault() {
-  if (!confirm("ลบ custom permissions → ใช้ default ตาม role?")) return;
-  saveTabPermissions(null);
-}
-
-async function savePermissions() {
-  const selected = Array.from(document.querySelectorAll(".perm-tab-cb:checked")).map(cb => cb.value);
-  saveTabPermissions(selected.length > 0 ? selected : null);
-}
-
-async function saveTabPermissions(perms) {
-  if (!permEditingUserId) return;
-  const msg = document.getElementById("permMsg");
-  msg.style.color = "#888";
-  msg.textContent = "⏳ กำลังบันทึก...";
-  const res = await api(`admin-users/${permEditingUserId}/permissions`, {
-    method: "PUT",
-    body: JSON.stringify({ tab_permissions: perms })
-  });
-  if (res?.success) {
-    closePermissionModal();
-    loadAdminUsers();
-    // ถ้าเปลี่ยนสิทธิ์ของ user ที่ login อยู่ → reload role
-    loadCurrentUserRole();
-  } else {
-    msg.style.color = "#e53935";
-    msg.textContent = `❌ ${res?.error || "บันทึกไม่สำเร็จ"}`;
-  }
-}
-
-async function deleteAdminUser(id, username) {
-  if (!confirm(`ลบบัญชี "${username}"?`)) return;
-  const res = await api(`admin-users/${id}`, { method: "DELETE" });
-  if (res?.success) loadAdminUsers();
-  else alert(res?.error || "เกิดข้อผิดพลาด");
-}
-
-function openChangePasswordModal(id, name) {
-  document.getElementById("cp_userId").value = id;
-  document.getElementById("cpTargetName").textContent = `👤 ${name}`;
-  document.getElementById("cp_password").value = "";
-  document.getElementById("changePasswordErr").textContent = "";
-  document.getElementById("changePasswordModal").classList.add("open");
-}
-
-async function submitChangePassword() {
-  const id       = document.getElementById("cp_userId").value;
-  const password = document.getElementById("cp_password").value;
-  const errEl    = document.getElementById("changePasswordErr");
-  if (!password || password.length < 6) { errEl.textContent = "password ต้องมีอย่างน้อย 6 ตัวอักษร"; return; }
-  errEl.textContent = "⏳ กำลังบันทึก...";
-  const res = await api(`admin-users/${id}`, { method: "PUT", body: JSON.stringify({ password }) });
-  if (res?.success) { document.getElementById("changePasswordModal").style.display = "none"; alert("✅ เปลี่ยน password สำเร็จ"); }
-  else errEl.textContent = res?.error || "เกิดข้อผิดพลาด";
-}
-
-function openAddMaintModal() {
-  // เติมรายการรถ
-  const sel = document.getElementById("am_truck");
-  sel.innerHTML = allTrucks.map(t => `<option value="${t.id}">${esc(t.plate_number)} (${esc(t.warehouse)})</option>`).join("");
-  document.getElementById("am_date").value = todayISO();
-  openModal("addMaintModal");
-}
-
-async function doAddMaint() {
-  const body = {
-    truck_id:             parseInt(document.getElementById("am_truck").value),
-    maintenance_type:     document.getElementById("am_type").value,
-    maintenance_date:     document.getElementById("am_date").value,
-    mileage_at_service:   parseInt(document.getElementById("am_mile").value) || null,
-    cost:                 parseFloat(document.getElementById("am_cost").value) || null,
-    shop_name:            document.getElementById("am_shop").value || null,
-    notes:                document.getElementById("am_notes").value || null,
-  };
-  const res = await api("add-maintenance", { method: "POST", body: JSON.stringify(body) });
-  if (res?.success) { closeModal("addMaintModal"); loadMaintenance(); }
-  else { document.getElementById("addMaintMsg").textContent = res?.error || "เกิดข้อผิดพลาด"; }
-}
-
-function openEditMileage(id, mileage) {
-  document.getElementById("em_id").value      = id;
-  document.getElementById("em_table").value   = "mileage";
-  document.getElementById("em_mileage").value = mileage;
-  document.getElementById("em_note").value    = "";
-  document.getElementById("em_title").textContent = "✏️ แก้ไขเลขไมล์";
-  document.getElementById("editMileageMsg").textContent = "";
-  openModal("editMileageModal");
-}
-
-// ⛽ แก้ไขไมล์ของบิลน้ำมัน — ใช้ modal เดียวกัน แต่ flag table = "fuel"
-function openEditFuelMileage(id, mileage) {
-  document.getElementById("em_id").value      = id;
-  document.getElementById("em_table").value   = "fuel";
-  document.getElementById("em_mileage").value = mileage;
-  document.getElementById("em_note").value    = "";
-  document.getElementById("em_title").textContent = "⛽ แก้ไขเลขไมล์ของบิลน้ำมัน";
-  document.getElementById("editMileageMsg").textContent = "";
-  openModal("editMileageModal");
-}
-
-async function doEditMileage() {
-  const id      = parseInt(document.getElementById("em_id").value);
-  const table   = document.getElementById("em_table").value || "mileage";
-  const mileage = parseInt(document.getElementById("em_mileage").value);
-  const note    = document.getElementById("em_note").value.trim();
-  if (!mileage) { alert("กรุณาระบุเลขไมล์"); return; }
-  const res = await api("edit-mileage", { method: "PUT", body: JSON.stringify({ id, mileage, edit_note: note, table }) });
-  if (res?.success) {
-    closeModal("editMileageModal");
-    if (table === "fuel") { loadFuel(); }
-    else { loadDaily(); loadAnomalies(); }
-  } else {
-    document.getElementById("editMileageMsg").textContent = res?.error || "เกิดข้อผิดพลาด";
-  }
-}
-
-function openAddNotifModal() {
-  _resetNotifForm();
-  document.getElementById("notifModalTitle").textContent = "+ เพิ่มกลุ่ม LINE / แอดมิน";
-  openModal("addNotifModal");
-}
-
-async function doSaveNotif() {
-  const id = document.getElementById("nt_id").value;
-  const body = {
-    target_type:        document.getElementById("nt_type").value,
-    target_name:        document.getElementById("nt_name").value.trim(),
-    line_id:            document.getElementById("nt_lineid").value.trim(),
-    warehouse:          document.getElementById("nt_warehouse").value || null,
-    notify_daily:       document.getElementById("nt_notify_daily").checked,
-    notify_maintenance: document.getElementById("nt_notify_maintenance").checked,
-    notify_doc:         document.getElementById("nt_notify_doc").checked,
-    notify_anomaly:     document.getElementById("nt_notify_anomaly").checked,
-    is_active:          document.getElementById("nt_is_active").checked,
-  };
-  if (!body.target_name || !body.line_id) {
-    document.getElementById("addNotifMsg").textContent = "กรุณากรอกชื่อและ LINE ID";
-    return;
-  }
-  const res = id
-    ? await api(`notification-targets/${id}`, { method: "PUT", body: JSON.stringify(body) })
-    : await api("add-notification-target", { method: "POST", body: JSON.stringify(body) });
-  if (res?.success) { closeModal("addNotifModal"); loadNotifTargets(); }
-  else { document.getElementById("addNotifMsg").textContent = res?.error || "เกิดข้อผิดพลาด"; }
-}
-
-// ════════════════════════════════════════════════════════════
-// INIT
-// ════════════════════════════════════════════════════════════
-document.getElementById("topDate").textContent = new Date().toLocaleDateString("th-TH", {
-  timeZone: TZ, year: "numeric", month: "long", day: "numeric", weekday: "long"
-});
-
-// โหลด Summary ก่อน + โหลด trucks + companies เพื่อใช้ใน modals
-// ── เก็บ role + permissions ของ user ที่ login ──
-let currentUserRole = "admin";
-let currentUserTabPermissions = null;  // null = ใช้ default ตาม role
-
-// แท็บทั้งหมดในระบบ (ใช้ตอนตั้ง permissions)
-const ALL_TABS = [
-  { key: "summary",     label: "📊 ภาพรวม" },
-  { key: "daily",       label: "📋 ไมล์รายวัน" },
-  { key: "fuel",        label: "⛽ น้ำมัน" },
-  { key: "usage",       label: "📈 สรุปการใช้" },
-  { key: "gps",         label: "🛰 GPS Live" },
-  { key: "maintenance", label: "🔧 ซ่อมบำรุง" },
-  { key: "maintsched",  label: "🛠 แผนซ่อม" },
-  { key: "verify",      label: "🔍 ตรวจสอบบิล" },
-  { key: "accounting",  label: "📒 ส่งบัญชี" },
-  { key: "anomalies",   label: "⚠️ ผิดปกติ" },
-  { key: "documents",   label: "📋 ภาษี/ประกัน" },
-  { key: "trucks",      label: "🚛 รถ" },
-  { key: "drivers",     label: "👤 คนขับ" },
-  { key: "companies",   label: "🏢 บริษัท" },
-  { key: "adminusers",  label: "🔑 ผู้ใช้ระบบ" },
-  { key: "settings",    label: "⚙️ ตั้งค่า" },
-];
-
-// Default tabs ของ role (ถ้าไม่ตั้ง custom)
-const DEFAULT_TABS_BY_ROLE = {
-  superadmin: ALL_TABS.map(t => t.key),  // ทุกแท็บ
-  admin:      ["summary","daily","fuel","usage","gps","maintenance","maintsched","verify","accounting","anomalies","documents","trucks","drivers","companies","settings"],
-};
-
-async function loadCurrentUserRole() {
-  try {
-    const me = await api("me");
-    if (me?.role) {
-      currentUserRole = me.role;
-      currentUserTabPermissions = me.tab_permissions;
-      applyRoleVisibility();
-    }
-  } catch (_) { /* ignore */ }
-}
-
-// ── คำนวณ tabs ที่ user เห็น (custom > role default) ──
-function getVisibleTabs() {
-  if (Array.isArray(currentUserTabPermissions) && currentUserTabPermissions.length > 0) {
-    return currentUserTabPermissions;
-  }
-  return DEFAULT_TABS_BY_ROLE[currentUserRole] || DEFAULT_TABS_BY_ROLE.admin;
-}
-
-// ── ซ่อนแท็บที่ user ไม่มีสิทธิ์เห็น + ปุ่ม super-only ──
-function applyRoleVisibility() {
-  const isSuper = currentUserRole === "superadmin";
-  const visibleTabs = new Set(getVisibleTabs());
-
-  // 1) ซ่อน top-level tab ที่มี data-tab (ไม่ใช่ tab-parent)
-  document.querySelectorAll('.tab[data-tab]:not(.tab-parent)').forEach(t => {
-    const key = t.getAttribute("data-tab");
-    t.style.display = visibleTabs.has(key) ? "" : "none";
-  });
-
-  // 2) ซ่อน submenu items + ซ่อน parent ถ้า submenu ทั้งหมดถูกซ่อน
-  document.querySelectorAll('.tab-group').forEach(group => {
-    let visibleCount = 0;
-    group.querySelectorAll('.tab-sub[data-tab]').forEach(s => {
-      const key = s.getAttribute("data-tab");
-      const show = visibleTabs.has(key);
-      s.style.display = show ? "" : "none";
-      if (show) visibleCount++;
-    });
-    // ซ่อน parent ถ้าไม่มี submenu visible เลย
-    group.style.display = visibleCount > 0 ? "" : "none";
-  });
-
-  // ⭐ Toggle body class — CSS ซ่อน .super-only ทันที (รวมถึง DOM ที่ render ใหม่ภายหลัง)
-  document.body.classList.toggle("role-non-super", !isSuper);
-
-  // ⭐ ถ้า active section อยู่ใน tab ที่ user ไม่มีสิทธิ์ → switch ไปแท็บแรกที่เห็น
-  const activeSection = document.querySelector(".section.active");
-  if (activeSection) {
-    const activeKey = activeSection.id.replace(/^sec-/, "");
-    if (!visibleTabs.has(activeKey) && visibleTabs.size > 0) {
-      const firstVisible = [...visibleTabs][0];
-      if (typeof switchTab === "function") switchTab(firstVisible);
-    }
-  }
-
-  // badge role
-  const badge = document.getElementById("userRoleBadge");
-  if (badge) {
-    badge.textContent = isSuper ? "🔴 Superadmin" : "🔵 Admin";
-    badge.style.background = isSuper ? "#c62828" : "#1a73e8";
-  }
-}
-
-function startApp() {
-  loadCurrentUserRole();
-  Promise.all([
-    loadSummary(),
-    api("trucks").then(d => { if (d) { allTrucks = d; populateMaintTruckFilter(); populateFuelTruckFilter(); } }),
-    api("companies").then(d => { if (d) allCompanies = d; }),
-    loadMaintLabels(),   // ⭐ โหลดประเภทซ่อม (สำหรับ label ของประเภทที่ admin เพิ่มเอง)
-  ]);
-}
-
-// ── Login / Logout ────────────────────────────────────────────────────────────
-async function doLogin() {
-  const user  = document.getElementById("loginUser").value.trim();
-  const pass  = document.getElementById("loginPass").value;
-  const errEl = document.getElementById("loginErr");
-  if (!user || !pass) { errEl.textContent = "กรุณากรอก Username และ Password"; return; }
-
-  errEl.textContent = "⏳ กำลังตรวจสอบ...";
-  errEl.style.color = "#888";
-
-  const testHeader = "Basic " + btoa(user + ":" + pass);
-  try {
-    const res = await fetch(`${API_BASE}/trucks`, {
-      headers: { "Authorization": testHeader, "Content-Type": "application/json" }
-    });
-    if (res.status === 401) {
-      errEl.textContent = "❌ Username หรือ Password ไม่ถูกต้อง";
-      errEl.style.color = "#e53935";
-      return;
-    }
-  } catch (e) {
-    errEl.textContent = "❌ เชื่อมต่อ server ไม่ได้ ลองใหม่อีกครั้ง";
-    errEl.style.color = "#e53935";
-    return;
-  }
-
-  AUTH_HEADER = testHeader;
-  sessionStorage.setItem("adminUser", user);
-  sessionStorage.setItem("adminPass", pass);
-  errEl.textContent = "";
-
-  document.getElementById("loginScreen").style.display = "none";
-  document.getElementById("mainContent").style.display = "block";
-  startApp();
-}
-
-function doLogout() {
-  sessionStorage.removeItem("adminUser");
-  sessionStorage.removeItem("adminPass");
-  location.reload();
-}
-
-// ── Check saved session ───────────────────────────────────────────────────────
-const savedUser = sessionStorage.getItem("adminUser");
-const savedPass = sessionStorage.getItem("adminPass");
-if (savedUser && savedPass) {
-  AUTH_HEADER = "Basic " + btoa(savedUser + ":" + savedPass);
-  document.getElementById("loginScreen").style.display = "none";
-  document.getElementById("mainContent").style.display = "block";
-  startApp();
-}
-</script>
-</div><!-- /mainContent -->
-</body>
-</html>
+  // วาด checkbox list ของแท็บทั้งหม
