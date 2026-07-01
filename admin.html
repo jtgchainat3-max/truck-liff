@@ -4896,427 +4896,209 @@ async function exportBillsPDF(warehouseFilter = '') {
   const fM = (n) => (n === null || n === undefined || n === "") ? "—" : `฿${Number(n).toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const pct = (part, total) => total ? `${(part / total * 100).toFixed(1)}%` : "0.0%";
 
+  // ── Compact print: pre-compute matrix + helpers ──
+  const allFuelTrucks = fuelByWarehouse.flatMap(w => w.trucks)
+    .map(t => ({...t, truck_type: t.rows[0]?.trucks?.truck_type || 'transport'}))
+    .sort((a, b) => { const o = s => s === 'van' ? 0 : 1; return o(a.truck_type) - o(b.truck_type) || a.plate.localeCompare(b.plate); });
+
+  // day → plate → total (sum ถ้าเติมหลายครั้งในวันเดียว)
+  const fuelMx = {};
+  for (const t of allFuelTrucks) {
+    for (const r of t.rows) {
+      const day = parseInt((r.log_date || '').split('-')[2] || 0);
+      if (!day) continue;
+      if (!fuelMx[day]) fuelMx[day] = {};
+      fuelMx[day][t.plate] = (fuelMx[day][t.plate] || 0) + parseFloat(r.total_cost || 0);
+    }
+  }
+  const fuelDays = Object.keys(fuelMx).map(Number).sort((a, b) => a - b);
+
+  function chunkArr(a, n) { const c = []; for (let i = 0; i < a.length; i += n) c.push(a.slice(i, i + n)); return c; }
+
+  function mxTable(trucks, days, mx) {
+    if (!trucks.length || !days.length) return '';
+    const hd = trucks.map(t => `<th>${esc(t.plate)}</th>`).join('');
+    const rows = days.map(d => {
+      const cells = trucks.map(t => { const v = mx[d]?.[t.plate]; return `<td class="num">${v ? f(v) : '<span style="color:#ccc">—</span>'}</td>`; }).join('');
+      const rt = trucks.reduce((s, t) => s + (mx[d]?.[t.plate] || 0), 0);
+      return `<tr><td class="ctr"><b>${d}</b></td>${cells}<td class="num sumi">${f(rt)}</td></tr>`;
+    }).join('');
+    const tots = trucks.map(t => `<td class="num"><b>${fM(t.total)}</b></td>`).join('');
+    const g = trucks.reduce((s, t) => s + t.total, 0);
+    return `<table><colgroup><col style="width:26px">${trucks.map(() => '<col>').join('')}<col style="width:70px"></colgroup>` +
+      `<thead><tr><th>วัน</th>${hd}<th>รวม</th></tr></thead>` +
+      `<tbody>${rows}</tbody>` +
+      `<tfoot><tr class="grand"><td>รวม</td>${tots}<td class="num">${fM(g)}</td></tr></tfoot></table>`;
+  }
+
+  const vanTrucks   = allFuelTrucks.filter(t => t.truck_type === 'van');
+  const transTrucks = allFuelTrucks.filter(t => t.truck_type !== 'van');
+  const vanMxHTML   = chunkArr(vanTrucks, 4).map(ch => mxTable(ch, fuelDays, fuelMx)).join('');
+  const transMxHTML = chunkArr(transTrucks, 4).map(ch => mxTable(ch, fuelDays, fuelMx)).join('');
+
+  // Per-truck combined summary (fuel + maint)
+  const truckSumMap = {};
+  for (const t of allFuelTrucks) {
+    truckSumMap[t.plate] = {plate: t.plate, tt: t.truck_type, co: t.company_name, fc: t.rows.length, ft: t.total, mc: 0, mt: 0};
+  }
+  for (const w of maintByWarehouse) for (const t of w.trucks) {
+    const tt = t.rows[0]?.trucks?.truck_type || 'transport';
+    if (!truckSumMap[t.plate]) truckSumMap[t.plate] = {plate: t.plate, tt, co: t.company_name, fc: 0, ft: 0, mc: 0, mt: 0};
+    truckSumMap[t.plate].mc = t.rows.length;
+    truckSumMap[t.plate].mt = t.total;
+  }
+  const truckSumList = Object.values(truckSumMap).sort((a, b) => { const o = s => s === 'van' ? 0 : 1; return o(a.tt) - o(b.tt) || a.plate.localeCompare(b.plate); });
+
+  // Compact maint flat list, sorted VAN→transport→plate→date
+  const maintFlat = maintByWarehouse.flatMap(w => w.trucks.flatMap(t =>
+    t.rows.map(r => ({
+      date: r.maintenance_date, plate: t.plate,
+      tt: t.rows[0]?.trucks?.truck_type || 'transport',
+      type: MAINT_LABELS[r.maintenance_type] || r.maintenance_type,
+      shop: r.shop_name || '—', cost: parseFloat(r.cost || 0),
+      note: (r.notes || '').slice(0, 35),
+    }))
+  )).sort((a, b) => { const o = s => s === 'van' ? 0 : 1; return o(a.tt) - o(b.tt) || a.plate.localeCompare(b.plate) || a.date.localeCompare(b.date); });
+
+  const seenMPlates = new Set(); const maintPlateOrder = [];
+  for (const r of maintFlat) { if (!seenMPlates.has(r.plate)) { seenMPlates.add(r.plate); maintPlateOrder.push(r.plate); } }
+  const maintByPlate = {};
+  for (const r of maintFlat) { if (!maintByPlate[r.plate]) maintByPlate[r.plate] = []; maintByPlate[r.plate].push(r); }
+
+  // Filter fuel_by_route: เฉพาะสายที่มีรถอยู่ในโกดังที่ filter
+  const filteredPlates = new Set(allFuelTrucks.map(t => t.plate));
+  const printRoutes = (data.fuel_by_route || []).filter(r =>
+    !warehouseFilter || (r.plates || []).some(p => filteredPlates.has(p))
+  );
+
   const html = `<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><title>รายงาน ${thaiMonth} ${yearThai}</title>
 <style>
-  * { box-sizing: border-box; }
-  body {
-    font-family: 'Sarabun', 'Tahoma', sans-serif;
-    padding: 24px 28px;
-    color: #1a1a1a;
-    line-height: 1.4;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-  h1 { font-size: 22px; margin: 0 0 4px 0; color: #0d47a1; }
-  .subtitle { color: #888; font-size: 12px; margin-bottom: 18px; }
-
-  h2 {
-    font-size: 16px;
-    margin: 22px 0 8px 0;
-    padding: 8px 12px;
-    background: #1a73e8;
-    color: #fff;
-    border-radius: 6px 6px 0 0;
-  }
-  h3 {
-    font-size: 13px;
-    margin: 14px 0 0 0;
-    padding: 6px 12px;
-    background: #e3f2fd;
-    color: #0d47a1;
-    border-left: 4px solid #1a73e8;
-    border-radius: 0 4px 4px 0;
-  }
-
-  /* ── ตารางหลัก — fixed layout เพื่อคอลัมน์เท่ากันทุกแถว ── */
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 0 0 14px 0;
-    font-size: 11.5px;
-    table-layout: fixed;
-    font-variant-numeric: tabular-nums;
-  }
-  th, td {
-    border: 1px solid #d0d7de;
-    padding: 6px 8px;
-    vertical-align: middle;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    word-wrap: break-word;
-  }
-  th {
-    background: #f1f5f9;
-    color: #1a1a1a;
-    font-weight: 700;
-    text-align: center;
-    font-size: 11px;
-    text-transform: none;
-  }
-  td { text-align: left; }
-  .num { text-align: right; font-variant-numeric: tabular-nums; }
-  .ctr { text-align: center; }
-  .lbl { color: #6b7280; font-size: 10px; }
-
-  /* ── striped rows สำหรับอ่านง่าย ── */
-  tbody tr:nth-child(even) td { background: #fafbfc; }
-  tbody tr.subtotal td { background: #fff8e1 !important; font-weight: 700; }
-  tbody tr.grand td { background: #c8e6c9 !important; font-weight: 700; font-size: 12.5px; }
-
-  /* ── สรุปยอดรวม (พื้นอ่อน อ่านง่าย) ── */
-  .summary-card {
-    background: #f5f5f5;
-    color: #1a1a1a;
-    padding: 16px 20px;
-    border-radius: 10px;
-    margin: 14px 0 18px 0;
-    border: 1px solid #d0d7de;
-  }
-  .summary-card .title { font-size: 15px; font-weight: 700; color: #0d47a1; margin-bottom: 10px; }
-  .summary-card table { background: transparent; font-size: 14px; margin: 0; }
-  .summary-card td { border: none; padding: 7px 0; color: #1a1a1a; }
-  .summary-card .grand-row td {
-    border-top: 2px solid #1a73e8;
-    background: #c8e6c9 !important;
-    font-size: 16px;
-    font-weight: 700;
-    padding: 10px 8px;
-    color: #1b5e20;
-  }
-
-  /* ── หัวบริษัท/รถ ── */
-  .section-info { font-size: 11px; color: #6b7280; font-weight: 400; }
-
-  /* ── print specific ── */
-  @media print {
-    body { padding: 14px 18px; }
-    h2 { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    h3 { page-break-after: avoid; }
-    table { page-break-inside: auto; }
-    tr { page-break-inside: avoid; page-break-after: auto; }
-    thead { display: table-header-group; }
-    tfoot { display: table-row-group; }
-    .no-print { display: none !important; }
-  }
-
-  /* ── ปุ่ม print ── */
-  .toolbar {
-    position: sticky; top: 0; background: #fff; border-bottom: 1px solid #ddd;
-    padding: 10px 0; margin: -24px -28px 14px -28px;
-    padding-left: 28px; padding-right: 28px; z-index: 100;
-  }
-  .toolbar button { padding: 8px 16px; background: #1a73e8; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-family: inherit; }
+*{box-sizing:border-box}
+body{font-family:'Sarabun','Tahoma',sans-serif;padding:14px 16px;color:#1a1a1a;line-height:1.35;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+h1{font-size:18px;margin:0 0 2px;color:#0d47a1}
+.dsub{color:#888;font-size:11px;margin-bottom:12px}
+h2{font-size:12px;margin:16px 0 0;padding:5px 10px;background:#1a73e8;color:#fff;border-radius:5px 5px 0 0}
+.tlbl{display:inline-block;font-size:9px;padding:1px 6px;border-radius:3px;font-weight:700;margin:6px 0 2px}
+.vl{background:#e3f2fd;color:#0d47a1}.tl{background:#fff3e0;color:#e65100}
+table{width:100%;border-collapse:collapse;margin:0 0 6px;font-size:10.5px;table-layout:fixed;font-variant-numeric:tabular-nums}
+th,td{border:1px solid #d0d7de;padding:3px 5px;vertical-align:middle;overflow:hidden;word-break:break-word}
+th{background:#f1f5f9;font-weight:700;text-align:center;font-size:10px}
+.num{text-align:right}.ctr{text-align:center}.lbl{color:#777;font-size:9px}
+.sumi{background:#f0f4ff;font-weight:700}
+tbody tr:nth-child(even) td{background:#fafbfc}
+tr.subtotal td{background:#fff8e1!important;font-weight:700}
+tr.grand td{background:#c8e6c9!important;font-weight:700}
+.sc{display:flex;gap:8px;margin:8px 0 10px}
+.sc>div{flex:1;border:1px solid #d0d7de;border-radius:5px;padding:6px 10px}
+.sc .lbl2{font-size:10px;color:#888;margin-bottom:1px}
+.sc .val{font-size:13px;font-weight:700}
+.sc.gr>div{background:#e8f5e9;border-color:#a5d6a7}
+.sc.gr .val{color:#2e7d32}
+@media print{body{padding:10px 12px}h2{-webkit-print-color-adjust:exact;print-color-adjust:exact}table{page-break-inside:auto}tr{page-break-inside:avoid}thead{display:table-header-group}.no-print{display:none!important}}
+.tb{position:sticky;top:0;background:#fff;border-bottom:1px solid #ddd;padding:8px 0;margin:-14px -16px 12px;padding-left:16px;z-index:100}
+.tb button{padding:5px 14px;background:#1a73e8;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:13px;font-family:inherit}
 </style></head><body>
-  <div class="toolbar no-print">
-    <button onclick="window.print()">🖨 พิมพ์ / Save as PDF</button>
-    &nbsp; <span style="color:#666;font-size:13px">ตั้งค่าใน print dialog: ขนาด A4, margin = ปานกลาง</span>
-  </div>
+<div class="tb no-print">
+  <button onclick="window.print()">🖨 พิมพ์ / Save as PDF</button>
+  &nbsp;<span style="color:#666;font-size:12px">A4 · margin ปานกลาง</span>
+</div>
 
-  <h1>📋 รายงานบิล — ${thaiMonth} ${yearThai}${warehouseFilter ? ` · โกดัง${warehouseFilter}` : ''}</h1>
-  <div class="subtitle">สร้างเมื่อ ${new Date().toLocaleString("th-TH")} · ${type === "all" ? "น้ำมัน + ซ่อมบำรุง" : type === "fuel" ? "เฉพาะน้ำมัน" : "เฉพาะซ่อมบำรุง"}${warehouseFilter ? ` · เฉพาะโกดัง${warehouseFilter}` : ' · ทุกโกดัง'}</div>
+<h1>📋 รายงานบิล — ${thaiMonth} ${yearThai}${warehouseFilter ? ` · โกดัง${warehouseFilter}` : ''}</h1>
+<div class="dsub">สร้างเมื่อ ${new Date().toLocaleString("th-TH")} · ${type === "all" ? "น้ำมัน + ซ่อมบำรุง" : type === "fuel" ? "น้ำมัน" : "ซ่อมบำรุง"}${warehouseFilter ? ` · โกดัง${warehouseFilter}` : ' · ทุกโกดัง'}</div>
 
-  ${type === "all" ? `
-  <!-- ═══ SUMMARY ═══ -->
-  <div class="summary-card">
-    <div class="title">💰 สรุปยอดรวม${warehouseFilter ? `โกดัง${warehouseFilter}` : 'ทั้งหมด'}</div>
-    <table>
-      <tr>
-        <td>⛽ ค่าน้ำมันรวม</td>
-        <td class="num">${printFuelCount} รายการ</td>
-        <td class="num"><b>${fM(printFuelTotal)}</b></td>
-      </tr>
-      <tr>
-        <td>🔧 ค่าซ่อมบำรุงรวม</td>
-        <td class="num">${printMaintCount} รายการ</td>
-        <td class="num"><b>${fM(printMaintTotal)}</b></td>
-      </tr>
-      <tr class="grand-row">
-        <td>💵 ยอดรวมทั้งสิ้น</td>
-        <td class="num">${printFuelCount + printMaintCount} รายการ</td>
-        <td class="num"><b>${fM(printFuelTotal + printMaintTotal)}</b></td>
-      </tr>
-    </table>
-  </div>
-  ` : ""}
+${type === "all" ? `
+<div class="sc">
+  <div><div class="lbl2">⛽ ค่าน้ำมัน</div><div class="val">${fM(printFuelTotal)}</div><div style="font-size:9px;color:#888">${printFuelCount} ครั้ง</div></div>
+  <div><div class="lbl2">🔧 ค่าซ่อมบำรุง</div><div class="val">${fM(printMaintTotal)}</div><div style="font-size:9px;color:#888">${printMaintCount} ครั้ง</div></div>
+</div>
+<div class="sc gr">
+  <div><div class="lbl2">💵 ยอดรวมทั้งสิ้น</div><div class="val">${fM(printFuelTotal + printMaintTotal)}</div><div style="font-size:9px;color:#388e3c">${printFuelCount + printMaintCount} รายการ</div></div>
+</div>` : ''}
 
-  ${(type === "all" || type === "fuel") && (fuelByWarehouse.length > 0) ? `
-  <!-- ═══ FUEL: ต่อรถ ═══ -->
-  <!-- ═══ FUEL: สรุปต่อสายวิ่ง ═══ -->
-  ${(data.fuel_by_route && data.fuel_by_route.length > 0) ? `
-  <h2>🛣️ ค่าน้ำมัน — สรุปตามสายวิ่ง${warehouseFilter ? ` (โกดัง${warehouseFilter})` : ''}</h2>
-  <table>
-    <colgroup>
-      <col style="width:18%">
-      <col style="width:36%">
-      <col style="width:46%">
-    </colgroup>
-    <thead><tr>
-      <th>สายวิ่ง</th>
-      <th>ทะเบียนรถ</th>
-      <th style="text-align:right">ยอดรวมค่าน้ำมัน</th>
-    </tr></thead>
-    <tbody>
-    ${data.fuel_by_route.map(r => `
-      <tr>
-        <td><b>${esc(r.route_code)}</b></td>
-        <td>${(r.plates || []).map(p => esc(p)).join(", ")}</td>
-        <td class="num"><b>${fM(r.total)}</b></td>
-      </tr>`).join("")}
-    <tr class="grand">
-      <td colspan="2">รวม (${data.fuel_by_route.length} สาย)</td>
-      <td class="num">${fM(data.fuel_by_route.reduce((s, r) => s + r.total, 0))}</td>
-    </tr>
-    </tbody>
-  </table>` : ''}
+${truckSumList.length > 0 ? `
+<h2>📊 สรุปต่อรถ (VAN ก่อน → ขนส่ง)</h2>
+<table>
+  <colgroup><col style="width:13%"><col style="width:8%"><col style="width:23%"><col style="width:8%"><col style="width:12%"><col style="width:8%"><col style="width:12%"><col style="width:16%"></colgroup>
+  <thead><tr><th>ทะเบียน</th><th>ประเภท</th><th>บริษัท</th><th>น้ำมัน<br>(ครั้ง)</th><th>น้ำมัน (฿)</th><th>ซ่อม<br>(ครั้ง)</th><th>ซ่อม (฿)</th><th>รวม (฿)</th></tr></thead>
+  <tbody>
+  ${truckSumList.map(t => `<tr>
+    <td><b>${esc(t.plate)}</b></td>
+    <td class="ctr"><span class="tlbl ${t.tt === 'van' ? 'vl' : 'tl'}">${t.tt === 'van' ? 'VAN' : 'ขนส่ง'}</span></td>
+    <td>${esc(t.co)}</td>
+    <td class="num">${t.fc || '—'}</td>
+    <td class="num">${t.ft ? fM(t.ft) : '—'}</td>
+    <td class="num">${t.mc || '—'}</td>
+    <td class="num">${t.mt ? fM(t.mt) : '—'}</td>
+    <td class="num"><b>${fM(t.ft + t.mt)}</b></td>
+  </tr>`).join('')}
+  <tr class="grand">
+    <td colspan="3">รวม (${truckSumList.length} คัน)</td>
+    <td class="num">${printFuelCount || '—'}</td>
+    <td class="num">${fM(printFuelTotal)}</td>
+    <td class="num">${printMaintCount || '—'}</td>
+    <td class="num">${fM(printMaintTotal)}</td>
+    <td class="num">${fM(printFuelTotal + printMaintTotal)}</td>
+  </tr>
+  </tbody>
+</table>` : ''}
 
-  <!-- ═══ FUEL: สรุปต่อรถ ═══ -->
-  <h2>⛽ น้ำมัน — สรุปยอดต่อรถแต่ละคัน${warehouseFilter ? ` (โกดัง${warehouseFilter})` : ''}</h2>
-  <table>
-    <colgroup>
-      <col style="width:18%">
-      <col style="width:14%">
-      <col style="width:34%">
-      <col style="width:12%">
-      <col style="width:22%">
-    </colgroup>
-    <thead><tr>
-      <th>ทะเบียน</th>
-      <th>โกดัง</th>
-      <th>บริษัท</th>
-      <th>เติม (ครั้ง)</th>
-      <th>ยอดรวม</th>
-    </tr></thead>
-    <tbody>
-    ${printFuelByTruck.map(t => `
-      <tr>
-        <td><b>${esc(t.plate)}</b></td>
-        <td class="ctr">${esc(t.warehouse)}</td>
-        <td>${esc(t.company_name)}</td>
-        <td class="num">${f(t.count)}</td>
-        <td class="num"><b>${fM(t.total)}</b></td>
-      </tr>`).join("")}
-    <tr class="grand">
-      <td colspan="3">รวมทุกคัน (${printFuelByTruck.length} คัน)</td>
-      <td class="num">${f(printFuelCount)}</td>
-      <td class="num">${fM(printFuelTotal)}</td>
-    </tr>
-    </tbody>
-  </table>
+${printRoutes.length > 0 ? `
+<h2>🛣️ สรุปตามสายวิ่ง${warehouseFilter ? ` (โกดัง${warehouseFilter})` : ''}</h2>
+<table>
+  <colgroup><col style="width:15%"><col style="width:52%"><col style="width:33%"></colgroup>
+  <thead><tr><th>สาย</th><th>ทะเบียน</th><th style="text-align:right">ยอดน้ำมัน</th></tr></thead>
+  <tbody>
+  ${printRoutes.map(r => `<tr>
+    <td><b>${esc(r.route_code)}</b></td>
+    <td>${(r.plates || []).map(p => esc(p)).join(', ')}</td>
+    <td class="num"><b>${fM(r.total)}</b></td>
+  </tr>`).join('')}
+  <tr class="grand">
+    <td colspan="2">รวม (${printRoutes.length} สาย)</td>
+    <td class="num">${fM(printRoutes.reduce((s, r) => s + r.total, 0))}</td>
+  </tr>
+  </tbody>
+</table>` : ''}
 
-  <!-- ═══ FUEL: สรุปต่อโกดัง ═══ -->
-  <h2>⛽ น้ำมัน — สรุปยอดต่อโกดัง</h2>
-  <table>
-    <colgroup>
-      <col style="width:38%">
-      <col style="width:14%">
-      <col style="width:14%">
-      <col style="width:22%">
-      <col style="width:12%">
-    </colgroup>
-    <thead><tr>
-      <th>โกดัง</th>
-      <th>จำนวนรถ</th>
-      <th>รายการ</th>
-      <th>ยอดรวม</th>
-      <th>สัดส่วน</th>
-    </tr></thead>
-    <tbody>
-    ${fuelByWarehouse.map(w => `
-      <tr>
-        <td><b>📍 ${esc(w.warehouse)}</b></td>
-        <td class="num">${f(w.truck_count)}</td>
-        <td class="num">${f(w.count)}</td>
-        <td class="num"><b>${fM(w.total)}</b></td>
-        <td class="num">${pct(w.total, printFuelTotal)}</td>
-      </tr>`).join("")}
-    <tr class="grand">
-      <td>${warehouseFilter ? `รวมโกดัง${warehouseFilter}` : 'รวมทุกโกดัง'}</td>
-      <td class="num">—</td>
-      <td class="num">${f(printFuelCount)}</td>
-      <td class="num">${fM(printFuelTotal)}</td>
-      <td class="num">100.0%</td>
-    </tr>
-    </tbody>
-  </table>
+${(type === "all" || type === "fuel") && allFuelTrucks.length > 0 && fuelDays.length > 0 ? `
+<h2>⛽ ค่าน้ำมัน — รายวันต่อรถ${warehouseFilter ? ` (โกดัง${warehouseFilter})` : ''}</h2>
+${vanTrucks.length > 0 ? `<div class="tlbl vl" style="margin:8px 0 3px">🚐 VAN</div>${vanMxHTML}` : ''}
+${transTrucks.length > 0 ? `<div class="tlbl tl" style="margin:8px 0 3px">🚛 ขนส่ง</div>${transMxHTML}` : ''}` : ''}
 
-  <!-- ═══ FUEL: รายการแยกตามโกดัง → รถ ═══ -->
-  <h2>⛽ น้ำมัน — รายละเอียดทุกรายการ (แยกตามโกดัง)</h2>
-  ${fuelByWarehouse.map(w => `
-    <div style="background:#0d47a1;color:#fff;padding:10px 14px;margin:18px 0 0 0;border-radius:6px 6px 0 0;font-size:15px;font-weight:700">
-      📍 โกดัง ${esc(w.warehouse)}
-      <span style="float:right;font-weight:400;font-size:13px;opacity:.9">${w.truck_count} คัน · ${w.count} รายการ · <b>${fM(w.total)}</b></span>
-    </div>
-    ${w.trucks.map(g => `
-      <h3>🚛 ${esc(g.plate)} <span class="section-info">· ${esc(g.company_name)}</span></h3>
-      <table>
-        <colgroup>
-          <col style="width:14%">
-          <col style="width:20%">
-          <col style="width:12%">
-          <col style="width:10%">
-          <col style="width:12%">
-          <col style="width:14%">
-          <col style="width:18%">
-        </colgroup>
-        <thead><tr>
-          <th>วันที่</th>
-          <th>คนขับ</th>
-          <th>ไมล์</th>
-          <th>ลิตร</th>
-          <th>ราคา/ล.</th>
-          <th>ยอดรวม</th>
-          <th>ปั๊ม</th>
-        </tr></thead>
-        <tbody>
-        ${g.rows.map(r => `
-          <tr>
-            <td class="ctr">${r.log_date}</td>
-            <td>${esc(r.drivers?.name) || "—"}</td>
-            <td class="num">${f(r.mileage)}</td>
-            <td class="num">${f(r.liters)}</td>
-            <td class="num">${f(r.price_per_liter)}</td>
-            <td class="num"><b>${fM(r.total_cost)}</b></td>
-            <td>${esc(r.station_name) || "—"}</td>
-          </tr>`).join("")}
-        <tr class="subtotal">
-          <td colspan="5">รวม ${esc(g.plate)} (${g.rows.length} ครั้ง)</td>
-          <td class="num">${fM(g.total)}</td>
-          <td></td>
-        </tr>
-        </tbody>
-      </table>
-    `).join("")}
-    <div style="background:#1976d2;color:#fff;padding:8px 14px;margin:0 0 12px 0;border-radius:0 0 6px 6px;font-size:13px;font-weight:700;text-align:right">
-      📊 รวมโกดัง ${esc(w.warehouse)}: <b>${fM(w.total)}</b> (${w.count} ครั้ง · ${w.truck_count} คัน)
-    </div>
-  `).join("")}
-  ` : ""}
+${(type === "all" || type === "maintenance") && maintFlat.length > 0 ? `
+<h2>🔧 ซ่อมบำรุง — รายการ${warehouseFilter ? ` (โกดัง${warehouseFilter})` : ''}</h2>
+<table>
+  <colgroup><col style="width:7%"><col style="width:13%"><col style="width:18%"><col style="width:18%"><col style="width:13%"><col style="width:31%"></colgroup>
+  <thead><tr><th>วัน</th><th>ทะเบียน</th><th>ประเภท</th><th>ร้าน</th><th>บาท</th><th>หมายเหตุ</th></tr></thead>
+  <tbody>
+  ${maintPlateOrder.map(plate => {
+    const rows = maintByPlate[plate];
+    const ptotal = rows.reduce((s, r) => s + r.cost, 0);
+    const ttLbl = rows[0].tt === 'van' ? 'VAN' : 'ขส.';
+    return rows.map(r => `<tr>
+      <td class="ctr">${(r.date || '').split('-')[2] || r.date}</td>
+      <td><b>${esc(r.plate)}</b><br><span style="font-size:9px;color:#888">${ttLbl}</span></td>
+      <td>${esc(r.type)}</td>
+      <td>${esc(r.shop)}</td>
+      <td class="num">${fM(r.cost)}</td>
+      <td class="lbl">${esc(r.note)}</td>
+    </tr>`).join('') + `<tr class="subtotal">
+      <td colspan="4" style="text-align:right;font-size:10px">รวม ${esc(plate)} (${rows.length} ครั้ง)</td>
+      <td class="num">${fM(ptotal)}</td><td></td>
+    </tr>`;
+  }).join('')}
+  <tr class="grand">
+    <td colspan="4">รวมซ่อมทั้งหมด (${maintFlat.length} ครั้ง)</td>
+    <td class="num">${fM(printMaintTotal)}</td><td></td>
+  </tr>
+  </tbody>
+</table>` : ''}
 
-  ${(type === "all" || type === "maintenance") && (maintByWarehouse.length > 0) ? `
-  <!-- ═══ MAINTENANCE: ต่อรถ ═══ -->
-  <h2>🔧 ซ่อมบำรุง — สรุปยอดต่อรถแต่ละคัน${warehouseFilter ? ` (โกดัง${warehouseFilter})` : ''}</h2>
-  <table>
-    <colgroup>
-      <col style="width:18%">
-      <col style="width:14%">
-      <col style="width:36%">
-      <col style="width:12%">
-      <col style="width:20%">
-    </colgroup>
-    <thead><tr>
-      <th>ทะเบียน</th>
-      <th>โกดัง</th>
-      <th>บริษัท</th>
-      <th>ซ่อม (ครั้ง)</th>
-      <th>ยอดรวม</th>
-    </tr></thead>
-    <tbody>
-    ${printMaintByTruck.map(t => `
-      <tr>
-        <td><b>${esc(t.plate)}</b></td>
-        <td class="ctr">${esc(t.warehouse)}</td>
-        <td>${esc(t.company_name)}</td>
-        <td class="num">${f(t.count)}</td>
-        <td class="num"><b>${fM(t.total)}</b></td>
-      </tr>`).join("")}
-    <tr class="grand">
-      <td colspan="3">รวมทุกคัน (${printMaintByTruck.length} คัน)</td>
-      <td class="num">${f(printMaintCount)}</td>
-      <td class="num">${fM(printMaintTotal)}</td>
-    </tr>
-    </tbody>
-  </table>
-
-  <!-- ═══ MAINTENANCE: สรุปต่อโกดัง ═══ -->
-  <h2>🔧 ซ่อมบำรุง — สรุปยอดต่อโกดัง</h2>
-  <table>
-    <colgroup>
-      <col style="width:38%">
-      <col style="width:14%">
-      <col style="width:14%">
-      <col style="width:22%">
-      <col style="width:12%">
-    </colgroup>
-    <thead><tr>
-      <th>โกดัง</th>
-      <th>จำนวนรถ</th>
-      <th>รายการ</th>
-      <th>ยอดรวม</th>
-      <th>สัดส่วน</th>
-    </tr></thead>
-    <tbody>
-    ${maintByWarehouse.map(w => `
-      <tr>
-        <td><b>📍 ${esc(w.warehouse)}</b></td>
-        <td class="num">${f(w.truck_count)}</td>
-        <td class="num">${f(w.count)}</td>
-        <td class="num"><b>${fM(w.total)}</b></td>
-        <td class="num">${pct(w.total, printMaintTotal)}</td>
-      </tr>`).join("")}
-    <tr class="grand">
-      <td>${warehouseFilter ? `รวมโกดัง${warehouseFilter}` : 'รวมทุกโกดัง'}</td>
-      <td class="num">—</td>
-      <td class="num">${f(printMaintCount)}</td>
-      <td class="num">${fM(printMaintTotal)}</td>
-      <td class="num">100.0%</td>
-    </tr>
-    </tbody>
-  </table>
-
-  <!-- ═══ MAINTENANCE: รายการแยกตามโกดัง → รถ ═══ -->
-  <h2>🔧 ซ่อมบำรุง — รายละเอียดทุกรายการ (แยกตามโกดัง)</h2>
-  ${maintByWarehouse.map(w => `
-    <div style="background:#0d47a1;color:#fff;padding:10px 14px;margin:18px 0 0 0;border-radius:6px 6px 0 0;font-size:15px;font-weight:700">
-      📍 โกดัง ${esc(w.warehouse)}
-      <span style="float:right;font-weight:400;font-size:13px;opacity:.9">${w.truck_count} คัน · ${w.count} รายการ · <b>${fM(w.total)}</b></span>
-    </div>
-    ${w.trucks.map(g => `
-      <h3>🚛 ${esc(g.plate)} <span class="section-info">· ${esc(g.company_name)}</span></h3>
-      <table>
-        <colgroup>
-          <col style="width:13%">
-          <col style="width:18%">
-          <col style="width:20%">
-          <col style="width:11%">
-          <col style="width:14%">
-          <col style="width:24%">
-        </colgroup>
-        <thead><tr>
-          <th>วันที่</th>
-          <th>ประเภท</th>
-          <th>ร้าน</th>
-          <th>ไมล์</th>
-          <th>ยอดรวม</th>
-          <th>หมายเหตุ</th>
-        </tr></thead>
-        <tbody>
-        ${g.rows.map(r => `
-          <tr>
-            <td class="ctr">${r.maintenance_date}</td>
-            <td>${esc(MAINT_LABELS[r.maintenance_type] || r.maintenance_type)}</td>
-            <td>${esc(r.shop_name) || "—"}</td>
-            <td class="num">${f(r.mileage_at_service)}</td>
-            <td class="num"><b>${fM(r.cost)}</b></td>
-            <td>${esc((r.notes || "—").slice(0, 60))}</td>
-          </tr>`).join("")}
-        <tr class="subtotal">
-          <td colspan="4">รวม ${esc(g.plate)} (${g.rows.length} ครั้ง)</td>
-          <td class="num">${fM(g.total)}</td>
-          <td></td>
-        </tr>
-        </tbody>
-      </table>
-    `).join("")}
-    <div style="background:#1976d2;color:#fff;padding:8px 14px;margin:0 0 12px 0;border-radius:0 0 6px 6px;font-size:13px;font-weight:700;text-align:right">
-      📊 รวมโกดัง ${esc(w.warehouse)}: <b>${fM(w.total)}</b> (${w.count} ครั้ง · ${w.truck_count} คัน)
-    </div>
-  `).join("")}
-  ` : ""}
-
-  <div style="margin-top:30px;text-align:center;color:#999;font-size:11px;border-top:1px solid #eee;padding-top:14px">
-    Truck Service Tracker · Generated by JTG System · ${new Date().toLocaleString("th-TH")}
-  </div>
+<div style="margin-top:18px;text-align:center;color:#999;font-size:10px;border-top:1px solid #eee;padding-top:10px">
+  Truck Service Tracker · JTG · ${new Date().toLocaleString("th-TH")}
+</div>
 </body></html>`;
+
 
   const win = window.open("", "_blank");
   win.document.write(html);
