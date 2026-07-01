@@ -4931,10 +4931,7 @@ async function exportBillsPDF(warehouseFilter = '') {
       `<tfoot><tr class="grand"><td>รวม</td>${tots}<td class="num">${fM(g)}</td></tr></tfoot></table>`;
   }
 
-  const vanTrucks   = allFuelTrucks.filter(t => t.truck_type === 'van');
-  const transTrucks = allFuelTrucks.filter(t => t.truck_type !== 'van');
-  const vanMxHTML   = chunkArr(vanTrucks, 4).map(ch => mxTable(ch, fuelDays, fuelMx)).join('');
-  const transMxHTML = chunkArr(transTrucks, 4).map(ch => mxTable(ch, fuelDays, fuelMx)).join('');
+  const allMxHTML = mxTable(allFuelTrucks, fuelDays, fuelMx);
 
   // Per-truck combined summary (fuel + maint)
   const truckSumMap = {};
@@ -5062,8 +5059,7 @@ ${printRoutes.length > 0 ? `
 
 ${(type === "all" || type === "fuel") && allFuelTrucks.length > 0 && fuelDays.length > 0 ? `
 <h2>⛽ ค่าน้ำมัน — รายวันต่อรถ${warehouseFilter ? ` (โกดัง${warehouseFilter})` : ''}</h2>
-${vanTrucks.length > 0 ? `<div class="tlbl vl" style="margin:8px 0 3px">🚐 VAN</div>${vanMxHTML}` : ''}
-${transTrucks.length > 0 ? `<div class="tlbl tl" style="margin:8px 0 3px">🚛 ขนส่ง</div>${transMxHTML}` : ''}` : ''}
+${allMxHTML}` : ''}
 
 ${(type === "all" || type === "maintenance") && maintFlat.length > 0 ? `
 <h2>🔧 ซ่อมบำรุง — รายการ${warehouseFilter ? ` (โกดัง${warehouseFilter})` : ''}</h2>
