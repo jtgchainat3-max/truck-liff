@@ -4981,7 +4981,7 @@ table{width:100%;border-collapse:collapse;margin:0 0 6px;font-size:10.5px;table-
 th,td{border:1px solid #d0d7de;padding:3px 5px;vertical-align:middle;overflow:hidden;word-break:break-word}
 th{background:#f1f5f9;font-weight:700;text-align:center;font-size:10px}
 .num{text-align:right}.ctr{text-align:center}.lbl{color:#777;font-size:9px}
-.sumi{background:#f0f4ff;font-weight:700}.mx td,.mx th{padding:2px 4px;font-size:10px}.mx{font-size:10px}
+.sumi{background:#f0f4ff;font-weight:700}.mx td,.mx th{padding:2px 4px;font-size:10px}.mx{font-size:10px}.sm td,.sm th{padding:2px 4px;font-size:9.5px}.sm .lbl{font-size:8.5px}
 tbody tr:nth-child(even) td{background:#fafbfc}
 tr.subtotal td{background:#fff8e1!important;font-weight:700}
 tr.grand td{background:#c8e6c9!important;font-weight:700}
@@ -5062,8 +5062,8 @@ ${(type === "all" || type === "fuel") && allFuelTrucks.length > 0 && fuelDays.le
 ${allMxHTML}` : ''}
 
 ${(type === "all" || type === "maintenance") && maintFlat.length > 0 ? `
-<h2 class="pb">🔧 ซ่อมบำรุง — รายการ${warehouseFilter ? ` (โกดัง${warehouseFilter})` : ''}</h2>
-<table>
+<h2>🔧 ซ่อมบำรุง — รายการ${warehouseFilter ? ` (โกดัง${warehouseFilter})` : ''}</h2>
+<table class="sm">
   <colgroup><col style="width:7%"><col style="width:13%"><col style="width:18%"><col style="width:18%"><col style="width:13%"><col style="width:31%"></colgroup>
   <thead><tr><th>วัน</th><th>ทะเบียน</th><th>ประเภท</th><th>ร้าน</th><th>บาท</th><th>หมายเหตุ</th></tr></thead>
   <tbody>
